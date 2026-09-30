@@ -33,8 +33,18 @@ export async function appeler<T>(url: string, options: { methode?: string; corps
   }
   const donnees = await reponse.json().catch(() => ({}));
   if (!reponse.ok) {
-    const detail = typeof donnees?.detail === "string" ? donnees.detail : `Erreur ${reponse.status}`;
-    throw new ErreurApi(detail, reponse.status);
+    throw new ErreurApi(messageErreur(donnees) ?? `Erreur ${reponse.status}`, reponse.status);
   }
   return donnees as T;
+}
+
+/** Premier message lisible d'une réponse d'erreur DRF (``detail`` ou erreurs par champ). */
+function messageErreur(donnees: unknown): string | undefined {
+  if (typeof donnees === "string") return donnees;
+  if (Array.isArray(donnees)) return messageErreur(donnees[0]);
+  if (donnees && typeof donnees === "object") {
+    const objet = donnees as Record<string, unknown>;
+    return messageErreur(objet.detail ?? Object.values(objet)[0]);
+  }
+  return undefined;
 }

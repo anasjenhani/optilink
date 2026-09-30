@@ -12,6 +12,8 @@ api_v1 = [
     path("sante/", sante, name="sante"),
     path("", include("apps.securite.urls")),
     path("", include("apps.reseau.urls")),
+    path("", include("apps.stock.urls")),
+    path("", include("apps.ventes.urls")),
 ]
 
 urlpatterns = [

@@ -13,10 +13,10 @@ def test_roles_de_depart_crees(db):
     admin = Group.objects.get(name="Administrateur système")
     vendeur = Group.objects.get(name="Vendeur")
     assert admin.permissions.filter(codename="add_affectation").exists()
-    assert set(vendeur.permissions.values_list("codename", flat=True)) == {
-        "view_magasin",
-        "view_region",
-    }
+    assert {"view_magasin", "view_region"} <= set(
+        vendeur.permissions.values_list("codename", flat=True)
+    )
+    assert not vendeur.permissions.filter(codename="add_affectation").exists()
 
 
 def test_role_sans_la_permission_refuse(reseau, creer_role, creer_utilisateur, client_de):

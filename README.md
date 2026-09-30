@@ -39,6 +39,16 @@ Chaque utilisateur reçoit des **affectations** : un rôle (groupe Django) sur u
 - **Journal d'audit.** django-auditlog enregistre auteur, date, adresse IP, ancienne et nouvelle valeur pour les magasins, régions, comptes (hors mot de passe), affectations et rôles. Les connexions, déconnexions, codes MFA et désactivations sont dans `EvenementSecurite`, que l'application ne peut ni modifier ni supprimer. Les deux se consultent dans l'administration.
 - **Comptes inactifs.** Une tâche Celery quotidienne désactive les comptes sans connexion depuis 90 jours (`COMPTES_INACTIFS_JOURS`), hors super-utilisateurs.
 
+## Prototype caisse et stock
+
+- **Stock** (`apps.stock`) : `Article` (catalogue commun au réseau) et `MouvementStock` ; le stock d'un article dans un magasin est la somme de ses mouvements, jamais modifiés.
+- **Ventes** (`apps.ventes`) : `enregistrer_vente` écrit dans une seule transaction la vente, ses lignes, les sorties de stock, les paiements et le numéro de facture. Numérotation sans trou par magasin et par année (`M01-2026-000001`) : le compteur est verrouillé pendant la transaction et un échec annule aussi l'incrément.
+- Contrôles : stock suffisant, paiements égaux au total, droit de vente sur le magasin choisi, remise réservée aux rôles qui ont `ventes.appliquer_remise`.
+- API : `/api/v1/articles/?magasin=…&recherche=…`, `/api/v1/ventes/`, `/api/v1/mouvements-stock/` (réceptions et ajustements).
+- Essai rapide : `python manage.py charger_demo` crée quelques articles et 10 unités de chacun dans chaque magasin actif.
+
+La caisse suppose une liaison permanente avec le serveur (lien de secours 4G recommandé) ; un mode hors ligne changerait la numérotation et la gestion du stock.
+
 ## Démarrer en développement
 
 Prérequis : Docker avec Docker Compose.
@@ -97,4 +107,4 @@ Nginx redirige HTTP vers HTTPS (TLS 1.2 minimum, HSTS). La connexion Django vers
 - Row-Level Security SQL Server en complément du filtre applicatif, et droits SQL empêchant la modification des journaux
 - Reprise rapide par code PIN sur le poste de caisse
 - Notification de la direction à chaque changement de rôle ou d'affectation
-- Prototype caisse et stock pour valider Django sur SQL Server
+- Lot Vendre : clients, dossiers optiques, devis, avoirs, tables spécialisées par famille d'article
