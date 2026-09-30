@@ -42,11 +42,16 @@ jobs:
           cache-dependency-path: backend/requirements*.txt
       - name: Pilote ODBC Driver 18 pour SQL Server
         run: |
-          if ! odbcinst -q -d -n "ODBC Driver 18 for SQL Server" >/dev/null 2>&1; then
-            curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
-            curl -fsSL https://packages.microsoft.com/config/ubuntu/24.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          if ! dpkg -s msodbcsql18 >/dev/null 2>&1; then
+            # L'image du runner déclare souvent déjà le dépôt Microsoft : ne l'ajouter que s'il manque.
+            if ! grep -rqs packages.microsoft.com /etc/apt/sources.list /etc/apt/sources.list.d/; then
+              curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
+                | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+              curl -fsSL https://packages.microsoft.com/config/ubuntu/24.04/prod.list \
+                | sudo tee /etc/apt/sources.list.d/mssql-release.list
+            fi
             sudo apt-get update
-            sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
+            sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc
           fi
       - run: pip install -r requirements-dev.txt
       - run: ruff check .
