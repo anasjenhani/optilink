@@ -56,6 +56,17 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: ruff check .
       - run: ruff format --check .
+      - name: Base optilink (vérification de l'historique des migrations)
+        run: |
+          python - <<'PY'
+          import os, pyodbc
+          cnx = pyodbc.connect(
+              "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost,1433;"
+              f"UID=sa;PWD={os.environ['DB_PASSWORD']};Encrypt=yes;TrustServerCertificate=yes",
+              autocommit=True,
+          )
+          cnx.execute("IF DB_ID('optilink') IS NULL CREATE DATABASE optilink")
+          PY
       - name: Migrations à jour
         run: python manage.py makemigrations --check --dry-run
         env:
