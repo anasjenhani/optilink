@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: Ci-Optilink-2026!
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'Ci-Optilink-2026!' -Q 'SELECT 1' -b -o /dev/null"
+          --health-interval 10s
+          --health-start-period 30s
+          --health-retries 12
+    env:
+      DB_ENGINE: mssql
+      DB_HOST: localhost
+      DB_USER: sa
+      DB_PASSWORD: Ci-Optilink-2026!
+      DB_TRUST_SERVER_CERTIFICATE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - name: Pilote ODBC Driver 18 pour SQL Server
+        run: |
+          if ! odbcinst -q -d -n "ODBC Driver 18 for SQL Server" >/dev/null 2>&1; then
+            curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+            curl -fsSL https://packages.microsoft.com/config/ubuntu/24.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+            sudo apt-get update
+            sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
+          fi
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: ruff format --check .
+      - name: Migrations à jour
+        run: python manage.py makemigrations --check --dry-run
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.test
+      - name: Tests sur SQL Server
+        run: pytest
+      - name: Schéma OpenAPI valide
+        run: python manage.py spectacular --validate --fail-on-warn > /dev/null
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.test
+
+  frontend:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  images:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Image backend
+        run: docker build -t optilink-backend ./backend
+      - name: Image web
+        run: docker build -t optilink-web ./frontend
+      - name: Nginx accepte la configuration HTTPS
+        run: |
+          mkdir -p certs
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=ci \
+            -keyout certs/optilink.key -out certs/optilink.crt
+          docker run --rm --add-host backend:127.0.0.1 \
+            -v "$PWD/frontend/nginx/https.conf:/etc/nginx/conf.d/default.conf:ro" \
+            -v "$PWD/certs:/etc/nginx/certs:ro" optilink-web nginx -t

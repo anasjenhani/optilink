@@ -1,0 +1,12 @@
+.env
+certs/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+backend/staticfiles/
+*.sqlite3
+node_modules/
+dist/
+*.tsbuildinfo
