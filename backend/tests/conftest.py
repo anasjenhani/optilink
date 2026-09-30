@@ -1,5 +1,7 @@
 import pytest
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
+from django_otp import DEVICE_ID_SESSION_KEY
+from django_otp.plugins.otp_totp.models import TOTPDevice
 from rest_framework.test import APIClient
 
 from apps.reseau.models import Magasin, Region
@@ -19,9 +21,24 @@ def reseau(db):
     }
 
 
+def permission(nom):
+    app_label, codename = nom.split(".")
+    return Permission.objects.get(content_type__app_label=app_label, codename=codename)
+
+
 @pytest.fixture
-def role(db):
-    return Group.objects.create(name="Vendeur")
+def creer_role(db):
+    def _creer(nom, *permissions):
+        role = Group.objects.create(name=nom)
+        role.permissions.set([permission(p) for p in permissions])
+        return role
+
+    return _creer
+
+
+@pytest.fixture
+def role(creer_role):
+    return creer_role("Rôle de test", "reseau.view_magasin")
 
 
 @pytest.fixture
@@ -37,9 +54,23 @@ def creer_utilisateur(db, role):
 
 @pytest.fixture
 def client_de():
+    """Client connecté, second facteur déjà validé pour la session."""
+
     def _client(utilisateur):
+        device = TOTPDevice.objects.create(user=utilisateur, name="test", confirmed=True)
         client = APIClient()
         client.force_login(utilisateur)
+        session = client.session
+        session[DEVICE_ID_SESSION_KEY] = device.persistent_id
+        session.save()
         return client
 
     return _client
+
+
+@pytest.fixture(autouse=True)
+def cache_vide():
+    """Les limites de débit sont comptées dans le cache : chaque test repart de zéro."""
+    from django.core.cache import cache
+
+    cache.clear()

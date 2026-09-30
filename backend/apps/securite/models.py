@@ -81,3 +81,44 @@ class Affectation(models.Model):
             raise ValidationError("Le magasin ou la région ne correspond pas à la portée choisie.")
         if self.fin and self.fin < self.debut:
             raise ValidationError("La date de fin précède la date de début.")
+
+
+class EvenementSecurite(models.Model):
+    """Journal des connexions et opérations MFA, en ajout seul."""
+
+    class Type(models.TextChoices):
+        CONNEXION_REUSSIE = "connexion_reussie", "Connexion réussie"
+        CONNEXION_ECHOUEE = "connexion_echouee", "Connexion échouée"
+        DECONNEXION = "deconnexion", "Déconnexion"
+        MFA_REUSSIE = "mfa_reussie", "Code MFA accepté"
+        MFA_ECHOUEE = "mfa_echouee", "Code MFA refusé"
+        MFA_ACTIVEE = "mfa_activee", "MFA activée"
+        COMPTE_DESACTIVE = "compte_desactive", "Compte désactivé pour inactivité"
+
+    horodatage = models.DateTimeField(auto_now_add=True, db_index=True)
+    type = models.CharField(max_length=30, choices=Type.choices, db_index=True)
+    utilisateur = models.ForeignKey(
+        Utilisateur, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    identifiant = models.CharField(
+        max_length=150, blank=True, help_text="Identifiant saisi, conservé même sans compte."
+    )
+    adresse_ip = models.GenericIPAddressField(null=True, blank=True)
+    agent_utilisateur = models.CharField(max_length=255, blank=True)
+    details = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        verbose_name = "événement de sécurité"
+        verbose_name_plural = "événements de sécurité"
+        ordering = ["-horodatage"]
+
+    def __str__(self):
+        return f"{self.horodatage:%Y-%m-%d %H:%M} · {self.get_type_display()} · {self.identifiant}"
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            raise ValueError("Un événement de sécurité ne se modifie pas.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError("Un événement de sécurité ne se supprime pas.")

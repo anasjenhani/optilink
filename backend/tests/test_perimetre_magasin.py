@@ -35,8 +35,8 @@ def test_affectation_reseau_voit_tout(reseau, creer_utilisateur, client_de):
     assert codes(client_de(direction).get("/api/v1/magasins/")) == ["M01", "M02", "M03"]
 
 
-def test_sans_affectation_ne_voit_rien(reseau, creer_utilisateur, client_de):
-    assert codes(client_de(creer_utilisateur("nouveau")).get("/api/v1/magasins/")) == []
+def test_sans_affectation_n_a_aucun_droit(reseau, creer_utilisateur, client_de):
+    assert client_de(creer_utilisateur("nouveau")).get("/api/v1/magasins/").status_code == 403
 
 
 def test_affectation_terminee_ne_donne_plus_acces(reseau, creer_utilisateur, client_de):
@@ -48,7 +48,7 @@ def test_affectation_terminee_ne_donne_plus_acces(reseau, creer_utilisateur, cli
         debut=hier - datetime.timedelta(days=30),
         fin=hier,
     )
-    assert codes(client_de(ancien).get("/api/v1/magasins/")) == []
+    assert client_de(ancien).get("/api/v1/magasins/").status_code == 403
 
 
 def test_perimetre_filtre_aussi_hors_api(reseau):
