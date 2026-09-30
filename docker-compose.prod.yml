@@ -1,0 +1,10 @@
+# Production : HTTPS sur le port 443 avec les certificats de ./certs.
+# docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+services:
+  web:
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./frontend/nginx/https.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
