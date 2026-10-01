@@ -237,8 +237,16 @@ def regler_commande(*, vente, paiements, utilisateur):
 def livrer_commande(*, vente, utilisateur, paiements=()):
     """Remet l'équipement au client. Le solde est encaissé au plus tard à ce moment-là."""
     vente = _verrouiller_vente(vente)
+    if vente.statut == Vente.Statut.ANNULEE:
+        raise VenteInvalide(f"La vente {vente.numero} est annulée.")
     if vente.statut != Vente.Statut.EN_COMMANDE:
         raise VenteInvalide(f"La vente {vente.numero} est déjà livrée.")
+    from apps.achats.services import etat_verres
+
+    if etat_verres(vente) not in (None, "recus"):
+        raise VenteInvalide(
+            f"Les verres de la commande {vente.numero} ne sont pas encore reçus du fournisseur."
+        )
     if paiements:
         regler_commande(vente=vente, paiements=paiements, utilisateur=utilisateur)
     reste = vente.reste_a_payer

@@ -89,6 +89,14 @@ La caisse suppose une liaison permanente avec le serveur (lien de secours 4G rec
 - **Annulation** (`annulation: true`) : avoir sur tout ce qui n'a pas encore été repris ; la vente passe à « annulée ». Une commande non livrée ne peut qu'être annulée en entier : le client récupère ses acomptes (jamais plus que ce qu'il a versé) et la monture revient en stock.
 - **Règles.** Une vente qui a un avoir ne se facture plus ; si elle était déjà facturée, l'avoir porte le n° de la facture. Une commande annulée n'accepte plus de règlement. Droit `ventes.add_avoir` : responsables de magasin et régionaux ; direction et comptable en lecture. Avoirs et lignes cloisonnés par magasin dans PostgreSQL.
 
+## Commandes de verres aux fournisseurs
+
+- **Fournisseurs** (`apps.achats`, saisis dans l'administration) : communs au réseau, rattachés à un pays.
+- **Verres à commander** (écran du même nom, `GET /api/v1/commandes-fournisseurs/a-commander/?magasin=…`) : les lignes « sur commande » des commandes clients du magasin qui ne sont pas encore commandées.
+- **Commande fournisseur** (`POST /api/v1/commandes-fournisseurs/`) : un fournisseur, une référence, et pour chaque verre les détails à transmettre (œil, correction, traitement). Numérotée `M01-C2026-000001`. Elle se réceptionne (`/receptionner/`) ou s'annule (`/annuler/`) ; annulée, ses verres repassent à commander.
+- **Livraison client.** Une commande client ne se livre qu'une fois tous ses verres reçus ; l'API et l'écran Commandes indiquent où ils en sont (`verres` : à commander, commandés, reçus).
+- **Droits.** Opticien, responsables et logisticien commandent et réceptionnent ; responsables et logisticien tiennent la liste des fournisseurs ; direction et comptable consultent. Commandes et lignes cloisonnées par magasin dans PostgreSQL.
+
 ## Démarrer en développement
 
 Prérequis : Docker avec Docker Compose.
@@ -147,4 +155,4 @@ Nginx redirige HTTP vers HTTPS (TLS 1.2 minimum, HSTS). La connexion Django vers
 - Reprise rapide par code PIN sur le poste de caisse
 - Notification de la direction à chaque changement de rôle ou d'affectation
 - Interface en arabe (écriture de droite à gauche) et en anglais
-- Lot Vendre, suite : commandes fournisseurs de verres, tables spécialisées par famille d'article, export et anonymisation RGPD d'un client
+- Lot Vendre, suite : tables spécialisées par famille d'article, export et anonymisation RGPD d'un client

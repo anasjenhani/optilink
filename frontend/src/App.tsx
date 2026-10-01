@@ -22,6 +22,7 @@ import { Commandes } from "./pages/Commandes";
 import { Devis } from "./pages/Devis";
 import { Factures } from "./pages/Factures";
 import { Magasins } from "./pages/Magasins";
+import { Verres } from "./pages/Verres";
 
 function Contenu({ session }: { session: EtatSession }) {
   const queryClient = useQueryClient();
@@ -46,6 +47,7 @@ function Contenu({ session }: { session: EtatSession }) {
     <Stack spacing={3}>
       {peut(session, "ventes.add_vente") && <Caisse />}
       {peut(session, "ventes.add_vente") && <Commandes />}
+      {peut(session, "achats.add_commandefournisseur") && <Verres />}
       {peut(session, "ventes.add_devis") && peut(session, "crm.view_client") && (
         <Devis
           droits={{

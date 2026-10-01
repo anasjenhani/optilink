@@ -16,7 +16,7 @@ from apps.ventes.services import (
     livrer_commande,
     regler_commande,
 )
-from tests.conftest import tva
+from tests.conftest import recevoir_verres, tva
 
 
 @pytest.fixture
@@ -83,6 +83,9 @@ def test_reglements_puis_livraison_contre_le_solde(
     with pytest.raises(VenteInvalide, match="dépasse le reste"):
         regler_commande(vente=vente, paiements=especes("500.000"), utilisateur=vendeur)
     regler_commande(vente=vente, paiements=especes("100.000"), utilisateur=vendeur)
+    with pytest.raises(VenteInvalide, match="pas encore reçus"):
+        livrer_commande(vente=vente, utilisateur=opticien, paiements=especes("349.500"))
+    recevoir_verres(vente, opticien)
     with pytest.raises(VenteInvalide, match="doit encore 349.500 TND"):
         livrer_commande(vente=vente, utilisateur=opticien)
     with pytest.raises(FactureImpossible, match="reste 349.500"):
@@ -178,6 +181,9 @@ def test_parcours_commande_par_l_api(tunis, monture, verre, reseau, affecter, cl
         url + "reglement/", {"paiements": [{"mode": "especes", "montant": "49.500"}]}, format="json"
     )
     assert reglement.json()["reste_a_payer"] == "400.000"
+    assert reglement.json()["verres"] == "a_commander"
+    recevoir_verres(Vente.objects.get(numero=vente["numero"]), vendeur)
+    assert api.get(url).json()["verres"] == "recus"
     assert api.post(url + "livrer/", {}, format="json").status_code == 400
     livree = api.post(
         url + "livrer/", {"paiements": [{"mode": "carte", "montant": "400.000"}]}, format="json"

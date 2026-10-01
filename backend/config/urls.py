@@ -16,6 +16,7 @@ api_v1 = [
     path("", include("apps.ventes.urls")),
     path("", include("apps.crm.urls")),
     path("", include("apps.optique.urls")),
+    path("", include("apps.achats.urls")),
 ]
 
 urlpatterns = [

@@ -23,6 +23,8 @@ export type Vente = {
   reste_a_payer: string;
   statut: "en_commande" | "livree" | "annulee";
   livraison_prevue_le: string | null;
+  /** Verres commandés au fournisseur ; null si la commande n'en comporte pas. */
+  verres?: "a_commander" | "commandes" | "recus" | null;
   facture: string | null;
   client: { id: string; nom: string; matricule_fiscal: string } | null;
   lignes: { id: number; libelle: string; quantite: number; quantite_reprise: number; total_ttc: string }[];

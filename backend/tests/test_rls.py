@@ -184,3 +184,34 @@ def test_avoirs_et_leurs_lignes_cloisonnes(tunis, monture, reseau, creer_utilisa
     rls.poser({reseau["lille"].id})
     assert codes_visibles("ventes_avoir", "numero") == []
     assert codes_visibles("ventes_ligneavoir", "libelle") == []
+
+
+def test_commandes_fournisseurs_cloisonnees(tunis, monture, reseau, creer_utilisateur):
+    from decimal import Decimal
+
+    from apps.achats.models import Fournisseur
+    from apps.stock.models import Article, PrixArticle
+    from apps.ventes.services import enregistrer_vente
+    from tests.conftest import recevoir_verres, tva
+
+    verre = Article.objects.create(
+        reference="V", libelle="Verre", famille="verre", sur_commande=True
+    )
+    PrixArticle.objects.create(
+        article=verre, pays=tunis.pays, prix_vente_ttc=Decimal("100"), tva=tva(tunis.pays, 7)
+    )
+    Fournisseur.objects.create(nom="Labo Verres", pays=tunis.pays)
+    vente = enregistrer_vente(
+        magasin=tunis,
+        vendeur=creer_utilisateur("v"),
+        lignes=[{"article": verre, "quantite": 1}],
+        paiements=[],
+        commande=True,
+    )
+    recevoir_verres(vente, creer_utilisateur("o"))
+    rls.poser({tunis.id})
+    assert len(codes_visibles("achats_commandefournisseur", "numero")) == 1
+    assert len(codes_visibles("achats_lignecommandefournisseur", "details")) == 1
+    rls.poser({reseau["lille"].id})
+    assert codes_visibles("achats_commandefournisseur", "numero") == []
+    assert codes_visibles("achats_lignecommandefournisseur", "details") == []
