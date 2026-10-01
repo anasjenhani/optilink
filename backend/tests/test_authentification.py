@@ -41,7 +41,7 @@ def types_evenements():
     return list(EvenementSecurite.objects.order_by("id").values_list("type", flat=True))
 
 
-def test_session_anonyme_pose_le_cookie_csrf(client):
+def test_session_anonyme_pose_le_cookie_csrf(client, db):  # le middleware pose la RLS
     reponse = client.get("/api/v1/auth/session/")
     assert reponse.json() == {"authentifie": False, "mfa": None, "utilisateur": None}
     assert "csrftoken" in reponse.cookies
