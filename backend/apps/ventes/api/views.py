@@ -12,12 +12,15 @@ from apps.optique.models import Prescription
 from apps.reseau.models import Magasin
 from apps.stock.models import Article
 
-from ..models import Devis, Facture, Vente
+from ..models import Avoir, Devis, Facture, Vente
 from ..services import (
+    AvoirImpossible,
     DevisImpossible,
     FactureImpossible,
     VenteInvalide,
     accepter_devis,
+    annuler_vente,
+    emettre_avoir,
     encaisser_devis,
     enregistrer_vente,
     etablir_devis,
@@ -27,6 +30,8 @@ from ..services import (
     regler_commande,
 )
 from .serializers import (
+    AvoirSaisieSerializer,
+    AvoirSerializer,
     DevisSaisieSerializer,
     DevisSerializer,
     EncaissementDevisSerializer,
@@ -55,7 +60,7 @@ class VenteViewSet(
     def get_queryset(self):
         return Vente.objects.select_related(
             "magasin", "vendeur", "client", "facture"
-        ).prefetch_related("lignes__article", "paiements")
+        ).prefetch_related("lignes__article", "lignes__retours", "paiements")
 
     def _apres(self, operation, **parametres):
         try:
@@ -145,7 +150,7 @@ class FactureViewSet(
     def get_queryset(self):
         return Facture.objects.select_related(
             "magasin", "vente", "client", "emise_par"
-        ).prefetch_related("vente__lignes__article")
+        ).prefetch_related("vente__lignes__article", "vente__lignes__retours")
 
     @extend_schema(request=FactureSaisieSerializer, responses={201: FactureSerializer})
     def create(self, request):
@@ -314,3 +319,58 @@ class DevisViewSet(
             return resultat
         vente = VenteViewSet().get_queryset().get(pk=resultat.pk)
         return Response(VenteSerializer(vente).data, status=status.HTTP_201_CREATED)
+
+
+class AvoirViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Avoirs du périmètre : retour d'articles ou annulation d'une vente, avec remboursement."""
+
+    serializer_class = AvoirSerializer
+    lookup_field = "public_id"
+    filterset_fields = ["numero", "annulation"]
+
+    def get_queryset(self):
+        return Avoir.objects.select_related(
+            "magasin", "vente", "facture", "client", "emis_par"
+        ).prefetch_related("lignes")
+
+    @extend_schema(request=AvoirSaisieSerializer, responses={201: AvoirSerializer})
+    def create(self, request):
+        saisie = AvoirSaisieSerializer(data=request.data)
+        saisie.is_valid(raise_exception=True)
+        donnees = saisie.validated_data
+
+        vente = Vente.objects.select_related("magasin").filter(public_id=donnees["vente"]).first()
+        if vente is None:
+            raise ValidationError({"vente": "Vente inconnue ou hors de votre périmètre."})
+        if not request.user.has_perm("ventes.add_avoir", vente.magasin):
+            raise PermissionDenied("Pas de droit d'émettre un avoir dans ce magasin.")
+        commun = {
+            "vente": vente,
+            "motif": donnees["motif"],
+            "emetteur": request.user,
+            "mode_remboursement": donnees.get("mode_remboursement", ""),
+        }
+        try:
+            if donnees["annulation"]:
+                avoir = annuler_vente(**commun, remis_en_stock=donnees["remis_en_stock"])
+            else:
+                avoir = emettre_avoir(
+                    **commun,
+                    retours=[
+                        {
+                            "ligne_vente": r["ligne"],
+                            "quantite": r["quantite"],
+                            "remis_en_stock": r["remis_en_stock"],
+                        }
+                        for r in donnees["lignes"]
+                    ],
+                )
+        except AvoirImpossible as erreur:
+            return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)
+        avoir = self.get_queryset().get(pk=avoir.pk)
+        return Response(AvoirSerializer(avoir).data, status=status.HTTP_201_CREATED)

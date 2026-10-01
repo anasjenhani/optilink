@@ -21,11 +21,11 @@ export type Vente = {
   devise: string;
   total_ttc: string;
   reste_a_payer: string;
-  statut: "en_commande" | "livree";
+  statut: "en_commande" | "livree" | "annulee";
   livraison_prevue_le: string | null;
   facture: string | null;
   client: { id: string; nom: string; matricule_fiscal: string } | null;
-  lignes: { libelle: string; quantite: number; total_ttc: string }[];
+  lignes: { id: number; libelle: string; quantite: number; quantite_reprise: number; total_ttc: string }[];
 };
 
 export type SaisieVente = {

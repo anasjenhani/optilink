@@ -12,11 +12,18 @@ class TypeDocument(models.TextChoices):
     TICKET = "ticket", "Ticket de caisse"
     FACTURE = "facture", "Facture"
     DEVIS = "devis", "Devis"
+    AVOIR = "avoir", "Avoir"
 
 
 # Préfixe du numéro : M01-T2026-000001 pour un ticket, M01-F2026-000001 pour une facture,
-# M01-D2026-000001 pour un devis. Chaque type de document a sa propre suite de numéros.
-PREFIXES = {TypeDocument.TICKET: "T", TypeDocument.FACTURE: "F", TypeDocument.DEVIS: "D"}
+# M01-D2026-000001 pour un devis, M01-A2026-000001 pour un avoir. Chaque type de document a
+# sa propre suite de numéros.
+PREFIXES = {
+    TypeDocument.TICKET: "T",
+    TypeDocument.FACTURE: "F",
+    TypeDocument.DEVIS: "D",
+    TypeDocument.AVOIR: "A",
+}
 
 
 class CompteurFacture(models.Model):
@@ -55,6 +62,7 @@ class Vente(ModeleDeBase):
     class Statut(models.TextChoices):
         EN_COMMANDE = "en_commande", "En commande"
         LIVREE = "livree", "Livrée"
+        ANNULEE = "annulee", "Annulée"
 
     magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
     numero = models.CharField(max_length=40, unique=True, help_text="N° de ticket.")
@@ -225,6 +233,57 @@ class LigneDevis(models.Model):
         return f"{self.quantite} × {self.libelle}"
 
 
+class Avoir(ModeleDeBase):
+    """Avoir : crédit rendu au client sur une vente (retour d'articles, ou annulation).
+
+    La vente et sa facture ne sont jamais modifiées : l'avoir les corrige, avec sa propre suite
+    de numéros. Il dit ce qui est remboursé au client et ce qui revient en stock.
+    """
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="avoirs")
+    facture = models.ForeignKey(
+        Facture,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="avoirs",
+        help_text="Facture corrigée, si la vente avait été facturée.",
+    )
+    client = models.ForeignKey(
+        "crm.Client", on_delete=models.PROTECT, null=True, blank=True, related_name="avoirs"
+    )
+    annulation = models.BooleanField(default=False, help_text="Annule toute la vente.")
+    motif = models.CharField(max_length=300)
+    devise = models.CharField(max_length=3)
+    total_ht = models.DecimalField(max_digits=14, decimal_places=3)
+    total_tva = models.DecimalField(max_digits=14, decimal_places=3)
+    total_ttc = models.DecimalField(max_digits=14, decimal_places=3)
+    montant_rembourse = models.DecimalField(max_digits=14, decimal_places=3)
+    mode_remboursement = models.CharField(max_length=20, blank=True)
+    emis_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-cree_le"]
+        verbose_name = "avoir"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="avoir_numerote_sans_doublon"
+            )
+        ]
+
+    def __str__(self):
+        return self.numero
+
+
 class LigneVente(models.Model):
     vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="lignes")
     article = models.ForeignKey("stock.Article", on_delete=models.PROTECT, related_name="+")
@@ -237,6 +296,24 @@ class LigneVente(models.Model):
 
     class Meta:
         verbose_name = "ligne de vente"
+
+    def __str__(self):
+        return f"{self.quantite} × {self.libelle}"
+
+
+class LigneAvoir(models.Model):
+    avoir = models.ForeignKey(Avoir, on_delete=models.PROTECT, related_name="lignes")
+    ligne_vente = models.ForeignKey(LigneVente, on_delete=models.PROTECT, related_name="retours")
+    libelle = models.CharField(max_length=200)
+    quantite = models.PositiveIntegerField()
+    taux_tva = models.DecimalField(max_digits=5, decimal_places=2)
+    total_ttc = models.DecimalField(max_digits=14, decimal_places=3)
+    remis_en_stock = models.BooleanField(
+        default=True, help_text="Faux pour un article défectueux ou fait sur mesure."
+    )
+
+    class Meta:
+        verbose_name = "ligne d'avoir"
 
     def __str__(self):
         return f"{self.quantite} × {self.libelle}"

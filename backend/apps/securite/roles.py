@@ -123,12 +123,22 @@ PERMISSIONS_DEVIS = {
     "Comptable": ["ventes.view_devis"],
 }
 
+# Avoirs et annulations : remboursent le client, donc réservés aux responsables.
+AVOIRS_COMPLET = ["ventes.view_avoir", "ventes.add_avoir"]
+PERMISSIONS_AVOIRS = {
+    "Direction": ["ventes.view_avoir"],
+    "Responsable régional": AVOIRS_COMPLET,
+    "Responsable magasin": AVOIRS_COMPLET,
+    "Comptable": ["ventes.view_avoir"],
+}
+
 for _par_role in (
     PERMISSIONS_CAISSE_STOCK,
     PERMISSIONS_CLIENTS_OPTIQUE,
     PERMISSIONS_PARAMETRAGE,
     PERMISSIONS_FACTURES,
     PERMISSIONS_DEVIS,
+    PERMISSIONS_AVOIRS,
 ):
     for _nom, _permissions in _par_role.items():
         ROLES_DE_DEPART[_nom] = ROLES_DE_DEPART[_nom] + _permissions

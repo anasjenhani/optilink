@@ -83,6 +83,12 @@ La caisse suppose une liaison permanente avec le serveur (lien de secours 4G rec
 - **Articles sur commande** (`Article.sur_commande`, les verres par défaut) : commandés au fournisseur pour chaque client, ils n'ont pas de stock. Une vente qui en contient est forcément une commande. Les autres articles (monture…) sortent du stock dès la commande.
 - **Règlements et livraison** (écran Commandes) : `POST /api/v1/ventes/{id}/reglement/` encaisse un règlement sans dépasser le reste ; `POST /api/v1/ventes/{id}/livrer/` remet l'équipement et exige le solde, encaissé au plus tard à ce moment-là. Chaque paiement garde sa date et la personne qui l'a reçu. La facture reste possible seulement une fois la vente soldée.
 
+## Avoirs et annulations
+
+- **Avoir** (`ventes.Avoir`, écran Avoirs, `POST /api/v1/avoirs/`) : une vente et sa facture ne sont jamais modifiées ; l'avoir les corrige, avec sa propre suite de numéros (`M01-A2026-000001`). Il reprend des articles d'une vente livrée, ligne par ligne et quantité par quantité, avec un motif obligatoire. Le client est remboursé de leur prix (mode de remboursement exigé). Chaque article repris revient en stock, sauf s'il est défectueux (case décochée) ou fait sur commande.
+- **Annulation** (`annulation: true`) : avoir sur tout ce qui n'a pas encore été repris ; la vente passe à « annulée ». Une commande non livrée ne peut qu'être annulée en entier : le client récupère ses acomptes (jamais plus que ce qu'il a versé) et la monture revient en stock.
+- **Règles.** Une vente qui a un avoir ne se facture plus ; si elle était déjà facturée, l'avoir porte le n° de la facture. Une commande annulée n'accepte plus de règlement. Droit `ventes.add_avoir` : responsables de magasin et régionaux ; direction et comptable en lecture. Avoirs et lignes cloisonnés par magasin dans PostgreSQL.
+
 ## Démarrer en développement
 
 Prérequis : Docker avec Docker Compose.
@@ -141,4 +147,4 @@ Nginx redirige HTTP vers HTTPS (TLS 1.2 minimum, HSTS). La connexion Django vers
 - Reprise rapide par code PIN sur le poste de caisse
 - Notification de la direction à chaque changement de rôle ou d'affectation
 - Interface en arabe (écriture de droite à gauche) et en anglais
-- Lot Vendre, suite : avoirs et retours, commandes fournisseurs de verres, tables spécialisées par famille d'article, export et anonymisation RGPD d'un client
+- Lot Vendre, suite : commandes fournisseurs de verres, tables spécialisées par famille d'article, export et anonymisation RGPD d'un client

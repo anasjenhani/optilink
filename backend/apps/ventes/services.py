@@ -11,9 +11,11 @@ from apps.stock.models import MouvementStock, PrixArticle
 
 from .models import (
     PREFIXES,
+    Avoir,
     CompteurFacture,
     Devis,
     Facture,
+    LigneAvoir,
     LigneDevis,
     LigneVente,
     Paiement,
@@ -219,6 +221,8 @@ def _verrouiller_vente(vente):
 def regler_commande(*, vente, paiements, utilisateur):
     """Encaisse un règlement sur une vente qui n'est pas soldée (acompte complémentaire, solde)."""
     vente = _verrouiller_vente(vente)
+    if vente.statut == Vente.Statut.ANNULEE:
+        raise VenteInvalide(f"La vente {vente.numero} est annulée.")
     montant = sum((p["montant"] for p in paiements), Decimal("0"))
     if montant <= 0:
         raise VenteInvalide("Le règlement doit être positif.")
@@ -263,6 +267,10 @@ def generer_facture(*, vente, client, emetteur, mode_paiement_timbre=""):
     vente = Vente.tous.select_for_update().select_related("magasin__pays").get(pk=vente.pk)
     if Facture.tous.filter(vente=vente).exists():
         raise FactureImpossible(f"La vente {vente.numero} est déjà facturée.")
+    if Avoir.tous.filter(vente=vente).exists():
+        raise FactureImpossible(
+            f"La vente {vente.numero} a fait l'objet d'un avoir : elle ne se facture plus."
+        )
     if client is None:
         raise FactureImpossible("Une facture est établie au nom d'un client.")
     reste = vente.reste_a_payer
@@ -435,3 +443,161 @@ def encaisser_devis(*, devis, vendeur, paiements, commande=False, livraison_prev
     devis.statut = Devis.Statut.ENCAISSE
     devis.save(update_fields=["vente", "statut", "modifie_le"])
     return vente
+
+
+class AvoirImpossible(Exception):
+    pass
+
+
+def _deja_rendu(vente):
+    """Quantités déjà reprises par ligne de vente, et montant déjà remboursé."""
+    rendues = {}
+    for ligne in LigneAvoir.objects.filter(avoir__vente=vente):
+        rendues[ligne.ligne_vente_id] = rendues.get(ligne.ligne_vente_id, 0) + ligne.quantite
+    rembourse = sum((a.montant_rembourse for a in Avoir.tous.filter(vente=vente)), Decimal("0"))
+    return rendues, rembourse
+
+
+def _emettre(*, vente, retours, motif, emetteur, mode_remboursement, annulation):
+    """``retours`` : [(ligne_vente, quantite, remis_en_stock)]."""
+    if not motif.strip():
+        raise AvoirImpossible("Préciser le motif de l'avoir.")
+    pays = vente.magasin.pays
+    rendues, deja_rembourse = _deja_rendu(vente)
+    detail = []
+    for ligne, quantite, remis_en_stock in retours:
+        restante = ligne.quantite - rendues.get(ligne.pk, 0)
+        if quantite < 1 or quantite > restante:
+            raise AvoirImpossible(f"{ligne.libelle} : {restante} au plus peut encore être repris.")
+        if quantite == restante:
+            # Le dernier retour d'une ligne prend le solde : pas d'écart d'arrondi cumulé.
+            deja = sum((r.total_ttc for r in ligne.retours.all()), Decimal("0"))
+            ttc = ligne.total_ttc - deja
+        else:
+            ttc = arrondir(ligne.total_ttc * quantite / ligne.quantite, pays.decimales)
+        ht = arrondir(ttc / (1 + ligne.taux_tva / 100), pays.decimales)
+        detail.append((ligne, quantite, remis_en_stock, ttc, ht))
+    if not detail:
+        raise AvoirImpossible("L'avoir ne reprend aucun article.")
+
+    total_ttc = sum((d[3] for d in detail), Decimal("0"))
+    total_ht = sum((d[4] for d in detail), Decimal("0"))
+    paye = vente.total_ttc - vente.reste_a_payer
+    # On ne rend jamais plus que ce que le client a versé (acomptes d'une commande annulée).
+    rembourse = max(Decimal("0"), min(total_ttc, paye - deja_rembourse))
+    if rembourse > 0 and not mode_remboursement:
+        raise AvoirImpossible(
+            f"Rembourser {rembourse} {vente.devise} au client : préciser le mode de remboursement."
+        )
+
+    annee = _aujourd_hui(pays).year
+    sequence = _prochain_numero(vente.magasin, annee, TypeDocument.AVOIR)
+    avoir = Avoir.tous.create(
+        magasin=vente.magasin,
+        numero=_numero(vente.magasin, TypeDocument.AVOIR, annee, sequence),
+        annee=annee,
+        sequence=sequence,
+        vente=vente,
+        facture=Facture.tous.filter(vente=vente).first(),
+        client=vente.client,
+        annulation=annulation,
+        motif=motif.strip(),
+        devise=vente.devise,
+        total_ht=total_ht,
+        total_tva=total_ttc - total_ht,
+        total_ttc=total_ttc,
+        montant_rembourse=rembourse,
+        mode_remboursement=mode_remboursement if rembourse > 0 else "",
+        emis_par=emetteur,
+    )
+    LigneAvoir.objects.bulk_create(
+        LigneAvoir(
+            avoir=avoir,
+            ligne_vente=ligne,
+            libelle=ligne.libelle,
+            quantite=quantite,
+            taux_tva=ligne.taux_tva,
+            total_ttc=ttc,
+            remis_en_stock=remis_en_stock,
+        )
+        for ligne, quantite, remis_en_stock, ttc, _ in detail
+    )
+    MouvementStock.tous.bulk_create(
+        MouvementStock(
+            magasin=vente.magasin,
+            article=ligne.article,
+            quantite=quantite,
+            type=MouvementStock.Type.RETOUR,
+            utilisateur=emetteur,
+            reference=avoir.numero,
+        )
+        for ligne, quantite, remis_en_stock, *_ in detail
+        if remis_en_stock and not ligne.article.sur_commande
+    )
+    # Tout est repris : la vente est annulée.
+    rendues_apres = dict(rendues)
+    for ligne, quantite, *_ in detail:
+        rendues_apres[ligne.pk] = rendues_apres.get(ligne.pk, 0) + quantite
+    if all(rendues_apres.get(lv.pk, 0) >= lv.quantite for lv in vente.lignes.all()):
+        vente.statut = Vente.Statut.ANNULEE
+        vente.save(update_fields=["statut", "modifie_le"])
+    return avoir
+
+
+@transaction.atomic
+def emettre_avoir(*, vente, retours, motif, emetteur, mode_remboursement=""):
+    """Avoir pour un retour d'articles sur une vente livrée.
+
+    ``retours`` : [{"ligne_vente", "quantite", "remis_en_stock"}]. Les articles remis en stock y
+    reviennent (pas ceux faits sur commande) ; le client est remboursé de leur prix.
+    """
+    vente = _verrouiller_vente(vente)
+    if vente.statut == Vente.Statut.EN_COMMANDE:
+        raise AvoirImpossible(
+            f"La commande {vente.numero} n'est pas livrée : l'annuler plutôt que "
+            "reprendre des articles."
+        )
+    if vente.statut == Vente.Statut.ANNULEE:
+        raise AvoirImpossible(f"La vente {vente.numero} est déjà annulée.")
+    lignes = {ligne.pk: ligne for ligne in vente.lignes.select_related("article")}
+    try:
+        demandes = [
+            (lignes[r["ligne_vente"]], r["quantite"], r.get("remis_en_stock", True))
+            for r in retours
+        ]
+    except KeyError:
+        raise AvoirImpossible("Cette ligne n'appartient pas à la vente.") from None
+    return _emettre(
+        vente=vente,
+        retours=demandes,
+        motif=motif,
+        emetteur=emetteur,
+        mode_remboursement=mode_remboursement,
+        annulation=False,
+    )
+
+
+@transaction.atomic
+def annuler_vente(*, vente, motif, emetteur, mode_remboursement="", remis_en_stock=True):
+    """Annule une vente ou une commande : avoir sur tout ce qui n'a pas encore été repris.
+
+    Une commande non livrée rend son acompte et remet en stock ce qui en était sorti.
+    """
+    vente = _verrouiller_vente(vente)
+    if vente.statut == Vente.Statut.ANNULEE:
+        raise AvoirImpossible(f"La vente {vente.numero} est déjà annulée.")
+    jamais_livree = vente.statut == Vente.Statut.EN_COMMANDE
+    rendues, _ = _deja_rendu(vente)
+    demandes = [
+        (ligne, ligne.quantite - rendues.get(ligne.pk, 0), remis_en_stock or jamais_livree)
+        for ligne in vente.lignes.select_related("article")
+        if ligne.quantite > rendues.get(ligne.pk, 0)
+    ]
+    return _emettre(
+        vente=vente,
+        retours=demandes,
+        motif=motif,
+        emetteur=emetteur,
+        mode_remboursement=mode_remboursement,
+        annulation=True,
+    )

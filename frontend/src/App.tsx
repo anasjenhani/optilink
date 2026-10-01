@@ -15,6 +15,7 @@ import { CodesSecours } from "./auth/CodesSecours";
 import { Connexion } from "./auth/Connexion";
 import { VerificationMfa } from "./auth/VerificationMfa";
 import { Accueil } from "./pages/Accueil";
+import { Avoirs } from "./pages/Avoirs";
 import { Caisse } from "./pages/Caisse";
 import { Clients } from "./pages/Clients";
 import { Commandes } from "./pages/Commandes";
@@ -56,6 +57,7 @@ function Contenu({ session }: { session: EtatSession }) {
         />
       )}
       {peut(session, "ventes.add_facture") && <Factures />}
+      {peut(session, "ventes.add_avoir") && <Avoirs />}
       {peut(session, "crm.view_client") && (
         <Clients
           droits={{
