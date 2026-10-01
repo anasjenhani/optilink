@@ -17,6 +17,7 @@ import { VerificationMfa } from "./auth/VerificationMfa";
 import { Accueil } from "./pages/Accueil";
 import { Caisse } from "./pages/Caisse";
 import { Clients } from "./pages/Clients";
+import { Devis } from "./pages/Devis";
 import { Factures } from "./pages/Factures";
 import { Magasins } from "./pages/Magasins";
 
@@ -42,6 +43,16 @@ function Contenu({ session }: { session: EtatSession }) {
   return (
     <Stack spacing={3}>
       {peut(session, "ventes.add_vente") && <Caisse />}
+      {peut(session, "ventes.add_devis") && peut(session, "crm.view_client") && (
+        <Devis
+          droits={{
+            remise: peut(session, "ventes.appliquer_remise"),
+            voirOrdonnances: peut(session, "optique.view_prescription"),
+            changerStatut: peut(session, "ventes.change_devis"),
+            encaisser: peut(session, "ventes.add_vente"),
+          }}
+        />
+      )}
       {peut(session, "ventes.add_facture") && <Factures />}
       {peut(session, "crm.view_client") && (
         <Clients

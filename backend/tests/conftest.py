@@ -1,11 +1,15 @@
+from decimal import Decimal
+
 import pytest
 from django.contrib.auth.models import Group, Permission
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from rest_framework.test import APIClient
 
+from apps.crm.models import Client
 from apps.reseau.models import Magasin, Pays, Region, TauxTva
 from apps.securite.models import Affectation, Utilisateur
+from apps.stock.models import Article, MouvementStock, PrixArticle
 
 
 @pytest.fixture
@@ -96,3 +100,31 @@ def affecter(creer_role, creer_utilisateur):
 def tva(pays, taux):
     """Taux de TVA d'un pays, tel que créé par la migration (ex. tva(tunisie, 19))."""
     return TauxTva.objects.get(pays=pays, taux=taux)
+
+
+# Magasin tunisien de départ (dinar à 3 décimales, TVA 19 %, timbre sur facture).
+@pytest.fixture
+def tunis(db):
+    tunisie = Pays.objects.get(code="TN")
+    region = Region.objects.create(code="GT", nom="Grand Tunis")
+    return Magasin.tous.create(code="T01", nom="Tunis Centre", region=region, pays=tunisie)
+
+
+@pytest.fixture
+def monture(tunis):
+    article = Article.objects.create(reference="MON-T", libelle="Monture", famille="monture")
+    PrixArticle.objects.create(
+        article=article, pays=tunis.pays, prix_vente_ttc=Decimal("289.500"), tva=tva(tunis.pays, 19)
+    )
+    MouvementStock.tous.create(magasin=tunis, article=article, quantite=3, type="reception")
+    return article
+
+
+@pytest.fixture
+def societe(tunis):
+    return Client.objects.create(
+        nom="Optique Services",
+        prenom="SARL",
+        matricule_fiscal="1234567/A/M/000",
+        magasin_origine=tunis,
+    )

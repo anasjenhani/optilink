@@ -10,11 +10,12 @@ from core.models import ModeleDeBase
 class TypeDocument(models.TextChoices):
     TICKET = "ticket", "Ticket de caisse"
     FACTURE = "facture", "Facture"
+    DEVIS = "devis", "Devis"
 
 
-# Préfixe du numéro : M01-T2026-000001 pour un ticket, M01-F2026-000001 pour une facture.
-# Chaque type de document a sa propre suite de numéros.
-PREFIXES = {TypeDocument.TICKET: "T", TypeDocument.FACTURE: "F"}
+# Préfixe du numéro : M01-T2026-000001 pour un ticket, M01-F2026-000001 pour une facture,
+# M01-D2026-000001 pour un devis. Chaque type de document a sa propre suite de numéros.
+PREFIXES = {TypeDocument.TICKET: "T", TypeDocument.FACTURE: "F", TypeDocument.DEVIS: "D"}
 
 
 class CompteurFacture(models.Model):
@@ -127,6 +128,88 @@ class Facture(ModeleDeBase):
 
     def __str__(self):
         return self.numero
+
+
+class Devis(ModeleDeBase):
+    """Devis d'équipement remis à un client, avec ses prix figés jusqu'à la date de validité.
+
+    Il peut s'appuyer sur une ordonnance du client. Accepté, il s'encaisse en caisse au prix
+    du devis, même si le tarif a changé entre-temps. Ses lignes ne se modifient pas : une
+    autre proposition est un nouveau devis.
+    """
+
+    class Statut(models.TextChoices):
+        EN_COURS = "en_cours", "En cours"
+        ACCEPTE = "accepte", "Accepté"
+        REFUSE = "refuse", "Refusé"
+        ENCAISSE = "encaisse", "Encaissé"
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    client = models.ForeignKey("crm.Client", on_delete=models.PROTECT, related_name="devis")
+    prescription = models.ForeignKey(
+        "optique.Prescription",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="devis",
+        help_text="Ordonnance du client sur laquelle s'appuie le devis.",
+    )
+    etabli_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+    devise = models.CharField(max_length=3)
+    total_ht = models.DecimalField(max_digits=14, decimal_places=3)
+    total_tva = models.DecimalField(max_digits=14, decimal_places=3)
+    total_ttc = models.DecimalField(max_digits=14, decimal_places=3)
+    valable_jusqu_au = models.DateField()
+    statut = models.CharField(max_length=10, choices=Statut.choices, default=Statut.EN_COURS)
+    vente = models.OneToOneField(
+        Vente, on_delete=models.PROTECT, null=True, blank=True, related_name="devis"
+    )
+    remarques = models.TextField(blank=True)
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-cree_le"]
+        verbose_name = "devis"
+        verbose_name_plural = "devis"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="devis_numerote_sans_doublon"
+            )
+        ]
+
+    def __str__(self):
+        return self.numero
+
+
+class LigneDevis(models.Model):
+    class Oeil(models.TextChoices):
+        DROIT = "od", "Œil droit"
+        GAUCHE = "og", "Œil gauche"
+
+    devis = models.ForeignKey(Devis, on_delete=models.PROTECT, related_name="lignes")
+    article = models.ForeignKey("stock.Article", on_delete=models.PROTECT, related_name="+")
+    libelle = models.CharField(max_length=200)
+    oeil = models.CharField(
+        max_length=2, choices=Oeil.choices, blank=True, help_text="Pour un verre ou une lentille."
+    )
+    quantite = models.PositiveIntegerField()
+    prix_unitaire_ttc = models.DecimalField(max_digits=14, decimal_places=3)
+    remise_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    taux_tva = models.DecimalField(max_digits=5, decimal_places=2)
+    total_ttc = models.DecimalField(max_digits=14, decimal_places=3)
+
+    class Meta:
+        verbose_name = "ligne de devis"
+
+    def __str__(self):
+        return f"{self.quantite} × {self.libelle}"
 
 
 class LigneVente(models.Model):

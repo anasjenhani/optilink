@@ -31,6 +31,12 @@ ARTICLES = [
         "lentille",
         {"TN": ("85.500", "7"), "FR": ("32.90", "5.50")},
     ),
+    (
+        "VER-PR-007",
+        "Verre progressif 1.6 antireflet",
+        "verre",
+        {"TN": ("180.000", "7"), "FR": ("190.00", "5.50")},
+    ),
     ("ACC-ET-005", "Étui rigide", "accessoire", {"TN": ("25.000", "19"), "FR": ("15.00", "20")}),
     (
         "ACC-SP-006",

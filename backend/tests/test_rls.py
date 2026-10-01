@@ -145,3 +145,20 @@ def test_le_middleware_vide_la_variable_apres_la_requete(creer_utilisateur, clie
     with connection.cursor() as cursor:
         cursor.execute("SELECT current_setting('app.perimetre', true)")
         assert cursor.fetchone()[0] == ""
+
+
+def test_devis_et_leurs_lignes_cloisonnes(tunis, monture, societe, reseau, creer_utilisateur):
+    from apps.ventes.services import etablir_devis
+
+    etablir_devis(
+        magasin=tunis,
+        auteur=creer_utilisateur("o"),
+        client=societe,
+        lignes=[{"article": monture, "quantite": 1}],
+    )
+    rls.poser({tunis.id})
+    assert len(codes_visibles("ventes_devis", "numero")) == 1
+    assert len(codes_visibles("ventes_lignedevis", "libelle")) == 1
+    rls.poser({reseau["lille"].id})
+    assert codes_visibles("ventes_devis", "numero") == []
+    assert codes_visibles("ventes_lignedevis", "libelle") == []

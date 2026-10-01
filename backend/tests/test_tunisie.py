@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from apps.reseau.models import Magasin, Pays, Region
+from apps.reseau.models import Pays
 from apps.stock.models import Article, MouvementStock, PrixArticle
 from apps.ventes.services import (
     FactureImpossible,
@@ -15,39 +15,10 @@ from apps.ventes.services import (
 from tests.conftest import tva
 
 
-@pytest.fixture
-def tunis(db):
-    tunisie = Pays.objects.get(code="TN")
-    region = Region.objects.create(code="GT", nom="Grand Tunis")
-    return Magasin.tous.create(code="T01", nom="Tunis Centre", region=region, pays=tunisie)
-
-
-@pytest.fixture
-def monture(tunis):
-    article = Article.objects.create(reference="MON-T", libelle="Monture", famille="monture")
-    PrixArticle.objects.create(
-        article=article, pays=tunis.pays, prix_vente_ttc=Decimal("289.500"), tva=tva(tunis.pays, 19)
-    )
-    MouvementStock.tous.create(magasin=tunis, article=article, quantite=3, type="reception")
-    return article
-
-
 def test_parametres_tunisie(db):
     tunisie = Pays.objects.get(code="TN")
     assert (tunisie.devise, tunisie.decimales, tunisie.fuseau_horaire) == ("TND", 3, "Africa/Tunis")
     assert sorted(t.taux for t in tunisie.taux_tva.all()) == [7, 13, 19]
-
-
-@pytest.fixture
-def societe(tunis):
-    from apps.crm.models import Client
-
-    return Client.objects.create(
-        nom="Optique Services",
-        prenom="SARL",
-        matricule_fiscal="1234567/A/M/000",
-        magasin_origine=tunis,
-    )
 
 
 def vendre(tunis, monture, vendeur, **extra):

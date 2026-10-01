@@ -193,6 +193,9 @@ COMPTES_INACTIFS_JOURS = int(env("COMPTES_INACTIFS_JOURS", "90"))
 # la première chiffre, les suivantes ne servent qu'à relire pendant une rotation.
 PRESCRIPTIONS_CLES = env_list("PRESCRIPTIONS_CLES", "")
 
+# Durée de validité par défaut d'un devis, modifiable devis par devis.
+DEVIS_VALIDITE_JOURS = int(env("DEVIS_VALIDITE_JOURS", "30"))
+
 # Journal d'audit : le manager de base évite que le filtre de périmètre masque l'état précédent.
 AUDITLOG_USE_BASE_MANAGER = True
 
