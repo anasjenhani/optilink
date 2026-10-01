@@ -1,11 +1,17 @@
 from django.contrib import admin
 
-from .models import Article, MouvementStock
+from .models import Article, MouvementStock, PrixArticle
+
+
+class PrixArticleInline(admin.TabularInline):
+    model = PrixArticle
+    extra = 1
 
 
 @admin.register(Article)
 class ArticleAdmin(admin.ModelAdmin):
-    list_display = ("reference", "libelle", "famille", "prix_vente_ttc", "est_actif")
+    inlines = [PrixArticleInline]
+    list_display = ("reference", "libelle", "famille", "est_actif")
     list_filter = ("famille", "est_actif")
     search_fields = ("reference", "libelle", "code_barres")
 

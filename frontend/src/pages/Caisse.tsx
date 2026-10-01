@@ -18,16 +18,9 @@ import Typography from "@mui/material/Typography";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import {
-  chercherArticles,
-  encaisser,
-  enCentimes,
-  enEuros,
-  type Article,
-  type ModePaiement,
-  type Vente,
-} from "../api/caisse";
+import { chercherArticles, encaisser, type Article, type ModePaiement, type Vente } from "../api/caisse";
 import { listerMagasins } from "../api/magasins";
+import { enUnites, formater, formaterTexte, versTexte, type Monnaie } from "../api/monnaie";
 
 type Ligne = { article: Article; quantite: number };
 
@@ -42,6 +35,9 @@ export function Caisse() {
   const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
   const [magasinChoisi, setMagasin] = useState("");
   const magasin = magasinChoisi || magasins.data?.[0]?.id || "";
+  const pays = magasins.data?.find((m) => m.id === magasin)?.pays;
+  const monnaie: Monnaie = { devise: pays?.devise ?? "TND", decimales: pays?.decimales ?? 3 };
+  const unites = (montant: string) => enUnites(montant, monnaie.decimales);
   const [recherche, setRecherche] = useState("");
   const [panier, setPanier] = useState<Ligne[]>([]);
   const [mode, setMode] = useState<ModePaiement>("carte");
@@ -53,14 +49,17 @@ export function Caisse() {
     enabled: Boolean(magasin) && recherche.trim().length >= 2,
   });
 
-  const total = panier.reduce((somme, l) => somme + enCentimes(l.article.prix_vente_ttc) * l.quantite, 0);
+  const total = panier.reduce((somme, l) => somme + unites(l.article.prix_vente_ttc) * l.quantite, 0);
+  // Droit de timbre du pays (1 dinar par facture en Tunisie), payé avec la vente.
+  const timbre = panier.length > 0 ? unites(pays?.timbre_fiscal ?? "0") : 0;
+  const net = total + timbre;
 
   const vente = useMutation({
     mutationFn: () =>
       encaisser({
         magasin,
         lignes: panier.map((l) => ({ article: l.article.id, quantite: l.quantite })),
-        paiements: [{ mode, montant: enEuros(total) }],
+        paiements: [{ mode, montant: versTexte(net, monnaie.decimales) }],
       }),
     onSuccess: (enregistree) => {
       setDerniereVente(enregistree);
@@ -138,7 +137,7 @@ export function Caisse() {
                 }
               >
                 <ListItemText
-                  primary={`${article.libelle} · ${article.prix_vente_ttc} €`}
+                  primary={`${article.libelle} · ${formaterTexte(article.prix_vente_ttc, monnaie)}`}
                   secondary={`${article.reference} · stock ${article.stock ?? "?"}`}
                 />
               </ListItem>
@@ -173,7 +172,7 @@ export function Caisse() {
                       </IconButton>
                     </TableCell>
                     <TableCell align="right">
-                      {enEuros(enCentimes(ligne.article.prix_vente_ttc) * ligne.quantite)} €
+                      {formater(unites(ligne.article.prix_vente_ttc) * ligne.quantite, monnaie)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -182,9 +181,14 @@ export function Caisse() {
           )}
 
           <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
-            <Typography variant="h5" sx={{ flexGrow: 1 }}>
-              Total : {enEuros(total)} €
-            </Typography>
+            <Stack sx={{ flexGrow: 1 }}>
+              {timbre > 0 && (
+                <Typography color="text.secondary">
+                  Total TTC {formater(total, monnaie)} + timbre fiscal {formater(timbre, monnaie)}
+                </Typography>
+              )}
+              <Typography variant="h5">Net à payer : {formater(net, monnaie)}</Typography>
+            </Stack>
             <TextField
               select
               size="small"
@@ -211,7 +215,8 @@ export function Caisse() {
           {vente.isError && <Alert severity="error">{vente.error.message}</Alert>}
           {derniereVente && (
             <Alert severity="success">
-              Vente enregistrée : facture {derniereVente.numero}, {derniereVente.total_ttc} €.
+              Vente enregistrée : facture {derniereVente.numero},{" "}
+              {formaterTexte(derniereVente.net_a_payer, { devise: derniereVente.devise, decimales: monnaie.decimales })}.
             </Alert>
           )}
         </Stack>

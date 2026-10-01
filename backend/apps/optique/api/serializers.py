@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal
 
 from rest_framework import serializers
@@ -85,7 +86,7 @@ class PrescriptionSerializer(serializers.ModelSerializer):
             "type",
             "date_prescription",
             "prescripteur",
-            "prescripteur_rpps",
+            "prescripteur_identifiant",
             "mesures",
             "magasin_saisie",
             "saisie_par",
@@ -95,6 +96,16 @@ class PrescriptionSerializer(serializers.ModelSerializer):
 
     def get_saisie_par(self, prescription) -> str:
         return prescription.saisie_par.get_full_name() or prescription.saisie_par.get_username()
+
+    def validate(self, attrs):
+        pays = attrs["magasin_saisie"].pays
+        identifiant = attrs.get("prescripteur_identifiant", "")
+        motif = pays.format_identifiant_prescripteur
+        if identifiant and motif and not re.fullmatch(motif, identifiant):
+            raise serializers.ValidationError(
+                {"prescripteur_identifiant": f"{pays.libelle_identifiant_prescripteur} invalide."}
+            )
+        return attrs
 
     def validate_date_prescription(self, valeur):
         from django.utils import timezone

@@ -1,4 +1,14 @@
-from django.db.models import IntegerField, OuterRef, Q, Subquery, Sum, Value
+from django.db.models import (
+    CharField,
+    DecimalField,
+    Exists,
+    IntegerField,
+    OuterRef,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+)
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
@@ -8,7 +18,7 @@ from rest_framework.exceptions import PermissionDenied
 
 from apps.reseau.models import Magasin
 
-from ..models import Article, MouvementStock
+from ..models import Article, MouvementStock, PrixArticle
 from .serializers import ArticleSerializer, MouvementStockSerializer
 
 
@@ -19,7 +29,9 @@ from .serializers import ArticleSerializer, MouvementStockSerializer
                 "recherche", OpenApiTypes.STR, description="Référence, libellé ou code-barres"
             ),
             OpenApiParameter(
-                "magasin", OpenApiTypes.UUID, description="Ajoute le stock de ce magasin"
+                "magasin",
+                OpenApiTypes.UUID,
+                description="Ajoute stock et prix dans ce magasin (articles vendables seulement)",
             ),
         ]
     )
@@ -42,8 +54,20 @@ class ArticleViewSet(viewsets.ReadOnlyModelViewSet):
             )
         magasin_id = self.request.query_params.get("magasin")
         if not magasin_id:
-            return articles.annotate(stock=Value(None, output_field=IntegerField()))
-        magasin = get_object_or_404(Magasin.objects, public_id=magasin_id)
+            return articles.annotate(
+                stock=Value(None, output_field=IntegerField()),
+                prix_vente_ttc=Value(None, output_field=DecimalField()),
+                taux_tva=Value(None, output_field=DecimalField()),
+                devise=Value(None, output_field=CharField()),
+            )
+        magasin = get_object_or_404(Magasin.objects.select_related("pays"), public_id=magasin_id)
+        # Seuls les articles qui ont un prix dans le pays du magasin y sont vendables.
+        tarif = PrixArticle.objects.filter(article=OuterRef("pk"), pays=magasin.pays)
+        articles = articles.filter(Exists(tarif)).annotate(
+            prix_vente_ttc=Subquery(tarif.values("prix_vente_ttc")),
+            taux_tva=Subquery(tarif.values("taux_tva")),
+            devise=Value(magasin.pays.devise, output_field=CharField()),
+        )
         stock = (
             MouvementStock.tous.filter(magasin=magasin, article=OuterRef("pk"))
             .values("article")

@@ -38,9 +38,7 @@ def test_le_compte_applicatif_n_echappe_pas_a_la_rls(db):
 def test_la_base_ne_montre_que_les_mouvements_du_perimetre(reseau):
     from apps.stock.models import Article, MouvementStock
 
-    article = Article.objects.create(
-        reference="P", libelle="P", famille="monture", prix_vente_ttc=10
-    )
+    article = Article.objects.create(reference="P", libelle="P", famille="monture")
     for magasin in reseau.values():
         if isinstance(magasin, Magasin):
             MouvementStock.tous.create(
@@ -74,15 +72,15 @@ def test_magasins_lisibles_mais_modifiables_dans_le_perimetre_seulement(reseau):
         cursor.execute("UPDATE reseau_magasin SET nom = 'x'")
         assert cursor.rowcount == 1
     with pytest.raises(DatabaseError, match="row-level security"), transaction.atomic():
-        Magasin.tous.create(code="M09", nom="Hors", region=reseau["nord"])
+        Magasin.tous.create(
+            code="M09", nom="Hors", region=reseau["nord"], pays=reseau["lille"].pays
+        )
 
 
 def test_ventes_et_lignes_cloisonnees(reseau):
     from apps.stock.models import Article, MouvementStock
 
-    article = Article.objects.create(
-        reference="A", libelle="A", famille="monture", prix_vente_ttc=10
-    )
+    article = Article.objects.create(reference="A", libelle="A", famille="monture")
     for magasin in (reseau["lille"], reseau["nice"]):
         MouvementStock.tous.create(magasin=magasin, article=article, quantite=3, type="reception")
 
@@ -97,9 +95,7 @@ def test_ventes_et_lignes_cloisonnees(reseau):
 def test_ecrire_hors_perimetre_est_refuse(reseau):
     from apps.stock.models import Article, MouvementStock
 
-    article = Article.objects.create(
-        reference="B", libelle="B", famille="monture", prix_vente_ttc=10
-    )
+    article = Article.objects.create(reference="B", libelle="B", famille="monture")
     rls.poser({reseau["lille"].id})
     with pytest.raises(DatabaseError, match="row-level security"), transaction.atomic():
         MouvementStock.tous.create(

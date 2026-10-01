@@ -19,7 +19,7 @@ class LigneSaisieSerializer(serializers.Serializer):
 
 class PaiementSaisieSerializer(serializers.Serializer):
     mode = serializers.ChoiceField(choices=Paiement.Mode.choices)
-    montant = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0.01"))
+    montant = serializers.DecimalField(max_digits=14, decimal_places=3, min_value=Decimal("0.001"))
 
 
 class VenteSaisieSerializer(serializers.Serializer):
@@ -65,9 +65,12 @@ class VenteSerializer(serializers.ModelSerializer):
             "magasin",
             "vendeur",
             "cree_le",
+            "devise",
             "total_ht",
             "total_tva",
             "total_ttc",
+            "timbre_fiscal",
+            "net_a_payer",
             "lignes",
             "paiements",
         ]

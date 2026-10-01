@@ -2,36 +2,68 @@ from decimal import Decimal
 
 from django.core.management.base import BaseCommand
 
-from apps.reseau.models import Magasin
-from apps.stock.models import Article, MouvementStock
+from apps.reseau.models import Magasin, Pays
+from apps.stock.models import Article, MouvementStock, PrixArticle
 
+# Prix de démonstration par pays : (prix TTC, taux de TVA). Taux réels à valider.
 ARTICLES = [
-    ("MON-RB-001", "Monture Ray-Ban RB5154 écaille", "monture", "149.00", "20.00"),
-    ("MON-OA-002", "Monture titane légère noire", "monture", "219.00", "20.00"),
-    ("SOL-PO-003", "Lunettes de soleil polarisées", "monture", "129.00", "20.00"),
-    ("LEN-MJ-004", "Lentilles journalières boîte de 30", "lentille", "32.90", "5.50"),
-    ("ACC-ET-005", "Étui rigide", "accessoire", "15.00", "20.00"),
-    ("ACC-SP-006", "Spray nettoyant 30 ml", "accessoire", "6.90", "20.00"),
+    (
+        "MON-RB-001",
+        "Monture Ray-Ban RB5154 écaille",
+        "monture",
+        {"TN": ("489.000", "19"), "FR": ("149.00", "20")},
+    ),
+    (
+        "MON-OA-002",
+        "Monture titane légère noire",
+        "monture",
+        {"TN": ("650.000", "19"), "FR": ("219.00", "20")},
+    ),
+    (
+        "SOL-PO-003",
+        "Lunettes de soleil polarisées",
+        "monture",
+        {"TN": ("320.000", "19"), "FR": ("129.00", "20")},
+    ),
+    (
+        "LEN-MJ-004",
+        "Lentilles journalières boîte de 30",
+        "lentille",
+        {"TN": ("85.500", "7"), "FR": ("32.90", "5.50")},
+    ),
+    ("ACC-ET-005", "Étui rigide", "accessoire", {"TN": ("25.000", "19"), "FR": ("15.00", "20")}),
+    (
+        "ACC-SP-006",
+        "Spray nettoyant 30 ml",
+        "accessoire",
+        {"TN": ("12.500", "19"), "FR": ("6.90", "20")},
+    ),
 ]
 
 
 class Command(BaseCommand):
-    help = "Crée quelques articles et 10 unités de chacun dans chaque magasin actif (essais)."
+    help = (
+        "Crée quelques articles avec leurs prix par pays, et 10 unités de chacun dans chaque "
+        "magasin actif qui n'en a pas encore (essais)."
+    )
 
     def handle(self, *args, **options):
-        for reference, libelle, famille, prix, tva in ARTICLES:
-            article, cree = Article.objects.get_or_create(
-                reference=reference,
-                defaults={
-                    "libelle": libelle,
-                    "famille": famille,
-                    "prix_vente_ttc": Decimal(prix),
-                    "taux_tva": Decimal(tva),
-                },
+        pays = {p.code: p for p in Pays.objects.all()}
+        magasins = list(Magasin.tous.filter(est_actif=True))
+        for reference, libelle, famille, tarifs in ARTICLES:
+            article, _ = Article.objects.get_or_create(
+                reference=reference, defaults={"libelle": libelle, "famille": famille}
             )
-            if not cree:
-                continue
-            for magasin in Magasin.tous.filter(est_actif=True):
+            for code, (prix, tva) in tarifs.items():
+                if code in pays:
+                    PrixArticle.objects.get_or_create(
+                        article=article,
+                        pays=pays[code],
+                        defaults={"prix_vente_ttc": Decimal(prix), "taux_tva": Decimal(tva)},
+                    )
+            for magasin in magasins:
+                if MouvementStock.tous.filter(magasin=magasin, article=article).exists():
+                    continue
                 MouvementStock.tous.create(
                     magasin=magasin,
                     article=article,

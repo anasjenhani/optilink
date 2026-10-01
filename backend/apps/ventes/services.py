@@ -1,22 +1,22 @@
 from decimal import ROUND_HALF_UP, Decimal
+from zoneinfo import ZoneInfo
 
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
-from apps.stock.models import MouvementStock
+from apps.stock.models import MouvementStock, PrixArticle
 
 from .models import CompteurFacture, LigneVente, Paiement, Vente
-
-CENTIME = Decimal("0.01")
 
 
 class VenteInvalide(Exception):
     pass
 
 
-def arrondir(montant):
-    return montant.quantize(CENTIME, rounding=ROUND_HALF_UP)
+def arrondir(montant, decimales):
+    """Arrondi à la plus petite unité de la monnaie (centime, millime…)."""
+    return montant.quantize(Decimal(1).scaleb(-decimales), rounding=ROUND_HALF_UP)
 
 
 def _prochain_numero(magasin, annee):
@@ -61,23 +61,35 @@ def enregistrer_vente(*, magasin, vendeur, lignes, paiements):
         if stocks.get(article.pk, 0) < quantites[article.pk]:
             raise VenteInvalide(f"Stock insuffisant pour {article.reference}.")
 
+    pays = magasin.pays
+    tarifs = {
+        prix.article_id: prix
+        for prix in PrixArticle.objects.filter(pays=pays, article__in=quantites.keys())
+    }
     detail = []
     for ligne in lignes:
         article, quantite = ligne["article"], ligne["quantite"]
+        tarif = tarifs.get(article.pk)
+        if tarif is None:
+            raise VenteInvalide(f"L'article {article.reference} n'a pas de prix en {pays}.")
         remise = ligne.get("remise_pct") or Decimal("0")
-        total_ttc = arrondir(article.prix_vente_ttc * quantite * (1 - remise / 100))
-        total_ht = arrondir(total_ttc / (1 + article.taux_tva / 100))
-        detail.append((article, quantite, remise, total_ttc, total_ht))
+        total_ttc = arrondir(tarif.prix_vente_ttc * quantite * (1 - remise / 100), pays.decimales)
+        total_ht = arrondir(total_ttc / (1 + tarif.taux_tva / 100), pays.decimales)
+        detail.append((article, quantite, remise, total_ttc, total_ht, tarif))
 
     total_ttc = sum((d[3] for d in detail), Decimal("0"))
     total_ht = sum((d[4] for d in detail), Decimal("0"))
-    total_paye = sum((arrondir(p["montant"]) for p in paiements), Decimal("0"))
-    if total_paye != total_ttc:
+    timbre = pays.timbre_fiscal
+    net_a_payer = total_ttc + timbre
+    total_paye = sum((arrondir(p["montant"], pays.decimales) for p in paiements), Decimal("0"))
+    if total_paye != net_a_payer:
         raise VenteInvalide(
-            f"Les paiements ({total_paye} €) ne couvrent pas le total ({total_ttc} €)."
+            f"Les paiements ({total_paye} {pays.devise}) ne couvrent pas le net à payer "
+            f"({net_a_payer} {pays.devise})."
         )
 
-    annee = timezone.localdate().year
+    # L'année de la facture est celle du magasin, pas celle du serveur.
+    annee = timezone.localdate(timezone=ZoneInfo(pays.fuseau_horaire)).year
     sequence = _prochain_numero(magasin, annee)
     vente = Vente.tous.create(
         magasin=magasin,
@@ -85,9 +97,12 @@ def enregistrer_vente(*, magasin, vendeur, lignes, paiements):
         annee=annee,
         sequence=sequence,
         vendeur=vendeur,
+        devise=pays.devise,
         total_ht=total_ht,
         total_tva=total_ttc - total_ht,
         total_ttc=total_ttc,
+        timbre_fiscal=timbre,
+        net_a_payer=net_a_payer,
     )
     LigneVente.objects.bulk_create(
         LigneVente(
@@ -95,12 +110,12 @@ def enregistrer_vente(*, magasin, vendeur, lignes, paiements):
             article=article,
             libelle=article.libelle,
             quantite=quantite,
-            prix_unitaire_ttc=article.prix_vente_ttc,
+            prix_unitaire_ttc=tarif.prix_vente_ttc,
             remise_pct=remise,
-            taux_tva=article.taux_tva,
+            taux_tva=tarif.taux_tva,
             total_ttc=ttc,
         )
-        for article, quantite, remise, ttc, _ in detail
+        for article, quantite, remise, ttc, _, tarif in detail
     )
     MouvementStock.tous.bulk_create(
         MouvementStock(
@@ -114,6 +129,7 @@ def enregistrer_vente(*, magasin, vendeur, lignes, paiements):
         for article, quantite, *_ in detail
     )
     Paiement.objects.bulk_create(
-        Paiement(vente=vente, mode=p["mode"], montant=arrondir(p["montant"])) for p in paiements
+        Paiement(vente=vente, mode=p["mode"], montant=arrondir(p["montant"], pays.decimales))
+        for p in paiements
     )
     return vente

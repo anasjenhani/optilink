@@ -3,22 +3,21 @@ from decimal import Decimal
 import pytest
 
 from apps.securite.models import Affectation
-from apps.stock.models import Article, MouvementStock, stock_disponible
+from apps.stock.models import Article, MouvementStock, PrixArticle, stock_disponible
 from apps.ventes.models import Vente
 from apps.ventes.services import VenteInvalide, enregistrer_vente
 
 
 @pytest.fixture
 def articles(reseau):
-    monture = Article.objects.create(
-        reference="MON-1", libelle="Monture", famille="monture", prix_vente_ttc=Decimal("149.00")
+    france = reseau["lille"].pays
+    monture = Article.objects.create(reference="MON-1", libelle="Monture", famille="monture")
+    lentilles = Article.objects.create(reference="LEN-1", libelle="Lentilles", famille="lentille")
+    PrixArticle.objects.create(
+        article=monture, pays=france, prix_vente_ttc=Decimal("149.00"), taux_tva=Decimal("20")
     )
-    lentilles = Article.objects.create(
-        reference="LEN-1",
-        libelle="Lentilles",
-        famille="lentille",
-        prix_vente_ttc=Decimal("32.90"),
-        taux_tva=Decimal("5.50"),
+    PrixArticle.objects.create(
+        article=lentilles, pays=france, prix_vente_ttc=Decimal("32.90"), taux_tva=Decimal("5.50")
     )
     for magasin in (reseau["lille"], reseau["arras"]):
         for article in (monture, lentilles):
@@ -134,7 +133,7 @@ def test_caisse_par_l_api(reseau, articles, affecter, client_de):
         format="json",
     )
     assert reponse.status_code == 201, reponse.json()
-    assert reponse.json()["total_ttc"] == "298.00"
+    assert reponse.json()["total_ttc"] == "298.000"
     assert reponse.json()["lignes"][0]["libelle"] == "Monture"
     assert client.get("/api/v1/ventes/").json()["count"] == 1
 

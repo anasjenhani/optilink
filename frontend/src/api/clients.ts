@@ -32,7 +32,7 @@ export type Prescription = {
 export type SaisiePrescription = Omit<Prescription, "id" | "saisie_par"> & {
   client: string;
   magasin_saisie: string;
-  prescripteur_rpps: string;
+  prescripteur_identifiant: string;
 };
 
 export const chercherClients = (recherche: string) =>

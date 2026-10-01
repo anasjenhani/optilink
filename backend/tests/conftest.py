@@ -4,20 +4,22 @@ from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from rest_framework.test import APIClient
 
-from apps.reseau.models import Magasin, Region
+from apps.reseau.models import Magasin, Pays, Region
 from apps.securite.models import Affectation, Utilisateur
 
 
 @pytest.fixture
 def reseau(db):
+    # Réseau de test en France (euro, 2 décimales, sans timbre) ; la Tunisie a ses propres tests.
+    france = Pays.objects.get(code="FR")
     nord = Region.objects.create(code="NORD", nom="Nord")
     sud = Region.objects.create(code="SUD", nom="Sud")
     return {
         "nord": nord,
         "sud": sud,
-        "lille": Magasin.tous.create(code="M01", nom="Lille", region=nord),
-        "arras": Magasin.tous.create(code="M02", nom="Arras", region=nord),
-        "nice": Magasin.tous.create(code="M03", nom="Nice", region=sud),
+        "lille": Magasin.tous.create(code="M01", nom="Lille", region=nord, pays=france),
+        "arras": Magasin.tous.create(code="M02", nom="Arras", region=nord, pays=france),
+        "nice": Magasin.tous.create(code="M03", nom="Nice", region=sud, pays=france),
     }
 
 

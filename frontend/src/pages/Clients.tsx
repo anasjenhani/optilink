@@ -115,7 +115,12 @@ function NouvelleOrdonnance({ client, onSaisie }: { client: Client; onSaisie: ()
   const [type, setType] = useState<"lunettes" | "lentilles">("lunettes");
   const [date, setDate] = useState("");
   const [prescripteur, setPrescripteur] = useState("");
-  const [rpps, setRpps] = useState("");
+  const [identifiant, setIdentifiant] = useState("");
+  const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
+  // Le pays du magasin dit quel identifiant porte le prescripteur (Ordre des médecins, RPPS…).
+  const libelleIdentifiant =
+    magasins.data?.find((m) => m.id === magasin)?.pays.libelle_identifiant_prescripteur ??
+    "Identifiant du prescripteur";
   const [yeux, setYeux] = useState({ od: OEIL_VIDE, og: OEIL_VIDE });
   const [ecart, setEcart] = useState("");
   const saisie = useMutation({
@@ -126,7 +131,7 @@ function NouvelleOrdonnance({ client, onSaisie }: { client: Client; onSaisie: ()
         type,
         date_prescription: date,
         prescripteur,
-        prescripteur_rpps: rpps,
+        prescripteur_identifiant: identifiant,
         mesures: { od: versMesure(yeux.od), og: versMesure(yeux.og), ecart_pupillaire: ecart || null },
       }),
     onSuccess: onSaisie,
@@ -172,7 +177,12 @@ function NouvelleOrdonnance({ client, onSaisie }: { client: Client; onSaisie: ()
       </Stack>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
         <TextField size="small" label="Prescripteur" value={prescripteur} onChange={(e) => setPrescripteur(e.target.value)} />
-        <TextField size="small" label="N° RPPS" value={rpps} onChange={(e) => setRpps(e.target.value)} />
+        <TextField
+          size="small"
+          label={libelleIdentifiant}
+          value={identifiant}
+          onChange={(e) => setIdentifiant(e.target.value)}
+        />
         <TextField size="small" label="Écart pupillaire (mm)" value={ecart} onChange={(e) => setEcart(e.target.value)} />
       </Stack>
       {oeil("od", "OD")}

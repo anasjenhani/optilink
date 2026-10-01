@@ -32,9 +32,16 @@ class Vente(ModeleDeBase):
     vendeur = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
     )
-    total_ht = models.DecimalField(max_digits=12, decimal_places=2)
-    total_tva = models.DecimalField(max_digits=12, decimal_places=2)
-    total_ttc = models.DecimalField(max_digits=12, decimal_places=2)
+    devise = models.CharField(max_length=3, help_text="Monnaie du pays du magasin à la vente.")
+    total_ht = models.DecimalField(max_digits=14, decimal_places=3)
+    total_tva = models.DecimalField(max_digits=14, decimal_places=3)
+    total_ttc = models.DecimalField(max_digits=14, decimal_places=3)
+    timbre_fiscal = models.DecimalField(
+        max_digits=10, decimal_places=3, default=0, help_text="Droit de timbre du pays."
+    )
+    net_a_payer = models.DecimalField(
+        max_digits=14, decimal_places=3, help_text="Total TTC + droit de timbre."
+    )
 
     objects = ParMagasinManager()
     tous = models.Manager()
@@ -58,10 +65,10 @@ class LigneVente(models.Model):
     article = models.ForeignKey("stock.Article", on_delete=models.PROTECT, related_name="+")
     libelle = models.CharField(max_length=200)
     quantite = models.PositiveIntegerField()
-    prix_unitaire_ttc = models.DecimalField(max_digits=10, decimal_places=2)
+    prix_unitaire_ttc = models.DecimalField(max_digits=14, decimal_places=3)
     remise_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     taux_tva = models.DecimalField(max_digits=5, decimal_places=2)
-    total_ttc = models.DecimalField(max_digits=12, decimal_places=2)
+    total_ttc = models.DecimalField(max_digits=14, decimal_places=3)
 
     class Meta:
         verbose_name = "ligne de vente"
@@ -78,10 +85,10 @@ class Paiement(models.Model):
 
     vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="paiements")
     mode = models.CharField(max_length=20, choices=Mode.choices)
-    montant = models.DecimalField(max_digits=12, decimal_places=2)
+    montant = models.DecimalField(max_digits=14, decimal_places=3)
 
     class Meta:
         verbose_name = "paiement"
 
     def __str__(self):
-        return f"{self.get_mode_display()} {self.montant} €"
+        return f"{self.get_mode_display()} {self.montant}"

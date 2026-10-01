@@ -28,7 +28,7 @@ def corps_ordonnance(client, magasin, **mesures):
         "type": "lunettes",
         "date_prescription": str(date.today() - timedelta(days=10)),
         "prescripteur": "Dr Martin",
-        "prescripteur_rpps": "10001234567",
+        "prescripteur_identifiant": "10001234567",
         "mesures": {"od": od, "og": og, "ecart_pupillaire": "63.0", **mesures},
     }
 

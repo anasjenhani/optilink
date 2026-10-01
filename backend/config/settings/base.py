@@ -129,7 +129,8 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = "fr-fr"
-TIME_ZONE = "Europe/Paris"
+# Fuseau du serveur (tâches planifiées, journaux) ; chaque magasin a aussi celui de son pays.
+TIME_ZONE = env("TIME_ZONE", "Africa/Tunis")
 USE_I18N = True
 USE_TZ = True
 

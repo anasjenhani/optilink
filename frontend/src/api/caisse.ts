@@ -7,6 +7,7 @@ export type Article = {
   famille: string;
   prix_vente_ttc: string;
   taux_tva: string;
+  devise: string;
   stock: number | null;
 };
 
@@ -15,7 +16,10 @@ export type ModePaiement = "carte" | "especes" | "cheque";
 export type Vente = {
   id: string;
   numero: string;
+  devise: string;
   total_ttc: string;
+  timbre_fiscal: string;
+  net_a_payer: string;
   lignes: { libelle: string; quantite: number; total_ttc: string }[];
 };
 
@@ -32,7 +36,3 @@ export const chercherArticles = (magasin: string, recherche: string) =>
 
 export const encaisser = (saisie: SaisieVente) =>
   appeler<Vente>("/api/v1/ventes/", { methode: "POST", corps: saisie });
-
-/** Montants en centimes pour éviter les erreurs d'arrondi des nombres à virgule. */
-export const enCentimes = (montant: string) => Math.round(Number(montant) * 100);
-export const enEuros = (centimes: number) => (centimes / 100).toFixed(2);
