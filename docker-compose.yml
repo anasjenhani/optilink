@@ -1,4 +1,4 @@
-# Services applicatifs OptiLink. SQL Server est externe en production
+# Services applicatifs OptiLink. PostgreSQL est externe en production
 # (serveur dédié) ; docker-compose.dev.yml en ajoute un pour le développement.
 x-backend: &backend
   build: ./backend

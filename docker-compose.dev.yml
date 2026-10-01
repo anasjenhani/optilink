@@ -1,50 +1,33 @@
-# Développement : ajoute un SQL Server local et les réglages Django de dev.
+# Développement : ajoute un PostgreSQL local et les réglages Django de dev.
 # docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 x-dev-env: &dev-env
   DJANGO_SETTINGS_MODULE: config.settings.dev
-  DB_HOST: sqlserver
-  DB_TRUST_SERVER_CERTIFICATE: "1"
+  DB_HOST: postgres
+  DB_SSLMODE: disable
 
 services:
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+  postgres:
+    image: postgres:17-alpine
     environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_PID: Developer
-      MSSQL_SA_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-optilink}
+      POSTGRES_USER: ${DB_USER:-optilink}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
-      - "1433:1433"
+      - "127.0.0.1:5432:5432"
     volumes:
-      - sqlserver-data:/var/opt/mssql
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b -o /dev/null"]
-      interval: 10s
-      start_period: 30s
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
       retries: 10
-
-  # Crée la base au premier démarrage (Django ne la crée pas lui-même).
-  sqlserver-init:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    environment:
-      MSSQL_SA_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ${DB_NAME:-optilink}
-    entrypoint:
-      - /bin/sh
-      - -c
-      - >-
-        /opt/mssql-tools18/bin/sqlcmd -C -S sqlserver -U sa -P "$$MSSQL_SA_PASSWORD" -b
-        -Q "IF DB_ID('$$DB_NAME') IS NULL CREATE DATABASE [$$DB_NAME]"
-    depends_on:
-      sqlserver:
-        condition: service_healthy
-    restart: "no"
+    restart: unless-stopped
 
   backend:
     environment:
       <<: *dev-env
     depends_on:
-      sqlserver-init:
-        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
 
   worker:
     environment:
@@ -55,4 +38,4 @@ services:
       <<: *dev-env
 
 volumes:
-  sqlserver-data:
+  postgres-data:

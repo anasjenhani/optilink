@@ -80,9 +80,9 @@ TEMPLATES = [
     },
 ]
 
-# Base de données : SQL Server via mssql-django (pilote ODBC Driver 18).
+# Base de données : PostgreSQL (pilote psycopg 3).
 # DB_ENGINE=sqlite n'est prévu que pour les tests rapides en local.
-if env("DB_ENGINE", "mssql") == "sqlite":
+if env("DB_ENGINE", "postgresql") == "sqlite":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -92,20 +92,24 @@ if env("DB_ENGINE", "mssql") == "sqlite":
 else:
     DATABASES = {
         "default": {
-            "ENGINE": "mssql",
+            "ENGINE": "django.db.backends.postgresql",
             "NAME": env("DB_NAME", "optilink"),
             "HOST": env("DB_HOST", "localhost"),
-            "PORT": env("DB_PORT", "1433"),
-            "USER": env("DB_USER", "sa"),
+            "PORT": env("DB_PORT", "5432"),
+            "USER": env("DB_USER", "optilink"),
             "PASSWORD": env("DB_PASSWORD", ""),
+            "CONN_MAX_AGE": int(env("DB_CONN_MAX_AGE", "60")),
+            "CONN_HEALTH_CHECKS": True,
             "OPTIONS": {
-                "driver": "ODBC Driver 18 for SQL Server",
-                # TLS toujours actif ; le certificat n'est ignoré qu'en développement.
-                "extra_params": "Encrypt=yes;TrustServerCertificate="
-                + ("yes" if env_bool("DB_TRUST_SERVER_CERTIFICATE", False) else "no"),
+                # TLS exigé par défaut ; verify-full en production avec le certificat du serveur,
+                # disable uniquement pour la base locale de développement.
+                "sslmode": env("DB_SSLMODE", "require"),
             },
         }
     }
+    if env("DB_SSLROOTCERT"):
+        # Certificat de l'autorité qui a signé celui du serveur PostgreSQL (pour verify-full).
+        DATABASES["default"]["OPTIONS"]["sslrootcert"] = env("DB_SSLROOTCERT")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "securite.Utilisateur"
