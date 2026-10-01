@@ -6,7 +6,12 @@ import pytest
 
 from apps.reseau.models import Magasin, Pays, Region
 from apps.stock.models import Article, MouvementStock, PrixArticle
-from apps.ventes.services import VenteInvalide, enregistrer_vente
+from apps.ventes.services import (
+    FactureImpossible,
+    VenteInvalide,
+    enregistrer_vente,
+    generer_facture,
+)
 from tests.conftest import tva
 
 
@@ -45,6 +50,16 @@ def societe(tunis):
     )
 
 
+def vendre(tunis, monture, vendeur, **extra):
+    return enregistrer_vente(
+        magasin=tunis,
+        vendeur=vendeur,
+        lignes=[{"article": monture, "quantite": 1}],
+        paiements=[{"mode": "especes", "montant": Decimal("289.500")}],
+        **extra,
+    )
+
+
 def test_ticket_de_caisse_sans_timbre(tunis, monture, creer_utilisateur):
     vente = enregistrer_vente(
         magasin=tunis,
@@ -53,63 +68,64 @@ def test_ticket_de_caisse_sans_timbre(tunis, monture, creer_utilisateur):
         paiements=[{"mode": "especes", "montant": Decimal("269.235")}],
     )
     assert vente.devise == "TND"
-    assert vente.type_document == "ticket"
     assert vente.total_ttc == Decimal("269.235")  # 289,500 × 0,93, arrondi au millime
     assert vente.total_ht == Decimal("226.248")  # 269,235 / 1,19
-    assert vente.timbre_fiscal == 0
-    assert vente.net_a_payer == Decimal("269.235")
+    assert vente.reste_a_payer == 0
     assert vente.numero.startswith("T01-T")
+    assert not hasattr(vente, "facture") or vente.facture is None
 
 
-def test_facture_avec_timbre_et_client(tunis, monture, societe, creer_utilisateur):
-    vente = enregistrer_vente(
-        magasin=tunis,
-        vendeur=creer_utilisateur("vendeur"),
-        lignes=[{"article": monture, "quantite": 1}],
-        paiements=[{"mode": "carte", "montant": Decimal("290.500")}],
-        facture=True,
-        client=societe,
+def test_facture_generee_a_part_avec_timbre(tunis, monture, societe, creer_utilisateur):
+    opticien = creer_utilisateur("opticien")
+    vente = vendre(tunis, monture, opticien)
+    facture = generer_facture(
+        vente=vente, client=societe, emetteur=opticien, mode_paiement_timbre="especes"
     )
-    assert (vente.type_document, vente.client) == ("facture", societe)
-    assert (vente.timbre_fiscal, vente.net_a_payer) == (Decimal("1.000"), Decimal("290.500"))
-    assert vente.numero.startswith("T01-F")
+    assert facture.numero.startswith("T01-F")
+    assert (facture.client, facture.vente) == (societe, vente)
+    assert facture.total_ttc == Decimal("289.500")
+    assert (facture.timbre_fiscal, facture.net_a_payer) == (Decimal("1.000"), Decimal("290.500"))
+    assert facture.mode_paiement_timbre == "especes"
 
 
 def test_tickets_et_factures_ont_chacun_leur_suite(tunis, monture, societe, creer_utilisateur):
-    vendeur = creer_utilisateur("vendeur")
-    commun = {"magasin": tunis, "vendeur": vendeur, "lignes": [{"article": monture, "quantite": 1}]}
-    ticket = enregistrer_vente(
-        **commun, paiements=[{"mode": "carte", "montant": Decimal("289.500")}]
+    opticien = creer_utilisateur("opticien")
+    premiere, seconde = vendre(tunis, monture, opticien), vendre(tunis, monture, opticien)
+    facture = generer_facture(
+        vente=seconde, client=societe, emetteur=opticien, mode_paiement_timbre="carte"
     )
-    facture = enregistrer_vente(
-        **commun,
-        paiements=[{"mode": "carte", "montant": Decimal("290.500")}],
-        facture=True,
-        client=societe,
-    )
-    assert ticket.numero.endswith("-000001") and facture.numero.endswith("-000001")
+    assert premiere.numero.endswith("-000001") and seconde.numero.endswith("-000002")
+    assert facture.numero.endswith("-000001")
 
 
-def test_facture_exige_un_client(tunis, monture, creer_utilisateur):
-    with pytest.raises(VenteInvalide, match="client"):
-        enregistrer_vente(
-            magasin=tunis,
-            vendeur=creer_utilisateur("vendeur"),
-            lignes=[{"article": monture, "quantite": 1}],
-            paiements=[{"mode": "carte", "montant": Decimal("290.500")}],
-            facture=True,
+def test_facture_refusee_si_la_commande_n_est_pas_soldee(
+    tunis, monture, societe, creer_utilisateur
+):
+    from apps.ventes.models import Paiement
+
+    opticien = creer_utilisateur("opticien")
+    vente = vendre(tunis, monture, opticien)
+    # Simule une commande avec acompte : une partie du paiement manque.
+    Paiement.objects.filter(vente=vente).update(montant=Decimal("100.000"))
+    with pytest.raises(FactureImpossible, match="reste 189.500 TND"):
+        generer_facture(
+            vente=vente, client=societe, emetteur=opticien, mode_paiement_timbre="carte"
         )
 
 
-def test_le_timbre_de_la_facture_doit_etre_paye(tunis, monture, societe, creer_utilisateur):
-    with pytest.raises(VenteInvalide, match="net à payer"):
-        enregistrer_vente(
-            magasin=tunis,
-            vendeur=creer_utilisateur("vendeur"),
-            lignes=[{"article": monture, "quantite": 1}],
-            paiements=[{"mode": "carte", "montant": Decimal("289.500")}],
-            facture=True,
-            client=societe,
+def test_une_seule_facture_par_vente_et_client_obligatoire(
+    tunis, monture, societe, creer_utilisateur
+):
+    opticien = creer_utilisateur("opticien")
+    vente = vendre(tunis, monture, opticien)
+    with pytest.raises(FactureImpossible, match="client"):
+        generer_facture(vente=vente, client=None, emetteur=opticien, mode_paiement_timbre="carte")
+    with pytest.raises(FactureImpossible, match="timbre"):
+        generer_facture(vente=vente, client=societe, emetteur=opticien)
+    generer_facture(vente=vente, client=societe, emetteur=opticien, mode_paiement_timbre="carte")
+    with pytest.raises(FactureImpossible, match="déjà facturée"):
+        generer_facture(
+            vente=vente, client=societe, emetteur=opticien, mode_paiement_timbre="carte"
         )
 
 
@@ -188,16 +204,30 @@ def test_caisse_tunisienne_par_l_api(tunis, monture, societe, affecter, client_d
     }
     ticket = api.post("/api/v1/ventes/", corps, format="json")
     assert ticket.status_code == 201, ticket.json()
-    assert (ticket.json()["net_a_payer"], ticket.json()["devise"]) == ("289.500", "TND")
+    assert (ticket.json()["total_ttc"], ticket.json()["devise"]) == ("289.500", "TND")
+    assert (ticket.json()["reste_a_payer"], ticket.json()["facture"]) == ("0.000", None)
 
-    corps.update(facture=True, paiements=[{"mode": "carte", "montant": "290.500"}])
-    sans_client = api.post("/api/v1/ventes/", corps, format="json")
-    assert sans_client.status_code == 400
-    corps["client"] = str(societe.public_id)
-    facture = api.post("/api/v1/ventes/", corps, format="json")
+    # Le vendeur encaisse mais ne facture pas ; l'opticien génère la facture.
+    demande = {"vente": ticket.json()["id"], "client": str(societe.public_id)}
+    assert api.post("/api/v1/factures/", demande, format="json").status_code == 403
+    opticien = affecter(
+        "opticien",
+        "ventes.add_facture",
+        "ventes.view_facture",
+        "ventes.view_vente",
+        portee="magasin",
+        magasin=tunis,
+    )
+    facturation = client_de(opticien)
+    sans_timbre = facturation.post("/api/v1/factures/", demande, format="json")
+    assert sans_timbre.status_code == 400
+    facture = facturation.post(
+        "/api/v1/factures/", {**demande, "mode_paiement_timbre": "especes"}, format="json"
+    )
     assert facture.status_code == 201, facture.json()
-    assert facture.json()["type_document"] == "facture"
+    assert facture.json()["net_a_payer"] == "290.500"
     assert facture.json()["client"]["matricule_fiscal"] == "1234567/A/M/000"
+    assert facture.json()["lignes"][0]["libelle"] == "Monture"
 
 
 def test_identifiant_prescripteur_selon_le_pays(tunis, reseau, affecter, client_de):

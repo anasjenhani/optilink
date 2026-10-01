@@ -101,7 +101,22 @@ PERMISSIONS_PARAMETRAGE = {
     "Comptable": ["reseau.view_pays", "reseau.view_tauxtva", "stock.view_prixarticle"],
 }
 
-for _par_role in (PERMISSIONS_CAISSE_STOCK, PERMISSIONS_CLIENTS_OPTIQUE, PERMISSIONS_PARAMETRAGE):
+# Factures : générées à part, une fois la vente entièrement payée.
+FACTURES_COMPLET = ["ventes.view_facture", "ventes.add_facture"]
+PERMISSIONS_FACTURES = {
+    "Direction": ["ventes.view_facture"],
+    "Responsable régional": FACTURES_COMPLET,
+    "Responsable magasin": FACTURES_COMPLET,
+    "Opticien": FACTURES_COMPLET,
+    "Comptable": ["ventes.view_facture"],
+}
+
+for _par_role in (
+    PERMISSIONS_CAISSE_STOCK,
+    PERMISSIONS_CLIENTS_OPTIQUE,
+    PERMISSIONS_PARAMETRAGE,
+    PERMISSIONS_FACTURES,
+):
     for _nom, _permissions in _par_role.items():
         ROLES_DE_DEPART[_nom] = ROLES_DE_DEPART[_nom] + _permissions
 

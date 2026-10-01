@@ -46,14 +46,14 @@ export function Caisse() {
   const [panier, setPanier] = useState<Ligne[]>([]);
   const [mode, setMode] = useState<ModePaiement>("carte");
   const [derniereVente, setDerniereVente] = useState<Vente | null>(null);
-  // Ticket de caisse par défaut ; une facture est établie au nom d'un client, avec le timbre.
-  const [facture, setFacture] = useState(false);
+  // Client facultatif sur le ticket ; il sera repris pour la facture, générée à part.
+  const [avecClient, setAvecClient] = useState(false);
   const [rechercheClient, setRechercheClient] = useState("");
   const [client, setClient] = useState<Client | null>(null);
   const clients = useQuery({
     queryKey: ["clients", rechercheClient],
     queryFn: () => chercherClients(rechercheClient),
-    enabled: facture && !client && rechercheClient.trim().length >= 2,
+    enabled: avecClient && !client && rechercheClient.trim().length >= 2,
   });
 
   const articles = useQuery({
@@ -63,23 +63,19 @@ export function Caisse() {
   });
 
   const total = panier.reduce((somme, l) => somme + unites(l.article.prix_vente_ttc) * l.quantite, 0);
-  // Droit de timbre du pays (1 dinar en Tunisie), sur les factures seulement.
-  const timbre = facture && panier.length > 0 ? unites(pays?.timbre_fiscal ?? "0") : 0;
-  const net = total + timbre;
 
   const vente = useMutation({
     mutationFn: () =>
       encaisser({
         magasin,
-        facture,
-        client: facture ? client?.id : undefined,
+        client: avecClient ? client?.id : undefined,
         lignes: panier.map((l) => ({ article: l.article.id, quantite: l.quantite })),
-        paiements: [{ mode, montant: versTexte(net, monnaie.decimales) }],
+        paiements: [{ mode, montant: versTexte(total, monnaie.decimales) }],
       }),
     onSuccess: (enregistree) => {
       setDerniereVente(enregistree);
       setPanier([]);
-      setFacture(false);
+      setAvecClient(false);
       setClient(null);
       setRechercheClient("");
       void queryClient.invalidateQueries({ queryKey: ["articles"] });
@@ -199,23 +195,23 @@ export function Caisse() {
           )}
 
           <FormControlLabel
-            control={<Checkbox checked={facture} onChange={(e) => setFacture(e.target.checked)} />}
-            label="Facture au nom d'un client (sinon ticket de caisse)"
+            control={<Checkbox checked={avecClient} onChange={(e) => setAvecClient(e.target.checked)} />}
+            label="Rattacher un client au ticket"
           />
-          {facture && client && (
+          {avecClient && client && (
             <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
               <Typography>
-                Facture au nom de {client.nom.toUpperCase()} {client.prenom}
+                Client : {client.nom.toUpperCase()} {client.prenom}
               </Typography>
               <Button size="small" onClick={() => setClient(null)}>
                 Changer
               </Button>
             </Stack>
           )}
-          {facture && !client && (
+          {avecClient && !client && (
             <>
               <TextField
-                label="Client de la facture"
+                label="Client"
                 helperText="Nom, téléphone ou e-mail"
                 value={rechercheClient}
                 onChange={(e) => setRechercheClient(e.target.value)}
@@ -232,14 +228,9 @@ export function Caisse() {
           )}
 
           <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
-            <Stack sx={{ flexGrow: 1 }}>
-              {timbre > 0 && (
-                <Typography color="text.secondary">
-                  Total TTC {formater(total, monnaie)} + timbre fiscal {formater(timbre, monnaie)}
-                </Typography>
-              )}
-              <Typography variant="h5">Net à payer : {formater(net, monnaie)}</Typography>
-            </Stack>
+            <Typography variant="h5" sx={{ flexGrow: 1 }}>
+              Total : {formater(total, monnaie)}
+            </Typography>
             <TextField
               select
               size="small"
@@ -256,7 +247,7 @@ export function Caisse() {
             <Button
               variant="contained"
               size="large"
-              disabled={panier.length === 0 || vente.isPending || (facture && !client)}
+              disabled={panier.length === 0 || vente.isPending}
               onClick={() => vente.mutate()}
             >
               Encaisser
@@ -266,8 +257,8 @@ export function Caisse() {
           {vente.isError && <Alert severity="error">{vente.error.message}</Alert>}
           {derniereVente && (
             <Alert severity="success">
-              {derniereVente.type_document === "facture" ? "Facture" : "Ticket"} {derniereVente.numero},{" "}
-              {formaterTexte(derniereVente.net_a_payer, { devise: derniereVente.devise, decimales: monnaie.decimales })}.
+              Ticket {derniereVente.numero},{" "}
+              {formaterTexte(derniereVente.total_ttc, { devise: derniereVente.devise, decimales: monnaie.decimales })}.
             </Alert>
           )}
         </Stack>

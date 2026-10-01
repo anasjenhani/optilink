@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from ..models import LigneVente, Paiement, Vente
+from ..models import Facture, LigneVente, Paiement, Vente
 
 
 class LigneSaisieSerializer(serializers.Serializer):
@@ -24,18 +24,11 @@ class PaiementSaisieSerializer(serializers.Serializer):
 
 class VenteSaisieSerializer(serializers.Serializer):
     magasin = serializers.UUIDField()
-    facture = serializers.BooleanField(
-        default=False,
-        help_text="Facture au nom du client (avec droit de timbre) plutôt qu'un ticket de caisse.",
+    client = serializers.UUIDField(
+        required=False, allow_null=True, help_text="Facultatif ; repris pour la facture."
     )
-    client = serializers.UUIDField(required=False, allow_null=True)
     lignes = LigneSaisieSerializer(many=True, allow_empty=False)
     paiements = PaiementSaisieSerializer(many=True, allow_empty=False)
-
-    def validate(self, attrs):
-        if attrs["facture"] and not attrs.get("client"):
-            raise serializers.ValidationError({"client": "Une facture exige un client."})
-        return attrs
 
 
 class LigneVenteSerializer(serializers.ModelSerializer):
@@ -65,6 +58,8 @@ class VenteSerializer(serializers.ModelSerializer):
     magasin = serializers.CharField(source="magasin.code", read_only=True)
     vendeur = serializers.CharField(source="vendeur.get_username", read_only=True)
     client = serializers.SerializerMethodField()
+    reste_a_payer = serializers.DecimalField(max_digits=14, decimal_places=3, read_only=True)
+    facture = serializers.SerializerMethodField(help_text="N° de la facture, si elle est émise.")
     lignes = LigneVenteSerializer(many=True, read_only=True)
     paiements = PaiementSerializer(many=True, read_only=True)
 
@@ -72,7 +67,6 @@ class VenteSerializer(serializers.ModelSerializer):
         model = Vente
         fields = [
             "id",
-            "type_document",
             "numero",
             "magasin",
             "client",
@@ -82,18 +76,70 @@ class VenteSerializer(serializers.ModelSerializer):
             "total_ht",
             "total_tva",
             "total_ttc",
-            "timbre_fiscal",
-            "net_a_payer",
+            "reste_a_payer",
+            "facture",
             "lignes",
             "paiements",
         ]
 
     def get_client(self, vente) -> dict | None:
-        if vente.client is None:
-            return None
-        client = vente.client
-        return {
-            "id": str(client.public_id),
-            "nom": str(client),
-            "matricule_fiscal": client.matricule_fiscal,
-        }
+        return client_resume(vente.client)
+
+    def get_facture(self, vente) -> str | None:
+        facture = getattr(vente, "facture", None)
+        return facture.numero if facture else None
+
+
+def client_resume(client):
+    if client is None:
+        return None
+    return {
+        "id": str(client.public_id),
+        "nom": str(client),
+        "matricule_fiscal": client.matricule_fiscal,
+    }
+
+
+class FactureSaisieSerializer(serializers.Serializer):
+    vente = serializers.UUIDField(help_text="Vente entièrement payée à facturer.")
+    client = serializers.UUIDField(
+        required=False, allow_null=True, help_text="Par défaut, le client de la vente."
+    )
+    mode_paiement_timbre = serializers.ChoiceField(
+        choices=Paiement.Mode.choices,
+        required=False,
+        allow_blank=True,
+        help_text="Règlement du droit de timbre par le client.",
+    )
+
+
+class FactureSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source="public_id", read_only=True)
+    magasin = serializers.CharField(source="magasin.code", read_only=True)
+    vente = serializers.CharField(source="vente.numero", read_only=True)
+    client = serializers.SerializerMethodField()
+    emise_par = serializers.CharField(source="emise_par.get_username", read_only=True)
+    lignes = LigneVenteSerializer(source="vente.lignes", many=True, read_only=True)
+
+    class Meta:
+        model = Facture
+        fields = [
+            "id",
+            "numero",
+            "magasin",
+            "vente",
+            "client",
+            "cree_le",
+            "emise_par",
+            "devise",
+            "total_ht",
+            "total_tva",
+            "total_ttc",
+            "timbre_fiscal",
+            "net_a_payer",
+            "mode_paiement_timbre",
+            "lignes",
+        ]
+
+    def get_client(self, facture) -> dict | None:
+        return client_resume(facture.client)

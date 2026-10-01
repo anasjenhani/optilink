@@ -181,6 +181,7 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "API OptiLink",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "ENUM_NAME_OVERRIDES": {"ModePaiementEnum": "apps.ventes.models.Paiement.Mode"},
 }
 
 # Sécurité : MFA, sessions et comptes.

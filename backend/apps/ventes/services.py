@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from apps.stock.models import MouvementStock, PrixArticle
 
-from .models import PREFIXES, CompteurFacture, LigneVente, Paiement, TypeDocument, Vente
+from .models import PREFIXES, CompteurFacture, Facture, LigneVente, Paiement, TypeDocument, Vente
 
 
 class VenteInvalide(Exception):
@@ -32,6 +32,10 @@ def _prochain_numero(magasin, annee, type_document):
     return compteur.dernier
 
 
+def _numero(magasin, type_document, annee, sequence):
+    return f"{magasin.code}-{PREFIXES[type_document]}{annee}-{sequence:06d}"
+
+
 def _stocks(magasin, articles):
     lignes = (
         MouvementStock.tous.filter(magasin=magasin, article__in=articles)
@@ -42,18 +46,15 @@ def _stocks(magasin, articles):
 
 
 @transaction.atomic
-def enregistrer_vente(*, magasin, vendeur, lignes, paiements, facture=False, client=None):
-    """Encaisse une vente : lignes, sortie de stock, paiements et numéro de ticket ou de facture.
+def enregistrer_vente(*, magasin, vendeur, lignes, paiements, client=None):
+    """Encaisse une vente : lignes, sortie de stock, paiements et numéro de ticket.
 
     ``lignes`` : [{"article", "quantite", "remise_pct"}] ; ``paiements`` : [{"mode", "montant"}].
-    Une facture exige un client et porte le droit de timbre du pays ; un ticket n'en a pas.
+    La facture, elle, se génère à part (``generer_facture``).
     Tout est écrit dans une seule transaction, ou rien.
     """
     if not lignes:
         raise VenteInvalide("La vente ne contient aucun article.")
-    if facture and client is None:
-        raise VenteInvalide("Une facture doit être établie au nom d'un client.")
-    type_document = TypeDocument.FACTURE if facture else TypeDocument.TICKET
 
     quantites = {}
     for ligne in lignes:
@@ -86,23 +87,20 @@ def enregistrer_vente(*, magasin, vendeur, lignes, paiements, facture=False, cli
 
     total_ttc = sum((d[3] for d in detail), Decimal("0"))
     total_ht = sum((d[4] for d in detail), Decimal("0"))
-    timbre = pays.timbre_fiscal if facture else Decimal("0")
-    net_a_payer = total_ttc + timbre
     total_paye = sum((arrondir(p["montant"], pays.decimales) for p in paiements), Decimal("0"))
-    if total_paye != net_a_payer:
+    if total_paye != total_ttc:
         raise VenteInvalide(
-            f"Les paiements ({total_paye} {pays.devise}) ne couvrent pas le net à payer "
-            f"({net_a_payer} {pays.devise})."
+            f"Les paiements ({total_paye} {pays.devise}) ne couvrent pas le total "
+            f"({total_ttc} {pays.devise})."
         )
 
     # L'année de la facture est celle du magasin, pas celle du serveur.
     annee = timezone.localdate(timezone=ZoneInfo(pays.fuseau_horaire)).year
-    sequence = _prochain_numero(magasin, annee, type_document)
+    sequence = _prochain_numero(magasin, annee, TypeDocument.TICKET)
     vente = Vente.tous.create(
         magasin=magasin,
-        type_document=type_document,
         client=client,
-        numero=f"{magasin.code}-{PREFIXES[type_document]}{annee}-{sequence:06d}",
+        numero=_numero(magasin, TypeDocument.TICKET, annee, sequence),
         annee=annee,
         sequence=sequence,
         vendeur=vendeur,
@@ -110,8 +108,6 @@ def enregistrer_vente(*, magasin, vendeur, lignes, paiements, facture=False, cli
         total_ht=total_ht,
         total_tva=total_ttc - total_ht,
         total_ttc=total_ttc,
-        timbre_fiscal=timbre,
-        net_a_payer=net_a_payer,
     )
     LigneVente.objects.bulk_create(
         LigneVente(
@@ -142,3 +138,51 @@ def enregistrer_vente(*, magasin, vendeur, lignes, paiements, facture=False, cli
         for p in paiements
     )
     return vente
+
+
+class FactureImpossible(Exception):
+    pass
+
+
+@transaction.atomic
+def generer_facture(*, vente, client, emetteur, mode_paiement_timbre=""):
+    """Émet la facture d'une vente entièrement payée, au nom d'un client.
+
+    Le droit de timbre du pays s'ajoute au net à payer : c'est le client qui le règle, au moment
+    de la facture (``mode_paiement_timbre``). Une vente n'a qu'une facture.
+    """
+    vente = Vente.tous.select_for_update().select_related("magasin__pays").get(pk=vente.pk)
+    if Facture.tous.filter(vente=vente).exists():
+        raise FactureImpossible(f"La vente {vente.numero} est déjà facturée.")
+    if client is None:
+        raise FactureImpossible("Une facture est établie au nom d'un client.")
+    reste = vente.reste_a_payer
+    if reste > 0:
+        raise FactureImpossible(
+            f"La commande n'est pas entièrement payée : reste {reste} {vente.devise}."
+        )
+    pays = vente.magasin.pays
+    timbre = pays.timbre_fiscal
+    if timbre > 0 and not mode_paiement_timbre:
+        raise FactureImpossible(
+            f"Encaisser le timbre fiscal ({timbre} {pays.devise}) : préciser le mode de paiement."
+        )
+    annee = timezone.localdate(timezone=ZoneInfo(pays.fuseau_horaire)).year
+    sequence = _prochain_numero(vente.magasin, annee, TypeDocument.FACTURE)
+    facture = Facture.tous.create(
+        magasin=vente.magasin,
+        vente=vente,
+        client=client,
+        numero=_numero(vente.magasin, TypeDocument.FACTURE, annee, sequence),
+        annee=annee,
+        sequence=sequence,
+        devise=vente.devise,
+        total_ht=vente.total_ht,
+        total_tva=vente.total_tva,
+        total_ttc=vente.total_ttc,
+        timbre_fiscal=timbre,
+        net_a_payer=vente.total_ttc + timbre,
+        mode_paiement_timbre=mode_paiement_timbre if timbre > 0 else "",
+        emise_par=emetteur,
+    )
+    return facture

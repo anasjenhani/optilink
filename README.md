@@ -34,12 +34,12 @@ OptiLink est conçu pour la Tunisie en premier lieu et s'ouvrira à d'autres pay
 
 - la monnaie et son nombre de décimales : dinar tunisien (TND) à 3 décimales, les millimes. Tous les montants sont stockés avec 3 décimales et arrondis à l'unité de la monnaie du magasin ;
 - les taux de TVA (Tunisie : 19 %, 13 %, 7 %), réglés par l'administrateur dans l'administration (rôle Administrateur système) : chaque prix d'article pointe vers un de ces taux, donc modifier un taux s'applique à tous les articles qui l'utilisent ; une vente déjà faite garde le taux appliqué ; chaque modification est tracée dans le journal d'audit ;
-- le droit de timbre (Tunisie : 1,000 TND), ajouté **aux factures seulement** : `net_a_payer = total_ttc + timbre_fiscal`. Un ticket de caisse n'en a pas ;
+- le droit de timbre (Tunisie : 1,000 TND), ajouté **aux factures seulement** et payé par le client : `net_a_payer = total_ttc + timbre_fiscal`. Un ticket de caisse n'en a pas ;
 - le fuseau horaire (année de numérotation des factures), l'indicatif téléphonique, et l'identifiant du prescripteur sur une ordonnance (Tunisie : n° d'inscription à l'Ordre des médecins ; France : n° RPPS à 11 chiffres).
 
 Un article a un prix et un taux de TVA par pays (`PrixArticle`) ; sans prix dans le pays du magasin, il n'y est pas vendable. Une vente garde la devise de son magasin. La Tunisie et la France sont créées à la migration ; un magasin existant est rattaché à la Tunisie.
 
-**Ticket ou facture.** Par défaut, la caisse émet un ticket (`M01-T2026-000001`). Sur demande, elle émet une facture (`M01-F2026-000001`) au nom d'un client, avec son matricule fiscal s'il s'agit d'une entreprise, et le droit de timbre. Tickets et factures ont chacun leur suite de numéros sans trou.
+**Ticket, puis facture à part.** La caisse émet un ticket (`M01-T2026-000001`), sans timbre, avec un client facultatif. La facture n'est pas faite en caisse : c'est une étape à part (écran Factures, `POST /api/v1/factures/`), possible seulement quand la vente est **entièrement payée**. Elle est établie au nom d'un client (avec son matricule fiscal s'il s'agit d'une entreprise), numérotée dans sa propre suite (`M01-F2026-000001`) et porte le droit de timbre, payé par le client au moment de la facture. Une vente n'a qu'une facture. Droit `ventes.add_facture` : opticien, responsable de magasin et responsable régional ; le vendeur encaisse mais ne facture pas.
 
 ## Cloisonnement par magasin
 

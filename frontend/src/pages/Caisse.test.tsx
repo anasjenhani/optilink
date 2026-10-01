@@ -63,59 +63,35 @@ async function remplirPanier() {
   fireEvent.click(screen.getByRole("button", { name: "Ajouter un" }));
 }
 
-test("ticket de caisse : pas de timbre", async () => {
+test("encaisse le panier en dinars et affiche le ticket", async () => {
   const ventes = simuler(() =>
-    json(
-      { id: "v1", numero: "T01-T2026-000001", type_document: "ticket", devise: "TND", net_a_payer: "579.000", lignes: [] },
-      201,
-    ),
+    json({ id: "v1", numero: "T01-T2026-000001", devise: "TND", total_ttc: "579.000", lignes: [] }, 201),
   );
   await remplirPanier();
 
-  // Dinar à 3 décimales ; le timbre ne s'applique qu'aux factures.
-  expect(screen.getByText(/Net à payer : 579,000\sTND/)).toBeInTheDocument();
-  expect(screen.queryByText(/timbre fiscal/)).not.toBeInTheDocument();
+  // Dinar à 3 décimales ; pas de timbre en caisse (il ne concerne que la facture).
+  expect(screen.getByText(/Total : 579,000\sTND/)).toBeInTheDocument();
+  expect(screen.queryByText(/timbre/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Encaisser" }));
 
   expect(await screen.findByText(/Ticket T01-T2026-000001/)).toBeInTheDocument();
   expect(ventes).toEqual([
-    {
-      magasin: "m1",
-      facture: false,
-      lignes: [{ article: "a1", quantite: 2 }],
-      paiements: [{ mode: "carte", montant: "579.000" }],
-    },
+    { magasin: "m1", lignes: [{ article: "a1", quantite: 2 }], paiements: [{ mode: "carte", montant: "579.000" }] },
   ]);
 });
 
-test("facture : client obligatoire et timbre de 1 dinar", async () => {
+test("rattache un client au ticket", async () => {
   const ventes = simuler(() =>
-    json(
-      { id: "v2", numero: "T01-F2026-000001", type_document: "facture", devise: "TND", net_a_payer: "580.000", lignes: [] },
-      201,
-    ),
+    json({ id: "v2", numero: "T01-T2026-000002", devise: "TND", total_ttc: "579.000", lignes: [] }, 201),
   );
   await remplirPanier();
-  fireEvent.click(screen.getByLabelText(/Facture au nom d'un client/));
-
-  expect(screen.getByRole("button", { name: "Encaisser" })).toBeDisabled();
-  expect(screen.getByText(/timbre fiscal 1,000\sTND/)).toBeInTheDocument();
-  expect(screen.getByText(/Net à payer : 580,000\sTND/)).toBeInTheDocument();
-
-  fireEvent.change(screen.getByLabelText(/Client de la facture/), { target: { value: "optique" } });
+  fireEvent.click(screen.getByLabelText(/Rattacher un client/));
+  fireEvent.change(screen.getByLabelText(/^Client/), { target: { value: "optique" } });
   fireEvent.click(await screen.findByText("OPTIQUE SERVICES SARL"));
   fireEvent.click(screen.getByRole("button", { name: "Encaisser" }));
 
-  expect(await screen.findByText(/Facture T01-F2026-000001/)).toBeInTheDocument();
-  expect(ventes).toEqual([
-    {
-      magasin: "m1",
-      facture: true,
-      client: "c1",
-      lignes: [{ article: "a1", quantite: 2 }],
-      paiements: [{ mode: "carte", montant: "580.000" }],
-    },
-  ]);
+  expect(await screen.findByText(/Ticket T01-T2026-000002/)).toBeInTheDocument();
+  expect(ventes[0]).toMatchObject({ client: "c1" });
 });
 
 test("affiche le refus de l'API", async () => {

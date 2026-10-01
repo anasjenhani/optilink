@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.conf import settings
 from django.db import models
 
@@ -11,6 +13,7 @@ class TypeDocument(models.TextChoices):
 
 
 # Préfixe du numéro : M01-T2026-000001 pour un ticket, M01-F2026-000001 pour une facture.
+# Chaque type de document a sa propre suite de numéros.
 PREFIXES = {TypeDocument.TICKET: "T", TypeDocument.FACTURE: "F"}
 
 
@@ -38,22 +41,19 @@ class CompteurFacture(models.Model):
 
 
 class Vente(ModeleDeBase):
-    """Vente encaissée et facturée. Jamais modifiée : une correction passera par un avoir."""
+    """Vente encaissée en caisse, avec son ticket. Jamais modifiée : une correction passera par
+    un avoir.
+
+    La facture n'est pas émise en caisse : c'est une étape à part (``Facture``), possible
+    seulement quand la vente est entièrement payée.
+    """
 
     magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
-    type_document = models.CharField(
-        max_length=10, choices=TypeDocument.choices, default=TypeDocument.TICKET
-    )
-    numero = models.CharField(max_length=40, unique=True)
+    numero = models.CharField(max_length=40, unique=True, help_text="N° de ticket.")
     annee = models.PositiveSmallIntegerField()
     sequence = models.PositiveIntegerField()
     client = models.ForeignKey(
-        "crm.Client",
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="ventes",
-        help_text="Obligatoire pour une facture.",
+        "crm.Client", on_delete=models.PROTECT, null=True, blank=True, related_name="ventes"
     )
     vendeur = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
@@ -62,15 +62,6 @@ class Vente(ModeleDeBase):
     total_ht = models.DecimalField(max_digits=14, decimal_places=3)
     total_tva = models.DecimalField(max_digits=14, decimal_places=3)
     total_ttc = models.DecimalField(max_digits=14, decimal_places=3)
-    timbre_fiscal = models.DecimalField(
-        max_digits=10,
-        decimal_places=3,
-        default=0,
-        help_text="Droit de timbre du pays, sur les factures seulement.",
-    )
-    net_a_payer = models.DecimalField(
-        max_digits=14, decimal_places=3, help_text="Total TTC + droit de timbre."
-    )
 
     objects = ParMagasinManager()
     tous = models.Manager()
@@ -81,13 +72,57 @@ class Vente(ModeleDeBase):
         permissions = [("appliquer_remise", "Peut appliquer une remise")]
         constraints = [
             models.UniqueConstraint(
-                fields=["magasin", "annee", "type_document", "sequence"],
-                name="facture_sans_doublon",
-            ),
-            models.CheckConstraint(
-                name="facture_avec_client",
-                condition=~models.Q(type_document="facture") | models.Q(client__isnull=False),
-            ),
+                fields=["magasin", "annee", "sequence"], name="facture_sans_doublon"
+            )
+        ]
+
+    def __str__(self):
+        return self.numero
+
+    @property
+    def reste_a_payer(self):
+        paye = sum((p.montant for p in self.paiements.all()), Decimal("0"))
+        return self.total_ttc - paye
+
+
+class Facture(ModeleDeBase):
+    """Facture émise à part, au nom d'un client, pour une vente entièrement payée.
+
+    Numérotée sans trou par magasin et par année (suite distincte des tickets), jamais modifiée.
+    Elle porte le droit de timbre du pays.
+    """
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    vente = models.OneToOneField(Vente, on_delete=models.PROTECT, related_name="facture")
+    client = models.ForeignKey("crm.Client", on_delete=models.PROTECT, related_name="factures")
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    devise = models.CharField(max_length=3)
+    total_ht = models.DecimalField(max_digits=14, decimal_places=3)
+    total_tva = models.DecimalField(max_digits=14, decimal_places=3)
+    total_ttc = models.DecimalField(max_digits=14, decimal_places=3)
+    timbre_fiscal = models.DecimalField(max_digits=10, decimal_places=3, default=0)
+    net_a_payer = models.DecimalField(
+        max_digits=14, decimal_places=3, help_text="Total TTC + droit de timbre."
+    )
+    mode_paiement_timbre = models.CharField(
+        max_length=20, blank=True, help_text="Comment le client a réglé le timbre."
+    )
+    emise_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-cree_le"]
+        verbose_name = "facture"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="facture_numerotee_sans_doublon"
+            )
         ]
 
     def __str__(self):
