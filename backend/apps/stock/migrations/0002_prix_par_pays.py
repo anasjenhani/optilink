@@ -10,13 +10,17 @@ def reprendre_les_prix(apps, schema_editor):
     Article = apps.get_model("stock", "Article")
     PrixArticle = apps.get_model("stock", "PrixArticle")
     Pays = apps.get_model("reseau", "Pays")
+    TauxTva = apps.get_model("reseau", "TauxTva")
     france = Pays.objects.filter(code="FR").first()
     if france is None:
         return
-    PrixArticle.objects.bulk_create(
-        PrixArticle(article=a, pays=france, prix_vente_ttc=a.prix_vente_ttc, taux_tva=a.taux_tva)
-        for a in Article.objects.all()
-    )
+    for article in Article.objects.all():
+        tva, _ = TauxTva.objects.get_or_create(
+            pays=france, taux=article.taux_tva, defaults={"libelle": f"{article.taux_tva} %"}
+        )
+        PrixArticle.objects.create(
+            article=article, pays=france, prix_vente_ttc=article.prix_vente_ttc, tva=tva
+        )
 
 
 class Migration(migrations.Migration):
@@ -31,9 +35,9 @@ class Migration(migrations.Migration):
             fields=[
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
                 ("prix_vente_ttc", models.DecimalField(decimal_places=3, max_digits=14, validators=[django.core.validators.MinValueValidator(Decimal("0"))])),
-                ("taux_tva", models.DecimalField(decimal_places=2, max_digits=5)),
                 ("article", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="prix", to="stock.article")),
                 ("pays", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="+", to="reseau.pays")),
+                ("tva", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="prix", to="reseau.tauxtva", verbose_name="TVA")),
             ],
             options={"verbose_name": "prix de vente", "verbose_name_plural": "prix de vente"},
         ),

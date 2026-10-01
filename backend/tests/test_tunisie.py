@@ -1,4 +1,4 @@
-"""Le cas de départ d'OptiLink : un magasin en Tunisie (dinar à 3 décimales, timbre fiscal)."""
+"""Le cas de départ d'OptiLink : un magasin en Tunisie (dinar à 3 décimales, timbre sur facture)."""
 
 from decimal import Decimal
 
@@ -7,6 +7,7 @@ import pytest
 from apps.reseau.models import Magasin, Pays, Region
 from apps.stock.models import Article, MouvementStock, PrixArticle
 from apps.ventes.services import VenteInvalide, enregistrer_vente
+from tests.conftest import tva
 
 
 @pytest.fixture
@@ -20,7 +21,7 @@ def tunis(db):
 def monture(tunis):
     article = Article.objects.create(reference="MON-T", libelle="Monture", famille="monture")
     PrixArticle.objects.create(
-        article=article, pays=tunis.pays, prix_vente_ttc=Decimal("289.500"), taux_tva=Decimal("19")
+        article=article, pays=tunis.pays, prix_vente_ttc=Decimal("289.500"), tva=tva(tunis.pays, 19)
     )
     MouvementStock.tous.create(magasin=tunis, article=article, quantite=3, type="reception")
     return article
@@ -32,29 +33,83 @@ def test_parametres_tunisie(db):
     assert sorted(t.taux for t in tunisie.taux_tva.all()) == [7, 13, 19]
 
 
-def test_vente_en_dinars_avec_timbre(tunis, monture, creer_utilisateur):
-    vendeur = creer_utilisateur("vendeur")
+@pytest.fixture
+def societe(tunis):
+    from apps.crm.models import Client
+
+    return Client.objects.create(
+        nom="Optique Services",
+        prenom="SARL",
+        matricule_fiscal="1234567/A/M/000",
+        magasin_origine=tunis,
+    )
+
+
+def test_ticket_de_caisse_sans_timbre(tunis, monture, creer_utilisateur):
     vente = enregistrer_vente(
         magasin=tunis,
-        vendeur=vendeur,
+        vendeur=creer_utilisateur("vendeur"),
         lignes=[{"article": monture, "quantite": 1, "remise_pct": Decimal("7")}],
-        paiements=[{"mode": "especes", "montant": Decimal("270.235")}],
+        paiements=[{"mode": "especes", "montant": Decimal("269.235")}],
     )
     assert vente.devise == "TND"
+    assert vente.type_document == "ticket"
     assert vente.total_ttc == Decimal("269.235")  # 289,500 × 0,93, arrondi au millime
     assert vente.total_ht == Decimal("226.248")  # 269,235 / 1,19
-    assert vente.timbre_fiscal == Decimal("1.000")
-    assert vente.net_a_payer == Decimal("270.235")
-    assert vente.numero.startswith("T01-")
+    assert vente.timbre_fiscal == 0
+    assert vente.net_a_payer == Decimal("269.235")
+    assert vente.numero.startswith("T01-T")
 
 
-def test_le_timbre_doit_etre_paye(tunis, monture, creer_utilisateur):
+def test_facture_avec_timbre_et_client(tunis, monture, societe, creer_utilisateur):
+    vente = enregistrer_vente(
+        magasin=tunis,
+        vendeur=creer_utilisateur("vendeur"),
+        lignes=[{"article": monture, "quantite": 1}],
+        paiements=[{"mode": "carte", "montant": Decimal("290.500")}],
+        facture=True,
+        client=societe,
+    )
+    assert (vente.type_document, vente.client) == ("facture", societe)
+    assert (vente.timbre_fiscal, vente.net_a_payer) == (Decimal("1.000"), Decimal("290.500"))
+    assert vente.numero.startswith("T01-F")
+
+
+def test_tickets_et_factures_ont_chacun_leur_suite(tunis, monture, societe, creer_utilisateur):
+    vendeur = creer_utilisateur("vendeur")
+    commun = {"magasin": tunis, "vendeur": vendeur, "lignes": [{"article": monture, "quantite": 1}]}
+    ticket = enregistrer_vente(
+        **commun, paiements=[{"mode": "carte", "montant": Decimal("289.500")}]
+    )
+    facture = enregistrer_vente(
+        **commun,
+        paiements=[{"mode": "carte", "montant": Decimal("290.500")}],
+        facture=True,
+        client=societe,
+    )
+    assert ticket.numero.endswith("-000001") and facture.numero.endswith("-000001")
+
+
+def test_facture_exige_un_client(tunis, monture, creer_utilisateur):
+    with pytest.raises(VenteInvalide, match="client"):
+        enregistrer_vente(
+            magasin=tunis,
+            vendeur=creer_utilisateur("vendeur"),
+            lignes=[{"article": monture, "quantite": 1}],
+            paiements=[{"mode": "carte", "montant": Decimal("290.500")}],
+            facture=True,
+        )
+
+
+def test_le_timbre_de_la_facture_doit_etre_paye(tunis, monture, societe, creer_utilisateur):
     with pytest.raises(VenteInvalide, match="net à payer"):
         enregistrer_vente(
             magasin=tunis,
             vendeur=creer_utilisateur("vendeur"),
             lignes=[{"article": monture, "quantite": 1}],
             paiements=[{"mode": "carte", "montant": Decimal("289.500")}],
+            facture=True,
+            client=societe,
         )
 
 
@@ -75,25 +130,47 @@ def test_prix_controle_selon_la_monnaie(tunis, reseau):
 
     article = Article.objects.create(reference="Y", libelle="Y", famille="accessoire")
     PrixArticle(
-        article=article, pays=tunis.pays, prix_vente_ttc=Decimal("12.345"), taux_tva=19
+        article=article, pays=tunis.pays, prix_vente_ttc=Decimal("12.345"), tva=tva(tunis.pays, 19)
     ).full_clean()
     with pytest.raises(ValidationError, match="2 décimales"):
         PrixArticle(
             article=article,
             pays=reseau["lille"].pays,
             prix_vente_ttc=Decimal("12.345"),
-            taux_tva=20,
+            tva=tva(reseau["lille"].pays, 20),
         ).full_clean()
-    with pytest.raises(ValidationError, match="TVA inconnu"):
-        PrixArticle(article=article, pays=tunis.pays, prix_vente_ttc=10, taux_tva=20).full_clean()
+    with pytest.raises(ValidationError, match="autre pays"):
+        PrixArticle(
+            article=article, pays=tunis.pays, prix_vente_ttc=10, tva=tva(reseau["lille"].pays, 20)
+        ).full_clean()
 
 
-def test_caisse_tunisienne_par_l_api(tunis, monture, affecter, client_de):
+def test_l_administrateur_change_le_taux_pour_tous_les_articles(tunis, monture):
+    taux = tva(tunis.pays, 19)
+    taux.taux = Decimal("18")
+    taux.save()
+    assert PrixArticle.objects.get(article=monture).tva.taux == Decimal("18")
+
+
+def test_administrateur_regle_la_tva_sans_voir_les_ventes(db):
+    from django.contrib.auth.models import Group
+
+    admin = set(
+        Group.objects.get(name="Administrateur système").permissions.values_list(
+            "codename", flat=True
+        )
+    )
+    assert {"change_tauxtva", "add_tauxtva", "change_pays"} <= admin
+    assert "view_vente" not in admin
+
+
+def test_caisse_tunisienne_par_l_api(tunis, monture, societe, affecter, client_de):
     vendeur = affecter(
         "vendeur",
         "ventes.add_vente",
         "ventes.view_vente",
         "stock.view_article",
+        "crm.view_client",
         portee="magasin",
         magasin=tunis,
     )
@@ -104,17 +181,23 @@ def test_caisse_tunisienne_par_l_api(tunis, monture, affecter, client_de):
         "19.00",
         "TND",
     )
-    reponse = api.post(
-        "/api/v1/ventes/",
-        {
-            "magasin": str(tunis.public_id),
-            "lignes": [{"article": article["id"], "quantite": 1}],
-            "paiements": [{"mode": "carte", "montant": "290.500"}],
-        },
-        format="json",
-    )
-    assert reponse.status_code == 201, reponse.json()
-    assert (reponse.json()["net_a_payer"], reponse.json()["devise"]) == ("290.500", "TND")
+    corps = {
+        "magasin": str(tunis.public_id),
+        "lignes": [{"article": article["id"], "quantite": 1}],
+        "paiements": [{"mode": "carte", "montant": "289.500"}],
+    }
+    ticket = api.post("/api/v1/ventes/", corps, format="json")
+    assert ticket.status_code == 201, ticket.json()
+    assert (ticket.json()["net_a_payer"], ticket.json()["devise"]) == ("289.500", "TND")
+
+    corps.update(facture=True, paiements=[{"mode": "carte", "montant": "290.500"}])
+    sans_client = api.post("/api/v1/ventes/", corps, format="json")
+    assert sans_client.status_code == 400
+    corps["client"] = str(societe.public_id)
+    facture = api.post("/api/v1/ventes/", corps, format="json")
+    assert facture.status_code == 201, facture.json()
+    assert facture.json()["type_document"] == "facture"
+    assert facture.json()["client"]["matricule_fiscal"] == "1234567/A/M/000"
 
 
 def test_identifiant_prescripteur_selon_le_pays(tunis, reseau, affecter, client_de):

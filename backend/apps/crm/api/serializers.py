@@ -26,6 +26,7 @@ class ClientSerializer(serializers.ModelSerializer):
             "adresse",
             "code_postal",
             "ville",
+            "matricule_fiscal",
             "magasin_origine",
             "accepte_relances",
             "notes",

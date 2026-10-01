@@ -6,6 +6,7 @@ from apps.securite.models import Affectation
 from apps.stock.models import Article, MouvementStock, PrixArticle, stock_disponible
 from apps.ventes.models import Vente
 from apps.ventes.services import VenteInvalide, enregistrer_vente
+from tests.conftest import tva
 
 
 @pytest.fixture
@@ -14,10 +15,10 @@ def articles(reseau):
     monture = Article.objects.create(reference="MON-1", libelle="Monture", famille="monture")
     lentilles = Article.objects.create(reference="LEN-1", libelle="Lentilles", famille="lentille")
     PrixArticle.objects.create(
-        article=monture, pays=france, prix_vente_ttc=Decimal("149.00"), taux_tva=Decimal("20")
+        article=monture, pays=france, prix_vente_ttc=Decimal("149.00"), tva=tva(france, 20)
     )
     PrixArticle.objects.create(
-        article=lentilles, pays=france, prix_vente_ttc=Decimal("32.90"), taux_tva=Decimal("5.50")
+        article=lentilles, pays=france, prix_vente_ttc=Decimal("32.90"), tva=tva(france, "5.50")
     )
     for magasin in (reseau["lille"], reseau["arras"]):
         for article in (monture, lentilles):

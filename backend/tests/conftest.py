@@ -4,7 +4,7 @@ from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from rest_framework.test import APIClient
 
-from apps.reseau.models import Magasin, Pays, Region
+from apps.reseau.models import Magasin, Pays, Region, TauxTva
 from apps.securite.models import Affectation, Utilisateur
 
 
@@ -91,3 +91,8 @@ def affecter(creer_role, creer_utilisateur):
         return utilisateur
 
     return _affecter
+
+
+def tva(pays, taux):
+    """Taux de TVA d'un pays, tel que créé par la migration (ex. tva(tunisie, 19))."""
+    return TauxTva.objects.get(pays=pays, taux=taux)

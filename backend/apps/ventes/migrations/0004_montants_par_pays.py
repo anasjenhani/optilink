@@ -1,3 +1,4 @@
+import django.db.models.deletion
 from django.db import migrations, models
 
 MONTANT = {"decimal_places": 3, "max_digits": 14}
@@ -15,6 +16,7 @@ class Migration(migrations.Migration):
     dependencies = [
         ("ventes", "0003_row_level_security"),
         ("reseau", "0002_pays"),
+        ("crm", "0001_initial"),
     ]
 
     operations = [
@@ -39,4 +41,37 @@ class Migration(migrations.Migration):
             preserve_default=False,
         ),
         migrations.RunPython(completer, migrations.RunPython.noop),
+        # Tickets de caisse et factures : deux suites de numéros ; seules les factures portent
+        # le timbre et exigent un client. Les ventes et compteurs existants sont des tickets.
+        migrations.AddField(
+            "compteurfacture", "type_document",
+            models.CharField(choices=[("ticket", "Ticket de caisse"), ("facture", "Facture")], default="ticket", max_length=10),
+            preserve_default=False,
+        ),
+        migrations.RemoveConstraint("compteurfacture", "compteur_unique_par_annee"),
+        migrations.AddConstraint(
+            "compteurfacture",
+            models.UniqueConstraint(fields=("magasin", "annee", "type_document"), name="compteur_unique_par_annee"),
+        ),
+        migrations.AddField(
+            "vente", "type_document",
+            models.CharField(choices=[("ticket", "Ticket de caisse"), ("facture", "Facture")], default="ticket", max_length=10),
+        ),
+        migrations.AddField(
+            "vente", "client",
+            models.ForeignKey(blank=True, help_text="Obligatoire pour une facture.", null=True, on_delete=django.db.models.deletion.PROTECT, related_name="ventes", to="crm.client"),
+        ),
+        migrations.AlterField(
+            "vente", "timbre_fiscal",
+            models.DecimalField(decimal_places=3, default=0, help_text="Droit de timbre du pays, sur les factures seulement.", max_digits=10),
+        ),
+        migrations.RemoveConstraint("vente", "facture_sans_doublon"),
+        migrations.AddConstraint(
+            "vente",
+            models.UniqueConstraint(fields=("magasin", "annee", "type_document", "sequence"), name="facture_sans_doublon"),
+        ),
+        migrations.AddConstraint(
+            "vente",
+            models.CheckConstraint(condition=models.Q(("type_document", "facture"), _negated=True) | models.Q(("client__isnull", False)), name="facture_avec_client"),
+        ),
     ]

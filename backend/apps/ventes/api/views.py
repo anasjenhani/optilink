@@ -3,6 +3,7 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
+from apps.crm.models import Client
 from apps.reseau.models import Magasin
 from apps.stock.models import Article
 
@@ -23,7 +24,7 @@ class VenteViewSet(
     lookup_field = "public_id"
 
     def get_queryset(self):
-        return Vente.objects.select_related("magasin", "vendeur").prefetch_related(
+        return Vente.objects.select_related("magasin", "vendeur", "client").prefetch_related(
             "lignes__article", "paiements"
         )
 
@@ -51,6 +52,14 @@ class VenteViewSet(
         if manquants:
             raise ValidationError({"lignes": "Article inconnu ou retiré de la vente."})
 
+        client = None
+        if donnees.get("client"):
+            if not user.has_perm("crm.view_client"):
+                raise PermissionDenied("Pas d'accès aux fiches clients.")
+            client = Client.objects.filter(public_id=donnees["client"]).first()
+            if client is None:
+                raise ValidationError({"client": "Client inconnu."})
+
         try:
             vente = enregistrer_vente(
                 magasin=magasin,
@@ -59,6 +68,8 @@ class VenteViewSet(
                     {**ligne, "article": articles[ligne["article"]]} for ligne in donnees["lignes"]
                 ],
                 paiements=donnees["paiements"],
+                facture=donnees["facture"],
+                client=client,
             )
         except VenteInvalide as erreur:
             return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)

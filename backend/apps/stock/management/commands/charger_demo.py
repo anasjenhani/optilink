@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.core.management.base import BaseCommand
 
-from apps.reseau.models import Magasin, Pays
+from apps.reseau.models import Magasin, Pays, TauxTva
 from apps.stock.models import Article, MouvementStock, PrixArticle
 
 # Prix de démonstration par pays : (prix TTC, taux de TVA). Taux réels à valider.
@@ -54,12 +54,15 @@ class Command(BaseCommand):
             article, _ = Article.objects.get_or_create(
                 reference=reference, defaults={"libelle": libelle, "famille": famille}
             )
-            for code, (prix, tva) in tarifs.items():
+            for code, (prix, taux) in tarifs.items():
                 if code in pays:
+                    tva = TauxTva.objects.filter(pays=pays[code], taux=Decimal(taux)).first()
+                    if tva is None:
+                        continue
                     PrixArticle.objects.get_or_create(
                         article=article,
                         pays=pays[code],
-                        defaults={"prix_vente_ttc": Decimal(prix), "taux_tva": Decimal(tva)},
+                        defaults={"prix_vente_ttc": Decimal(prix), "tva": tva},
                     )
             for magasin in magasins:
                 if MouvementStock.tous.filter(magasin=magasin, article=article).exists():

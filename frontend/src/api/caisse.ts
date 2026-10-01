@@ -16,6 +16,7 @@ export type ModePaiement = "carte" | "especes" | "cheque";
 export type Vente = {
   id: string;
   numero: string;
+  type_document: "ticket" | "facture";
   devise: string;
   total_ttc: string;
   timbre_fiscal: string;
@@ -25,6 +26,8 @@ export type Vente = {
 
 export type SaisieVente = {
   magasin: string;
+  facture: boolean;
+  client?: string;
   lignes: { article: string; quantite: number }[];
   paiements: { mode: ModePaiement; montant: string }[];
 };

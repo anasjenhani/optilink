@@ -38,9 +38,11 @@ class Article(ModeleDeBase):
 
 
 class PrixArticle(models.Model):
-    """Prix de vente et TVA d'un article dans un pays, dans la monnaie de ce pays.
+    """Prix de vente d'un article dans un pays, dans la monnaie de ce pays, et son taux de TVA.
 
-    Sans prix pour son pays, un article ne peut pas être vendu dans un magasin.
+    Le taux est une référence vers les taux du pays : quand l'administrateur modifie un taux,
+    tous les articles qui l'utilisent suivent. Une vente déjà faite garde le taux qu'elle a
+    appliqué. Sans prix pour son pays, un article ne peut pas être vendu dans un magasin.
     """
 
     article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name="prix")
@@ -48,7 +50,9 @@ class PrixArticle(models.Model):
     prix_vente_ttc = models.DecimalField(
         max_digits=14, decimal_places=3, validators=[MinValueValidator(Decimal("0"))]
     )
-    taux_tva = models.DecimalField(max_digits=5, decimal_places=2)
+    tva = models.ForeignKey(
+        "reseau.TauxTva", on_delete=models.PROTECT, related_name="prix", verbose_name="TVA"
+    )
 
     class Meta:
         verbose_name = "prix de vente"
@@ -59,8 +63,8 @@ class PrixArticle(models.Model):
         return f"{self.article.reference} {self.prix_vente_ttc} {self.pays.devise}"
 
     def clean(self):
-        if self.pays_id and not self.pays.taux_tva.filter(taux=self.taux_tva).exists():
-            raise ValidationError({"taux_tva": "Taux de TVA inconnu dans ce pays."})
+        if self.pays_id and self.tva_id and self.tva.pays_id != self.pays_id:
+            raise ValidationError({"tva": "Ce taux de TVA appartient à un autre pays."})
         prix = Decimal(self.prix_vente_ttc or 0)
         if self.pays_id and prix != prix.quantize(Decimal(1).scaleb(-self.pays.decimales)):
             raise ValidationError(

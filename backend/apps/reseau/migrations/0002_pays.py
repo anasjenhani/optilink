@@ -61,7 +61,7 @@ class Migration(migrations.Migration):
                 ("decimales", models.PositiveSmallIntegerField(default=2, help_text="Décimales de la monnaie : 3 pour le dinar (millimes).")),
                 ("fuseau_horaire", models.CharField(default="Africa/Tunis", max_length=50)),
                 ("indicatif_telephonique", models.CharField(blank=True, max_length=6)),
-                ("timbre_fiscal", models.DecimalField(decimal_places=3, default=0, help_text="Droit de timbre ajouté à chaque facture (0 si le pays n'en a pas).", max_digits=10)),
+                ("timbre_fiscal", models.DecimalField(decimal_places=3, default=0, help_text="Droit de timbre ajouté à chaque facture, pas aux tickets (0 si aucun).", max_digits=10)),
                 ("libelle_identifiant_prescripteur", models.CharField(default="Identifiant du prescripteur", max_length=100)),
                 ("format_identifiant_prescripteur", models.CharField(blank=True, help_text="Expression régulière ; vide = pas de contrôle.", max_length=100)),
             ],

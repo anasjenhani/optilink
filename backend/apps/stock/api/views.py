@@ -65,7 +65,7 @@ class ArticleViewSet(viewsets.ReadOnlyModelViewSet):
         tarif = PrixArticle.objects.filter(article=OuterRef("pk"), pays=magasin.pays)
         articles = articles.filter(Exists(tarif)).annotate(
             prix_vente_ttc=Subquery(tarif.values("prix_vente_ttc")),
-            taux_tva=Subquery(tarif.values("taux_tva")),
+            taux_tva=Subquery(tarif.values("tva__taux")),
             devise=Value(magasin.pays.devise, output_field=CharField()),
         )
         stock = (

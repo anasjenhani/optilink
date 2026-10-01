@@ -24,8 +24,18 @@ class PaiementSaisieSerializer(serializers.Serializer):
 
 class VenteSaisieSerializer(serializers.Serializer):
     magasin = serializers.UUIDField()
+    facture = serializers.BooleanField(
+        default=False,
+        help_text="Facture au nom du client (avec droit de timbre) plutôt qu'un ticket de caisse.",
+    )
+    client = serializers.UUIDField(required=False, allow_null=True)
     lignes = LigneSaisieSerializer(many=True, allow_empty=False)
     paiements = PaiementSaisieSerializer(many=True, allow_empty=False)
+
+    def validate(self, attrs):
+        if attrs["facture"] and not attrs.get("client"):
+            raise serializers.ValidationError({"client": "Une facture exige un client."})
+        return attrs
 
 
 class LigneVenteSerializer(serializers.ModelSerializer):
@@ -54,6 +64,7 @@ class VenteSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source="public_id", read_only=True)
     magasin = serializers.CharField(source="magasin.code", read_only=True)
     vendeur = serializers.CharField(source="vendeur.get_username", read_only=True)
+    client = serializers.SerializerMethodField()
     lignes = LigneVenteSerializer(many=True, read_only=True)
     paiements = PaiementSerializer(many=True, read_only=True)
 
@@ -61,8 +72,10 @@ class VenteSerializer(serializers.ModelSerializer):
         model = Vente
         fields = [
             "id",
+            "type_document",
             "numero",
             "magasin",
+            "client",
             "vendeur",
             "cree_le",
             "devise",
@@ -74,3 +87,13 @@ class VenteSerializer(serializers.ModelSerializer):
             "lignes",
             "paiements",
         ]
+
+    def get_client(self, vente) -> dict | None:
+        if vente.client is None:
+            return None
+        client = vente.client
+        return {
+            "id": str(client.public_id),
+            "nom": str(client),
+            "matricule_fiscal": client.matricule_fiscal,
+        }

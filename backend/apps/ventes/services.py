@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from apps.stock.models import MouvementStock, PrixArticle
 
-from .models import CompteurFacture, LigneVente, Paiement, Vente
+from .models import PREFIXES, CompteurFacture, LigneVente, Paiement, TypeDocument, Vente
 
 
 class VenteInvalide(Exception):
@@ -19,13 +19,14 @@ def arrondir(montant, decimales):
     return montant.quantize(Decimal(1).scaleb(-decimales), rounding=ROUND_HALF_UP)
 
 
-def _prochain_numero(magasin, annee):
+def _prochain_numero(magasin, annee, type_document):
     """Réserve le numéro suivant ; le verrou tient jusqu'à la fin de la transaction.
 
     Si la vente échoue, la transaction annule aussi l'incrément : aucun trou dans la suite.
     """
-    CompteurFacture.objects.get_or_create(magasin=magasin, annee=annee)
-    compteur = CompteurFacture.objects.select_for_update().get(magasin=magasin, annee=annee)
+    cle = {"magasin": magasin, "annee": annee, "type_document": type_document}
+    CompteurFacture.objects.get_or_create(**cle)
+    compteur = CompteurFacture.objects.select_for_update().get(**cle)
     compteur.dernier += 1
     compteur.save(update_fields=["dernier"])
     return compteur.dernier
@@ -41,14 +42,18 @@ def _stocks(magasin, articles):
 
 
 @transaction.atomic
-def enregistrer_vente(*, magasin, vendeur, lignes, paiements):
-    """Encaisse une vente : lignes, sortie de stock, paiements et numéro de facture.
+def enregistrer_vente(*, magasin, vendeur, lignes, paiements, facture=False, client=None):
+    """Encaisse une vente : lignes, sortie de stock, paiements et numéro de ticket ou de facture.
 
     ``lignes`` : [{"article", "quantite", "remise_pct"}] ; ``paiements`` : [{"mode", "montant"}].
+    Une facture exige un client et porte le droit de timbre du pays ; un ticket n'en a pas.
     Tout est écrit dans une seule transaction, ou rien.
     """
     if not lignes:
         raise VenteInvalide("La vente ne contient aucun article.")
+    if facture and client is None:
+        raise VenteInvalide("Une facture doit être établie au nom d'un client.")
+    type_document = TypeDocument.FACTURE if facture else TypeDocument.TICKET
 
     quantites = {}
     for ligne in lignes:
@@ -64,7 +69,9 @@ def enregistrer_vente(*, magasin, vendeur, lignes, paiements):
     pays = magasin.pays
     tarifs = {
         prix.article_id: prix
-        for prix in PrixArticle.objects.filter(pays=pays, article__in=quantites.keys())
+        for prix in PrixArticle.objects.select_related("tva").filter(
+            pays=pays, article__in=quantites.keys()
+        )
     }
     detail = []
     for ligne in lignes:
@@ -74,12 +81,12 @@ def enregistrer_vente(*, magasin, vendeur, lignes, paiements):
             raise VenteInvalide(f"L'article {article.reference} n'a pas de prix en {pays}.")
         remise = ligne.get("remise_pct") or Decimal("0")
         total_ttc = arrondir(tarif.prix_vente_ttc * quantite * (1 - remise / 100), pays.decimales)
-        total_ht = arrondir(total_ttc / (1 + tarif.taux_tva / 100), pays.decimales)
+        total_ht = arrondir(total_ttc / (1 + tarif.tva.taux / 100), pays.decimales)
         detail.append((article, quantite, remise, total_ttc, total_ht, tarif))
 
     total_ttc = sum((d[3] for d in detail), Decimal("0"))
     total_ht = sum((d[4] for d in detail), Decimal("0"))
-    timbre = pays.timbre_fiscal
+    timbre = pays.timbre_fiscal if facture else Decimal("0")
     net_a_payer = total_ttc + timbre
     total_paye = sum((arrondir(p["montant"], pays.decimales) for p in paiements), Decimal("0"))
     if total_paye != net_a_payer:
@@ -90,10 +97,12 @@ def enregistrer_vente(*, magasin, vendeur, lignes, paiements):
 
     # L'année de la facture est celle du magasin, pas celle du serveur.
     annee = timezone.localdate(timezone=ZoneInfo(pays.fuseau_horaire)).year
-    sequence = _prochain_numero(magasin, annee)
+    sequence = _prochain_numero(magasin, annee, type_document)
     vente = Vente.tous.create(
         magasin=magasin,
-        numero=f"{magasin.code}-{annee}-{sequence:06d}",
+        type_document=type_document,
+        client=client,
+        numero=f"{magasin.code}-{PREFIXES[type_document]}{annee}-{sequence:06d}",
         annee=annee,
         sequence=sequence,
         vendeur=vendeur,
@@ -112,7 +121,7 @@ def enregistrer_vente(*, magasin, vendeur, lignes, paiements):
             quantite=quantite,
             prix_unitaire_ttc=tarif.prix_vente_ttc,
             remise_pct=remise,
-            taux_tva=tarif.taux_tva,
+            taux_tva=tarif.tva.taux,
             total_ttc=ttc,
         )
         for article, quantite, remise, ttc, _, tarif in detail

@@ -23,7 +23,7 @@ class Pays(models.Model):
         max_digits=10,
         decimal_places=3,
         default=0,
-        help_text="Droit de timbre ajouté à chaque facture (0 si le pays n'en a pas).",
+        help_text="Droit de timbre ajouté à chaque facture, pas aux tickets (0 si aucun).",
     )
     libelle_identifiant_prescripteur = models.CharField(
         max_length=100, default="Identifiant du prescripteur"

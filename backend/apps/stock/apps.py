@@ -9,6 +9,7 @@ class StockConfig(AppConfig):
     def ready(self):
         from auditlog.registry import auditlog
 
-        from .models import Article
+        from .models import Article, PrixArticle
 
         auditlog.register(Article)
+        auditlog.register(PrixArticle)
