@@ -67,8 +67,23 @@ PERMISSIONS_CAISSE_STOCK = {
     "Comptable": VENTES_LECTURE + STOCK_LECTURE,
 }
 
-for _nom, _permissions in PERMISSIONS_CAISSE_STOCK.items():
-    ROLES_DE_DEPART[_nom] = ROLES_DE_DEPART[_nom] + _permissions
+# Lot Vendre : colonne « Clients & optique ». Seuls opticiens et responsables de magasin
+# voient les ordonnances (données de santé) ; la direction voit qui les a consultées.
+CLIENTS_COMPLET = ["crm.view_client", "crm.add_client", "crm.change_client"]
+CLIENTS_LECTURE = ["crm.view_client"]
+ORDONNANCES = ["optique.view_prescription", "optique.add_prescription"]
+
+PERMISSIONS_CLIENTS_OPTIQUE = {
+    "Direction": CLIENTS_LECTURE + ["optique.view_accesprescription"],
+    "Responsable régional": CLIENTS_LECTURE,
+    "Responsable magasin": CLIENTS_COMPLET + ORDONNANCES,
+    "Opticien": CLIENTS_COMPLET + ORDONNANCES,
+    "Vendeur": CLIENTS_COMPLET,
+}
+
+for _par_role in (PERMISSIONS_CAISSE_STOCK, PERMISSIONS_CLIENTS_OPTIQUE):
+    for _nom, _permissions in _par_role.items():
+        ROLES_DE_DEPART[_nom] = ROLES_DE_DEPART[_nom] + _permissions
 
 
 def _permission(nom):

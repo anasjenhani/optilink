@@ -51,6 +51,13 @@ PostgreSQL applique le même cloisonnement de son côté (Row-Level Security, `c
 
 La caisse suppose une liaison permanente avec le serveur (lien de secours 4G recommandé) ; un mode hors ligne changerait la numérotation et la gestion du stock.
 
+## Clients et ordonnances
+
+- **Clients** (`apps.crm`) : fiche commune à tout le réseau (un client achète partout), magasin d'origine conservé, consentement aux relances. Pas de suppression : on désactive. API `/api/v1/clients/?recherche=…` (nom, prénom, téléphone, e-mail).
+- **Ordonnances** (`apps.optique`) : `Prescription` datée, avec prescripteur et n° RPPS, mesures œil droit / œil gauche (sphère, cylindre, axe, addition ; rayon et diamètre pour les lentilles) et écart pupillaire. Une ordonnance ne se modifie pas : une correction est une nouvelle saisie. Elle suit le client dans tout le réseau.
+- **Données de santé.** Les mesures sont chiffrées par l'application avant d'arriver en base (`core/chiffrement.py`, clés `PRESCRIPTIONS_CLES` hors de la base) : une copie de la base ou d'une sauvegarde ne les révèle pas. Seuls les rôles Opticien et Responsable magasin les voient. Chaque consultation et chaque saisie est inscrite dans `AccesPrescription`, verrouillé en ajout seul dans PostgreSQL ; la direction peut consulter ce journal. L'API ne liste les ordonnances que client par client (`/api/v1/prescriptions/?client=…`).
+- **Clé de chiffrement.** À générer une fois (voir `.env.example`) et à sauvegarder hors du serveur : sans elle, les ordonnances sont illisibles, y compris depuis une sauvegarde. Rotation : mettre la nouvelle clé en premier, garder l'ancienne derrière.
+
 ## Démarrer en développement
 
 Prérequis : Docker avec Docker Compose.
@@ -104,8 +111,8 @@ La CI GitHub Actions lance les tests backend sur un vrai PostgreSQL 17, les cont
 
 Nginx redirige HTTP vers HTTPS (TLS 1.2 minimum, HSTS). La connexion Django vers PostgreSQL exige TLS (`DB_SSLMODE=require` par défaut) ; en production, utiliser `DB_SSLMODE=verify-full` avec `DB_SSLROOTCERT` (certificat de l'autorité, monté dans le conteneur) pour vérifier aussi le certificat du serveur.
 
-## Suite du lot 1
+## Suite
 
 - Reprise rapide par code PIN sur le poste de caisse
 - Notification de la direction à chaque changement de rôle ou d'affectation
-- Lot Vendre : clients, dossiers optiques, devis, avoirs, tables spécialisées par famille d'article
+- Lot Vendre, suite : client sur la vente, devis, avoirs et retours, tables spécialisées par famille d'article, export et anonymisation RGPD d'un client

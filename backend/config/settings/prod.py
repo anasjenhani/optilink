@@ -1,10 +1,12 @@
 from django.core.exceptions import ImproperlyConfigured
 
 from .base import *  # noqa: F403
-from .base import SECRET_KEY
+from .base import PRESCRIPTIONS_CLES, SECRET_KEY
 
 if not SECRET_KEY:
     raise ImproperlyConfigured("DJANGO_SECRET_KEY doit être défini en production.")
+if not PRESCRIPTIONS_CLES:
+    raise ImproperlyConfigured("PRESCRIPTIONS_CLES doit être défini en production.")
 
 DEBUG = False
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

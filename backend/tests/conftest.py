@@ -74,3 +74,18 @@ def cache_vide():
     from django.core.cache import cache
 
     cache.clear()
+
+
+@pytest.fixture
+def affecter(creer_role, creer_utilisateur):
+    roles = {}
+
+    def _affecter(nom, *permissions, **perimetre):
+        cle = tuple(sorted(permissions))
+        if cle not in roles:
+            roles[cle] = creer_role(f"Rôle {len(roles)}", *permissions)
+        utilisateur = creer_utilisateur(nom)
+        Affectation.objects.create(utilisateur=utilisateur, role=roles[cle], **perimetre)
+        return utilisateur
+
+    return _affecter

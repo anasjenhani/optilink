@@ -8,3 +8,4 @@ CELERY_TASK_ALWAYS_EAGER = True
 
 if env("DB_ENGINE", "postgresql") == "sqlite":
     DATABASES["default"]["NAME"] = ":memory:"
+PRESCRIPTIONS_CLES = ["IH0BBTQZYfIVNiYhsYo6CKgIXsR9_BN9QJ-LNBXtJhA="]

@@ -16,6 +16,7 @@ import { Connexion } from "./auth/Connexion";
 import { VerificationMfa } from "./auth/VerificationMfa";
 import { Accueil } from "./pages/Accueil";
 import { Caisse } from "./pages/Caisse";
+import { Clients } from "./pages/Clients";
 import { Magasins } from "./pages/Magasins";
 
 function Contenu({ session }: { session: EtatSession }) {
@@ -40,6 +41,15 @@ function Contenu({ session }: { session: EtatSession }) {
   return (
     <Stack spacing={3}>
       {peut(session, "ventes.add_vente") && <Caisse />}
+      {peut(session, "crm.view_client") && (
+        <Clients
+          droits={{
+            creerClient: peut(session, "crm.add_client"),
+            voirOrdonnances: peut(session, "optique.view_prescription"),
+            saisirOrdonnance: peut(session, "optique.add_prescription"),
+          }}
+        />
+      )}
       {peut(session, "reseau.view_magasin") && <Magasins />}
       <Accueil />
     </Stack>

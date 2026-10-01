@@ -45,6 +45,8 @@ INSTALLED_APPS = [
     "apps.reseau",
     "apps.stock",
     "apps.ventes",
+    "apps.crm",
+    "apps.optique",
 ]
 
 MIDDLEWARE = [
@@ -184,6 +186,10 @@ SPECTACULAR_SETTINGS = {
 MFA_OBLIGATOIRE = env_bool("MFA_OBLIGATOIRE", True)
 OTP_TOTP_ISSUER = "OptiLink"
 COMPTES_INACTIFS_JOURS = int(env("COMPTES_INACTIFS_JOURS", "90"))
+
+# Clés de chiffrement des prescriptions (core/chiffrement.py), séparées par des virgules :
+# la première chiffre, les suivantes ne servent qu'à relire pendant une rotation.
+PRESCRIPTIONS_CLES = env_list("PRESCRIPTIONS_CLES", "")
 
 # Journal d'audit : le manager de base évite que le filtre de périmètre masque l'état précédent.
 AUDITLOG_USE_BASE_MANAGER = True
