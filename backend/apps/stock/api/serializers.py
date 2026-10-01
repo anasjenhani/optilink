@@ -30,6 +30,7 @@ class ArticleSerializer(serializers.ModelSerializer):
             "libelle",
             "famille",
             "code_barres",
+            "sur_commande",
             "prix_vente_ttc",
             "taux_tva",
             "devise",
@@ -59,6 +60,10 @@ class MouvementStockSerializer(serializers.ModelSerializer):
     def validate(self, donnees):
         if donnees["quantite"] == 0:
             raise serializers.ValidationError({"quantite": "La quantité ne peut pas être nulle."})
+        if donnees["article"].sur_commande:
+            raise serializers.ValidationError(
+                {"article": "Article commandé pour chaque client : il n'a pas de stock."}
+            )
         if donnees["type"] == MouvementStock.Type.RECEPTION and donnees["quantite"] < 0:
             raise serializers.ValidationError({"quantite": "Une réception est positive."})
         return donnees

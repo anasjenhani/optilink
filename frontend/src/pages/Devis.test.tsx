@@ -129,7 +129,22 @@ test("encaisse un devis au prix du devis", async () => {
   expect(await screen.findByText(/encaissé : ticket T01-T2026-000007/)).toBeInTheDocument();
   expect(envois[0]).toEqual({
     url: "/api/v1/devis/d1/encaisser/",
-    corps: { paiements: [{ mode: "carte", montant: "649.500" }] },
+    corps: { paiements: [{ mode: "carte", montant: "649.500" }], commande: false },
+  });
+});
+
+test("passe un devis en commande avec acompte", async () => {
+  const envois = afficher(TOUS, [devis("accepte")]);
+  await choisirClient();
+  const liste = await screen.findByRole("list", { name: "Devis du client" });
+  fireEvent.click(screen.getByRole("checkbox", { name: /En commande/ }));
+  fireEvent.change(screen.getByLabelText("Acompte"), { target: { value: "300" } });
+  fireEvent.click(within(liste).getByRole("button", { name: "Commander" }));
+
+  expect(await screen.findByText(/encaissé|passé en commande/)).toBeInTheDocument();
+  expect(envois[0]).toEqual({
+    url: "/api/v1/devis/d1/encaisser/",
+    corps: { paiements: [{ mode: "carte", montant: "300" }], commande: true },
   });
 });
 

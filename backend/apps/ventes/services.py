@@ -94,11 +94,23 @@ def _stocks(magasin, articles):
 
 @transaction.atomic
 def enregistrer_vente(
-    *, magasin, vendeur, lignes, paiements, client=None, articles_retires_admis=False
+    *,
+    magasin,
+    vendeur,
+    lignes,
+    paiements,
+    client=None,
+    commande=False,
+    livraison_prevue_le=None,
+    articles_retires_admis=False,
 ):
-    """Encaisse une vente : lignes, sortie de stock, paiements et numéro de ticket.
+    """Enregistre une vente : lignes, sortie de stock, paiements et numéro de ticket.
 
     ``lignes`` : [{"article", "quantite", "remise_pct"}] ; ``paiements`` : [{"mode", "montant"}].
+    Remise tout de suite, la vente est payée en totalité. En ``commande``, le client verse un
+    acompte (éventuellement nul) et paiera le solde à la livraison (``livrer_commande``) ; une
+    vente qui comporte un article sur commande (verres…) est forcément une commande.
+    Les articles sur commande ne sortent pas du stock du magasin.
     La facture, elle, se génère à part (``generer_facture``).
     Tout est écrit dans une seule transaction, ou rien.
     """
@@ -108,12 +120,18 @@ def enregistrer_vente(
     quantites = {}
     for ligne in lignes:
         quantites[ligne["article"].pk] = quantites.get(ligne["article"].pk, 0) + ligne["quantite"]
-    stocks = _stocks(magasin, [ligne["article"] for ligne in lignes])
+    en_stock = [ligne["article"] for ligne in lignes if not ligne["article"].sur_commande]
+    stocks = _stocks(magasin, en_stock)
     for ligne in lignes:
         article = ligne["article"]
         if not article.est_actif and not articles_retires_admis:
             raise VenteInvalide(f"L'article {article.reference} n'est plus vendu.")
-        if stocks.get(article.pk, 0) < quantites[article.pk]:
+        if article.sur_commande:
+            if not commande:
+                raise VenteInvalide(
+                    f"{article.libelle} est commandé au fournisseur : enregistrer une commande."
+                )
+        elif stocks.get(article.pk, 0) < quantites[article.pk]:
             raise VenteInvalide(f"Stock insuffisant pour {article.reference}.")
 
     pays = magasin.pays
@@ -121,7 +139,11 @@ def enregistrer_vente(
     total_ttc = sum((d[3] for d in detail), Decimal("0"))
     total_ht = sum((d[4] for d in detail), Decimal("0"))
     total_paye = sum((arrondir(p["montant"], pays.decimales) for p in paiements), Decimal("0"))
-    if total_paye != total_ttc:
+    if commande and total_paye > total_ttc:
+        raise VenteInvalide(
+            f"L'acompte ({total_paye} {pays.devise}) dépasse le total ({total_ttc} {pays.devise})."
+        )
+    if not commande and total_paye != total_ttc:
         raise VenteInvalide(
             f"Les paiements ({total_paye} {pays.devise}) ne couvrent pas le total "
             f"({total_ttc} {pays.devise})."
@@ -141,6 +163,10 @@ def enregistrer_vente(
         total_ht=total_ht,
         total_tva=total_ttc - total_ht,
         total_ttc=total_ttc,
+        statut=Vente.Statut.EN_COMMANDE if commande else Vente.Statut.LIVREE,
+        livraison_prevue_le=livraison_prevue_le if commande else None,
+        livree_le=None if commande else timezone.now(),
+        livree_par=None if commande else vendeur,
     )
     LigneVente.objects.bulk_create(
         LigneVente(
@@ -165,11 +191,61 @@ def enregistrer_vente(
             reference=vente.numero,
         )
         for article, quantite, *_ in detail
+        if not article.sur_commande
     )
+    _encaisser(vente, paiements, vendeur)
+    return vente
+
+
+def _encaisser(vente, paiements, utilisateur):
+    decimales = vente.magasin.pays.decimales
     Paiement.objects.bulk_create(
-        Paiement(vente=vente, mode=p["mode"], montant=arrondir(p["montant"], pays.decimales))
+        Paiement(
+            vente=vente,
+            mode=p["mode"],
+            montant=arrondir(p["montant"], decimales),
+            recu_par=utilisateur,
+        )
         for p in paiements
+        if p["montant"] > 0
     )
+
+
+def _verrouiller_vente(vente):
+    return Vente.tous.select_for_update().select_related("magasin__pays").get(pk=vente.pk)
+
+
+@transaction.atomic
+def regler_commande(*, vente, paiements, utilisateur):
+    """Encaisse un règlement sur une vente qui n'est pas soldée (acompte complémentaire, solde)."""
+    vente = _verrouiller_vente(vente)
+    montant = sum((p["montant"] for p in paiements), Decimal("0"))
+    if montant <= 0:
+        raise VenteInvalide("Le règlement doit être positif.")
+    reste = vente.reste_a_payer
+    if arrondir(montant, vente.magasin.pays.decimales) > reste:
+        raise VenteInvalide(f"Le règlement dépasse le reste à payer ({reste} {vente.devise}).")
+    _encaisser(vente, paiements, utilisateur)
+    return vente
+
+
+@transaction.atomic
+def livrer_commande(*, vente, utilisateur, paiements=()):
+    """Remet l'équipement au client. Le solde est encaissé au plus tard à ce moment-là."""
+    vente = _verrouiller_vente(vente)
+    if vente.statut != Vente.Statut.EN_COMMANDE:
+        raise VenteInvalide(f"La vente {vente.numero} est déjà livrée.")
+    if paiements:
+        regler_commande(vente=vente, paiements=paiements, utilisateur=utilisateur)
+    reste = vente.reste_a_payer
+    if reste > 0:
+        raise VenteInvalide(
+            f"Le client doit encore {reste} {vente.devise} : encaisser le solde avant la livraison."
+        )
+    vente.statut = Vente.Statut.LIVREE
+    vente.livree_le = timezone.now()
+    vente.livree_par = utilisateur
+    vente.save(update_fields=["statut", "livree_le", "livree_par", "modifie_le"])
     return vente
 
 
@@ -324,10 +400,11 @@ def refuser_devis(*, devis):
 
 
 @transaction.atomic
-def encaisser_devis(*, devis, vendeur, paiements):
+def encaisser_devis(*, devis, vendeur, paiements, commande=False, livraison_prevue_le=None):
     """Encaisse un devis en caisse, au prix du devis : ticket, sortie de stock, paiements.
 
-    Possible tant que le devis est valable, qu'il ait été accepté avant ou non.
+    Possible tant que le devis est valable, qu'il ait été accepté avant ou non. En
+    ``commande``, le client ne verse qu'un acompte (verres à commander, par exemple).
     """
     devis = _verrouiller(devis)
     _verifier_validite(devis)
@@ -348,6 +425,8 @@ def encaisser_devis(*, devis, vendeur, paiements):
             lignes=lignes,
             paiements=paiements,
             client=devis.client,
+            commande=commande,
+            livraison_prevue_le=livraison_prevue_le,
             articles_retires_admis=True,
         )
     except VenteInvalide as erreur:

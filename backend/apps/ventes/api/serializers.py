@@ -28,7 +28,23 @@ class VenteSaisieSerializer(serializers.Serializer):
         required=False, allow_null=True, help_text="Facultatif ; repris pour la facture."
     )
     lignes = LigneSaisieSerializer(many=True, allow_empty=False)
+    paiements = PaiementSaisieSerializer(
+        many=True, help_text="Tout le prix, ou l'acompte d'une commande (peut être vide)."
+    )
+    commande = serializers.BooleanField(
+        default=False, help_text="Commande : acompte maintenant, solde à la livraison."
+    )
+    livraison_prevue_le = serializers.DateField(required=False, allow_null=True)
+
+
+class ReglementSerializer(serializers.Serializer):
     paiements = PaiementSaisieSerializer(many=True, allow_empty=False)
+
+
+class LivraisonSerializer(serializers.Serializer):
+    paiements = PaiementSaisieSerializer(
+        many=True, required=False, help_text="Solde encaissé à la livraison, s'il reste dû."
+    )
 
 
 class LigneVenteSerializer(serializers.ModelSerializer):
@@ -50,7 +66,7 @@ class LigneVenteSerializer(serializers.ModelSerializer):
 class PaiementSerializer(serializers.ModelSerializer):
     class Meta:
         model = Paiement
-        fields = ["mode", "montant"]
+        fields = ["mode", "montant", "recu_le"]
 
 
 class VenteSerializer(serializers.ModelSerializer):
@@ -77,6 +93,9 @@ class VenteSerializer(serializers.ModelSerializer):
             "total_tva",
             "total_ttc",
             "reste_a_payer",
+            "statut",
+            "livraison_prevue_le",
+            "livree_le",
             "facture",
             "lignes",
             "paiements",
@@ -165,7 +184,11 @@ class DevisSaisieSerializer(serializers.Serializer):
 
 
 class EncaissementDevisSerializer(serializers.Serializer):
-    paiements = PaiementSaisieSerializer(many=True, allow_empty=False)
+    paiements = PaiementSaisieSerializer(many=True)
+    commande = serializers.BooleanField(
+        default=False, help_text="Commande : acompte maintenant, solde à la livraison."
+    )
+    livraison_prevue_le = serializers.DateField(required=False, allow_null=True)
 
 
 class LigneDevisSerializer(serializers.ModelSerializer):

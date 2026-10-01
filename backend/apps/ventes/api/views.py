@@ -22,7 +22,9 @@ from ..services import (
     enregistrer_vente,
     etablir_devis,
     generer_facture,
+    livrer_commande,
     refuser_devis,
+    regler_commande,
 )
 from .serializers import (
     DevisSaisieSerializer,
@@ -30,6 +32,8 @@ from .serializers import (
     EncaissementDevisSerializer,
     FactureSaisieSerializer,
     FactureSerializer,
+    LivraisonSerializer,
+    ReglementSerializer,
     VenteSaisieSerializer,
     VenteSerializer,
 )
@@ -41,16 +45,40 @@ class VenteViewSet(
     mixins.RetrieveModelMixin,
     viewsets.GenericViewSet,
 ):
-    """Ventes du périmètre ; une vente enregistrée n'est jamais modifiée."""
+    """Ventes du périmètre. Une vente enregistrée n'est jamais modifiée ; une commande reçoit
+    ensuite ses règlements, puis sa livraison."""
 
     serializer_class = VenteSerializer
     lookup_field = "public_id"
-    filterset_fields = ["numero"]
+    filterset_fields = ["numero", "statut", "magasin__public_id"]
 
     def get_queryset(self):
         return Vente.objects.select_related(
             "magasin", "vendeur", "client", "facture"
         ).prefetch_related("lignes__article", "paiements")
+
+    def _apres(self, operation, **parametres):
+        try:
+            vente = operation(vente=self.get_object(), utilisateur=self.request.user, **parametres)
+        except VenteInvalide as erreur:
+            return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(VenteSerializer(self.get_queryset().get(pk=vente.pk)).data)
+
+    @extend_schema(request=ReglementSerializer, responses={200: VenteSerializer})
+    @action(detail=True, methods=["post"])
+    def reglement(self, request, public_id=None):
+        """Encaisse un règlement sur une commande pas encore soldée."""
+        saisie = ReglementSerializer(data=request.data)
+        saisie.is_valid(raise_exception=True)
+        return self._apres(regler_commande, paiements=saisie.validated_data["paiements"])
+
+    @extend_schema(request=LivraisonSerializer, responses={200: VenteSerializer})
+    @action(detail=True, methods=["post"])
+    def livrer(self, request, public_id=None):
+        """Livre une commande ; le solde éventuel est encaissé en même temps."""
+        saisie = LivraisonSerializer(data=request.data)
+        saisie.is_valid(raise_exception=True)
+        return self._apres(livrer_commande, paiements=saisie.validated_data.get("paiements", []))
 
     @extend_schema(request=VenteSaisieSerializer, responses={201: VenteSerializer})
     def create(self, request):
@@ -93,6 +121,8 @@ class VenteViewSet(
                 ],
                 paiements=donnees["paiements"],
                 client=client,
+                commande=donnees["commande"],
+                livraison_prevue_le=donnees.get("livraison_prevue_le"),
             )
         except VenteInvalide as erreur:
             return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)
@@ -272,8 +302,13 @@ class DevisViewSet(
         """Encaisse le devis en caisse, au prix du devis ; renvoie le ticket."""
         saisie = EncaissementDevisSerializer(data=request.data)
         saisie.is_valid(raise_exception=True)
+        donnees = saisie.validated_data
         resultat = self._changer(
-            encaisser_devis, vendeur=request.user, paiements=saisie.validated_data["paiements"]
+            encaisser_devis,
+            vendeur=request.user,
+            paiements=donnees["paiements"],
+            commande=donnees["commande"],
+            livraison_prevue_le=donnees.get("livraison_prevue_le"),
         )
         if isinstance(resultat, Response):
             return resultat

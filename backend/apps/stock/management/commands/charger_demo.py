@@ -58,7 +58,12 @@ class Command(BaseCommand):
         magasins = list(Magasin.tous.filter(est_actif=True))
         for reference, libelle, famille, tarifs in ARTICLES:
             article, _ = Article.objects.get_or_create(
-                reference=reference, defaults={"libelle": libelle, "famille": famille}
+                reference=reference,
+                defaults={
+                    "libelle": libelle,
+                    "famille": famille,
+                    "sur_commande": famille == "verre",
+                },
             )
             for code, (prix, taux) in tarifs.items():
                 if code in pays:
@@ -70,7 +75,7 @@ class Command(BaseCommand):
                         pays=pays[code],
                         defaults={"prix_vente_ttc": Decimal(prix), "tva": tva},
                     )
-            for magasin in magasins:
+            for magasin in magasins if not article.sur_commande else []:
                 if MouvementStock.tous.filter(magasin=magasin, article=article).exists():
                     continue
                 MouvementStock.tous.create(

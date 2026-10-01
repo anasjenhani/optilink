@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from core.managers import ParMagasinManager
 from core.models import ModeleDeBase
@@ -42,12 +43,18 @@ class CompteurFacture(models.Model):
 
 
 class Vente(ModeleDeBase):
-    """Vente encaissée en caisse, avec son ticket. Jamais modifiée : une correction passera par
-    un avoir.
+    """Vente enregistrée en caisse, avec son ticket. Jamais modifiée : une correction passera
+    par un avoir.
 
-    La facture n'est pas émise en caisse : c'est une étape à part (``Facture``), possible
+    Une vente est soit remise tout de suite (payée en totalité), soit une **commande** : le
+    client verse un acompte, l'équipement est préparé (verres commandés au fournisseur), puis
+    il est livré contre le solde. La facture est une étape à part (``Facture``), possible
     seulement quand la vente est entièrement payée.
     """
+
+    class Statut(models.TextChoices):
+        EN_COMMANDE = "en_commande", "En commande"
+        LIVREE = "livree", "Livrée"
 
     magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
     numero = models.CharField(max_length=40, unique=True, help_text="N° de ticket.")
@@ -63,6 +70,12 @@ class Vente(ModeleDeBase):
     total_ht = models.DecimalField(max_digits=14, decimal_places=3)
     total_tva = models.DecimalField(max_digits=14, decimal_places=3)
     total_ttc = models.DecimalField(max_digits=14, decimal_places=3)
+    statut = models.CharField(max_length=12, choices=Statut.choices, default=Statut.LIVREE)
+    livraison_prevue_le = models.DateField(null=True, blank=True)
+    livree_le = models.DateTimeField(null=True, blank=True)
+    livree_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
 
     objects = ParMagasinManager()
     tous = models.Manager()
@@ -230,6 +243,8 @@ class LigneVente(models.Model):
 
 
 class Paiement(models.Model):
+    """Règlement reçu : tout le prix en caisse, ou acompte puis solde pour une commande."""
+
     class Mode(models.TextChoices):
         CARTE = "carte", "Carte bancaire"
         ESPECES = "especes", "Espèces"
@@ -238,6 +253,10 @@ class Paiement(models.Model):
     vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="paiements")
     mode = models.CharField(max_length=20, choices=Mode.choices)
     montant = models.DecimalField(max_digits=14, decimal_places=3)
+    recu_le = models.DateTimeField(default=timezone.now)
+    recu_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, related_name="+"
+    )
 
     class Meta:
         verbose_name = "paiement"

@@ -1,6 +1,8 @@
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import CardContent from "@mui/material/CardContent";
 import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
@@ -86,6 +88,9 @@ export function Devis({ droits }: { droits: DroitsDevis }) {
   const [recherche, setRecherche] = useState("");
   const [lignes, setLignes] = useState<Ligne[]>([]);
   const [mode, setMode] = useState<ModePaiement>("carte");
+  // Devis avec verres à commander : acompte à l'encaissement, solde à la livraison.
+  const [enCommande, setEnCommande] = useState(false);
+  const [acompte, setAcompte] = useState("");
   const [message, setMessage] = useState("");
 
   const clients = useQuery({
@@ -141,8 +146,11 @@ export function Devis({ droits }: { droits: DroitsDevis }) {
     mutationFn: ({ devis, quoi }: { devis: DevisType; quoi: "accepter" | "refuser" | "encaisser" }) => {
       if (quoi === "accepter") return accepterDevis(devis.id).then((d) => `Devis ${d.numero} accepté.`);
       if (quoi === "refuser") return refuserDevis(devis.id).then((d) => `Devis ${d.numero} refusé.`);
-      return encaisserDevis(devis.id, { mode, montant: devis.total_ttc }).then(
-        (vente) => `Devis ${devis.numero} encaissé : ticket ${vente.numero}.`,
+      const montant = enCommande ? acompte || "0" : devis.total_ttc;
+      return encaisserDevis(devis.id, { mode, montant }, enCommande).then((vente) =>
+        vente.statut === "en_commande"
+          ? `Devis ${devis.numero} passé en commande ${vente.numero} : reste ${formaterTexte(vente.reste_a_payer, monnaie)} à la livraison.`
+          : `Devis ${devis.numero} encaissé : ticket ${vente.numero}.`,
       );
     },
     onSuccess: (texte) => {
@@ -355,20 +363,35 @@ export function Devis({ droits }: { droits: DroitsDevis }) {
                     Devis du client
                   </Typography>
                   {droits.encaisser && (
-                    <TextField
-                      select
-                      size="small"
-                      label="Paiement à l'encaissement"
-                      value={mode}
-                      onChange={(e) => setMode(e.target.value as ModePaiement)}
-                      sx={{ maxWidth: 240 }}
-                    >
-                      {MODES.map((m) => (
-                        <MenuItem key={m.valeur} value={m.valeur}>
-                          {m.libelle}
-                        </MenuItem>
-                      ))}
-                    </TextField>
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ alignItems: "center" }}>
+                      <TextField
+                        select
+                        size="small"
+                        label="Paiement à l'encaissement"
+                        value={mode}
+                        onChange={(e) => setMode(e.target.value as ModePaiement)}
+                        sx={{ minWidth: 220 }}
+                      >
+                        {MODES.map((m) => (
+                          <MenuItem key={m.valeur} value={m.valeur}>
+                            {m.libelle}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      <FormControlLabel
+                        control={<Checkbox checked={enCommande} onChange={(e) => setEnCommande(e.target.checked)} />}
+                        label="En commande (verres à commander)"
+                      />
+                      {enCommande && (
+                        <TextField
+                          size="small"
+                          type="number"
+                          label="Acompte"
+                          value={acompte}
+                          onChange={(e) => setAcompte(e.target.value)}
+                        />
+                      )}
+                    </Stack>
                   )}
                   <List dense aria-label="Devis du client">
                     {devisClient.data.map((devis) => {
@@ -407,7 +430,7 @@ export function Devis({ droits }: { droits: DroitsDevis }) {
                                 disabled={action.isPending}
                                 onClick={() => action.mutate({ devis, quoi: "encaisser" })}
                               >
-                                Encaisser
+                                {enCommande ? "Commander" : "Encaisser"}
                               </Button>
                             )}
                           </Stack>

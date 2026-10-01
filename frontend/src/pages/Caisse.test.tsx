@@ -101,3 +101,37 @@ test("affiche le refus de l'API", async () => {
 
   expect(await screen.findByText("Stock insuffisant pour MON-1.")).toBeInTheDocument();
 });
+
+test("un verre sur commande impose une commande avec acompte", async () => {
+  const VERRE = { ...MONTURE, id: "a2", reference: "VER-1", libelle: "Verre progressif", famille: "verre", sur_commande: true, prix_vente_ttc: "180.000", stock: 0 };
+  const ventes: unknown[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string, init?: RequestInit) => {
+      if (url === "/api/v1/magasins/") return json({ results: [MAGASIN] });
+      if (url.startsWith("/api/v1/articles/")) return json({ results: [VERRE] });
+      ventes.push(JSON.parse(init?.body as string));
+      return json(
+        { id: "v3", numero: "T01-T2026-000003", devise: "TND", total_ttc: "360.000", reste_a_payer: "260.000", statut: "en_commande", lignes: [] },
+        201,
+      );
+    }),
+  );
+  afficher();
+  fireEvent.change(await screen.findByLabelText(/Rechercher un article/), { target: { value: "ver" } });
+  expect(await screen.findByText(/sur commande/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Ajouter" }));
+  fireEvent.click(screen.getByRole("button", { name: "Ajouter un" }));
+
+  expect(screen.getByRole("checkbox", { name: /Commande : verres commandés/ })).toBeChecked();
+  fireEvent.change(screen.getByLabelText("Acompte"), { target: { value: "100" } });
+  expect(screen.getByText(/Reste à la livraison : 260,000\sTND/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer la commande" }));
+
+  expect(await screen.findByText(/Commande T01-T2026-000003.*reste 260,000\sTND à la livraison/)).toBeInTheDocument();
+  expect(ventes[0]).toMatchObject({
+    lignes: [{ article: "a2", quantite: 2 }],
+    paiements: [{ mode: "carte", montant: "100.000" }],
+    commande: true,
+  });
+});
