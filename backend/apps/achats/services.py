@@ -22,7 +22,7 @@ def verres_a_commander(magasin):
             article__sur_commande=True,
         )
         .exclude(commandes_fournisseur__commande__statut__in=EN_COURS)
-        .select_related("vente__client", "article")
+        .select_related("vente__client", "article__fournisseur")
         .order_by("vente__cree_le", "pk")
     )
 

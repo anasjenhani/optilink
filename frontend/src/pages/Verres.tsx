@@ -25,6 +25,7 @@ import {
   listerVerresACommander,
   passerCommande,
   receptionner,
+  type VerreACommander,
 } from "../api/achats";
 import { listerMagasins } from "../api/magasins";
 
@@ -91,13 +92,18 @@ export function Verres() {
     },
   });
 
-  const basculer = (ligne: number) =>
+  const basculer = (verre: VerreACommander) => {
+    // Le premier verre coché propose son fournisseur habituel.
+    if (!(verre.ligne in choisies) && Object.keys(choisies).length === 0 && verre.fournisseur) {
+      setFournisseur(verre.fournisseur);
+    }
     setChoisies((actuelles) => {
       const suivantes = { ...actuelles };
-      if (ligne in suivantes) delete suivantes[ligne];
-      else suivantes[ligne] = "";
+      if (verre.ligne in suivantes) delete suivantes[verre.ligne];
+      else suivantes[verre.ligne] = "";
       return suivantes;
     });
+  };
 
   return (
     <Card>
@@ -140,7 +146,7 @@ export function Verres() {
                     <TableCell padding="checkbox">
                       <Checkbox
                         checked={v.ligne in choisies}
-                        onChange={() => basculer(v.ligne)}
+                        onChange={() => basculer(v)}
                         slotProps={{ input: { "aria-label": `Commander ${v.commande_client} ${v.libelle}` } }}
                       />
                     </TableCell>
@@ -148,11 +154,17 @@ export function Verres() {
                       {v.commande_client}
                       <Typography variant="body2" color="text.secondary">
                         {v.client?.nom ?? "Sans client"}
+                        {v.peniche && ` · péniche ${v.peniche}`}
                         {v.livraison_prevue_le && ` · prévue le ${dateCourte(v.livraison_prevue_le)}`}
                       </Typography>
                     </TableCell>
                     <TableCell>
                       {v.quantite} × {v.libelle}
+                      {v.reference_fournisseur && (
+                        <Typography variant="body2" color="text.secondary">
+                          Réf. fournisseur {v.reference_fournisseur}
+                        </Typography>
+                      )}
                     </TableCell>
                     <TableCell>
                       <TextField

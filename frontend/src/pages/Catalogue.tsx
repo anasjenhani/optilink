@@ -89,9 +89,9 @@ export function Catalogue() {
                     <TableCell>{article.reference}</TableCell>
                     <TableCell>
                       {article.libelle}
-                      {article.description && (
+                      {(article.description || article.fournisseur || article.code_barres) && (
                         <Typography variant="body2" color="text.secondary">
-                          {article.description}
+                          {[article.description, article.fournisseur, article.code_barres].filter(Boolean).join(" · ")}
                         </Typography>
                       )}
                     </TableCell>

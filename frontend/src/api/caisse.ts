@@ -5,6 +5,8 @@ export type Article = {
   reference: string;
   libelle: string;
   famille: Famille;
+  code_barres: string;
+  fournisseur: string | null;
   /** Caractéristiques de la famille sur une ligne (« Ray-Ban RB5154 · écaille · 51□21-145 »). */
   description: string;
   caracteristiques: Record<string, string | number | boolean | null> | null;
@@ -34,6 +36,8 @@ export type Vente = {
   total_ttc: string;
   reste_a_payer: string;
   statut: "en_commande" | "livree" | "annulee";
+  /** Bac numéroté où l'équipement d'une commande attend sa livraison. */
+  peniche: number | null;
   livraison_prevue_le: string | null;
   /** Verres commandés au fournisseur ; null si la commande n'en comporte pas. */
   verres?: "a_commander" | "commandes" | "recus" | null;
@@ -50,6 +54,8 @@ export type SaisieVente = {
   /** Commande : acompte maintenant (paiements, éventuellement vides), solde à la livraison. */
   commande?: boolean;
   livraison_prevue_le?: string;
+  /** Commande : n° de péniche ; sans lui, la plus petite libre du magasin. */
+  peniche?: number;
 };
 
 export type Reglement = { mode: ModePaiement; montant: string };

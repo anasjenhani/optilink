@@ -47,12 +47,23 @@ CARACTERISTIQUES = {
 
 @admin.register(Article)
 class ArticleAdmin(admin.ModelAdmin):
-    list_display = ("reference", "libelle", "famille", "marque", "est_actif")
-    list_filter = ("famille", "est_actif")
+    list_display = (
+        "reference",
+        "libelle",
+        "famille",
+        "marque",
+        "fournisseur",
+        "code_barres",
+        "sur_commande",
+        "est_actif",
+    )
+    list_filter = ("famille", "sur_commande", "fournisseur", "est_actif")
+    autocomplete_fields = ("fournisseur",)
     search_fields = (
         "reference",
         "libelle",
         "code_barres",
+        "reference_fournisseur",
         "monture__marque",
         "monture__modele",
         "verre__marque",
@@ -75,7 +86,11 @@ class ArticleAdmin(admin.ModelAdmin):
         return fiche.marque if fiche else ""
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("monture", "verre", "lentille")
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("monture", "verre", "lentille", "fournisseur")
+        )
 
 
 @admin.register(MouvementStock)

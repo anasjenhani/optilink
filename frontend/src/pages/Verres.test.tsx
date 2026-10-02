@@ -12,7 +12,7 @@ const TUNIS = {
   pays: { code: "TN", nom: "Tunisie", devise: "TND", decimales: 3, indicatif_telephonique: "+216", timbre_fiscal: "1.000", libelle_identifiant_prescripteur: "" },
 };
 const A_COMMANDER = [
-  { ligne: 11, commande_client: "T01-T2026-000003", client: { id: "c1", nom: "BEN SALAH Leila" }, livraison_prevue_le: "2026-10-15", article: "VER-1", libelle: "Verre progressif", quantite: 2 },
+  { ligne: 11, commande_client: "T01-T2026-000003", client: { id: "c1", nom: "BEN SALAH Leila" }, livraison_prevue_le: "2026-10-15", peniche: 5, article: "VER-1", libelle: "Verre progressif", quantite: 2, fournisseur: "f2", reference_fournisseur: "VX-16" },
 ];
 const ENVOYEE = {
   id: "cf1",
@@ -41,7 +41,12 @@ function afficher() {
         return json({ ...ENVOYEE, numero: "T01-C2026-000002" }, 201);
       }
       if (url === "/api/v1/magasins/") return json({ results: [TUNIS] });
-      if (url === "/api/v1/fournisseurs/") return json({ results: [{ id: "f1", nom: "Essilor Tunisie", pays: "TN", telephone: "", email: "" }] });
+      if (url === "/api/v1/fournisseurs/") return json({
+          results: [
+            { id: "f1", nom: "Essilor Tunisie", pays: "TN", telephone: "", email: "" },
+            { id: "f2", nom: "Zeiss Tunisie", pays: "TN", telephone: "", email: "" },
+          ],
+        });
       if (url.includes("/a-commander/")) return json(A_COMMANDER);
       return json({ results: [ENVOYEE] });
     }),
@@ -57,6 +62,8 @@ function afficher() {
 test("commande au fournisseur les verres d'une commande client avec leurs détails", async () => {
   const envois = afficher();
   fireEvent.click(await screen.findByRole("checkbox", { name: "Commander T01-T2026-000003 Verre progressif" }));
+  expect(screen.getByText(/péniche 5/)).toBeInTheDocument();
+  expect(screen.getByText("Réf. fournisseur VX-16")).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Détails T01-T2026-000003"), { target: { value: "OD -2.25 / OG -1.75" } });
   fireEvent.change(screen.getByLabelText("Réf. fournisseur"), { target: { value: "ESS-2" } });
   fireEvent.click(screen.getByRole("button", { name: "Commander au fournisseur" }));
@@ -64,7 +71,7 @@ test("commande au fournisseur les verres d'une commande client avec leurs détai
   expect(await screen.findByText(/Commande T01-C2026-000002 envoyée à Essilor Tunisie/)).toBeInTheDocument();
   expect(envois[0]).toEqual({
     url: "/api/v1/commandes-fournisseurs/",
-    corps: { magasin: "m1", fournisseur: "f1", reference_fournisseur: "ESS-2", lignes: [{ ligne: 11, details: "OD -2.25 / OG -1.75" }] },
+    corps: { magasin: "m1", fournisseur: "f2", reference_fournisseur: "ESS-2", lignes: [{ ligne: 11, details: "OD -2.25 / OG -1.75" }] },
   });
 });
 

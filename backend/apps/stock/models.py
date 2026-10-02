@@ -28,15 +28,36 @@ class Article(ModeleDeBase):
     libelle = models.CharField(max_length=200)
     famille = models.CharField(max_length=20, choices=Famille.choices)
     code_barres = models.CharField(max_length=40, blank=True, db_index=True)
+    fournisseur = models.ForeignKey(
+        "achats.Fournisseur",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="articles",
+    )
+    reference_fournisseur = models.CharField(
+        max_length=60, blank=True, help_text="Référence de l'article chez le fournisseur."
+    )
     sur_commande = models.BooleanField(
         default=False,
-        help_text="Commandé au fournisseur pour chaque client (verres…) : hors stock du magasin.",
+        help_text=(
+            "Commandé au fournisseur pour chaque client (verre à commander) : hors stock du "
+            "magasin. Décoché, l'article se vend sur le stock (verre de stock, monture…)."
+        ),
     )
     est_actif = models.BooleanField(default=True)
 
     class Meta:
         ordering = ["reference"]
         verbose_name = "article"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["code_barres"],
+                condition=~models.Q(code_barres=""),
+                name="code_barres_unique",
+                violation_error_message="Ce code-barres est déjà celui d'un autre article.",
+            )
+        ]
 
     def __str__(self):
         return f"{self.reference} {self.libelle}"

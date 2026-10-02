@@ -1,3 +1,5 @@
+import uuid
+
 from django.db.models import (
     CharField,
     DecimalField,
@@ -32,6 +34,9 @@ from .serializers import ArticleSerializer, MouvementStockSerializer
             ),
             OpenApiParameter("marque", OpenApiTypes.STR, description="Marque (toutes familles)"),
             OpenApiParameter(
+                "fournisseur", OpenApiTypes.UUID, description="Articles de ce fournisseur"
+            ),
+            OpenApiParameter(
                 "magasin",
                 OpenApiTypes.UUID,
                 description="Ajoute stock et prix dans ce magasin (articles vendables seulement)",
@@ -48,14 +53,21 @@ class ArticleViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         articles = Article.objects.filter(est_actif=True).select_related(
-            "monture", "verre", "lentille"
+            "monture", "verre", "lentille", "fournisseur"
         )
+        fournisseur = self.request.query_params.get("fournisseur")
+        if fournisseur:
+            try:
+                articles = articles.filter(fournisseur__public_id=uuid.UUID(fournisseur))
+            except ValueError:
+                articles = articles.none()
         recherche = self.request.query_params.get("recherche", "").strip()
         if recherche:
             articles = articles.filter(
                 Q(reference__icontains=recherche)
                 | Q(libelle__icontains=recherche)
                 | Q(code_barres=recherche)
+                | Q(reference_fournisseur__iexact=recherche)
                 | Q(monture__marque__icontains=recherche)
                 | Q(monture__modele__icontains=recherche)
                 | Q(verre__marque__icontains=recherche)

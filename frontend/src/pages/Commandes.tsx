@@ -38,6 +38,7 @@ export function Commandes() {
   const [mode, setMode] = useState<ModePaiement>("especes");
   const [montants, setMontants] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
+  const [peniche, setPeniche] = useState("");
 
   const commandes = useQuery({
     queryKey: ["commandes", magasin],
@@ -102,12 +103,21 @@ export function Commandes() {
             </TextField>
           </Stack>
 
+          <TextField
+            size="small"
+            type="number"
+            label="Chercher par péniche"
+            value={peniche}
+            onChange={(e) => setPeniche(e.target.value)}
+            sx={{ maxWidth: 220 }}
+          />
           {commandes.isError && <Alert severity="error">{commandes.error.message}</Alert>}
           {commandes.data?.length === 0 && <Typography color="text.secondary">Aucune commande en cours.</Typography>}
           {commandes.data && commandes.data.length > 0 && (
             <Table size="small" aria-label="Commandes en cours">
               <TableHead>
                 <TableRow>
+                  <TableCell>Péniche</TableCell>
                   <TableCell>Commande</TableCell>
                   <TableCell>Client</TableCell>
                   <TableCell align="right">Reste à payer</TableCell>
@@ -116,61 +126,64 @@ export function Commandes() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {commandes.data.map((vente) => (
-                  <TableRow key={vente.id}>
-                    <TableCell>
-                      {vente.numero}
-                      {vente.livraison_prevue_le && (
+                {commandes.data
+                  .filter((vente) => !peniche || vente.peniche === Number(peniche))
+                  .map((vente) => (
+                    <TableRow key={vente.id}>
+                      <TableCell>{vente.peniche ?? "—"}</TableCell>
+                      <TableCell>
+                        {vente.numero}
+                        {vente.livraison_prevue_le && (
+                          <Typography variant="body2" color="text.secondary">
+                            Prévue le {dateCourte(vente.livraison_prevue_le)}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>{vente.client?.nom ?? "—"}</TableCell>
+                      <TableCell align="right">
+                        {formaterTexte(vente.reste_a_payer, monnaie(vente))}
                         <Typography variant="body2" color="text.secondary">
-                          Prévue le {dateCourte(vente.livraison_prevue_le)}
+                          sur {formaterTexte(vente.total_ttc, monnaie(vente))}
                         </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>{vente.client?.nom ?? "—"}</TableCell>
-                    <TableCell align="right">
-                      {formaterTexte(vente.reste_a_payer, monnaie(vente))}
-                      <Typography variant="body2" color="text.secondary">
-                        sur {formaterTexte(vente.total_ttc, monnaie(vente))}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      {Number(vente.reste_a_payer) > 0 && (
-                        <Stack direction="row" spacing={1}>
-                          <TextField
-                            size="small"
-                            type="number"
-                            label={`Montant ${vente.numero}`}
-                            value={montants[vente.id] ?? ""}
-                            onChange={(e) => setMontants((m) => ({ ...m, [vente.id]: e.target.value }))}
-                            sx={{ width: 140 }}
-                          />
-                          <Button
-                            size="small"
-                            disabled={!Number(montants[vente.id]) || action.isPending}
-                            onClick={() => action.mutate({ vente, quoi: "regler" })}
-                          >
-                            Encaisser
-                          </Button>
-                        </Stack>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {vente.verres && vente.verres !== "recus" && (
-                        <Typography variant="body2" color="warning.main">
-                          {vente.verres === "a_commander" ? "Verres à commander" : "Verres en attente du fournisseur"}
-                        </Typography>
-                      )}
-                      <Button
-                        variant="contained"
-                        size="small"
-                        disabled={action.isPending || (Boolean(vente.verres) && vente.verres !== "recus")}
-                        onClick={() => action.mutate({ vente, quoi: "livrer" })}
-                      >
-                        {Number(vente.reste_a_payer) > 0 ? "Encaisser le solde et livrer" : "Livrer"}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell>
+                        {Number(vente.reste_a_payer) > 0 && (
+                          <Stack direction="row" spacing={1}>
+                            <TextField
+                              size="small"
+                              type="number"
+                              label={`Montant ${vente.numero}`}
+                              value={montants[vente.id] ?? ""}
+                              onChange={(e) => setMontants((m) => ({ ...m, [vente.id]: e.target.value }))}
+                              sx={{ width: 140 }}
+                            />
+                            <Button
+                              size="small"
+                              disabled={!Number(montants[vente.id]) || action.isPending}
+                              onClick={() => action.mutate({ vente, quoi: "regler" })}
+                            >
+                              Encaisser
+                            </Button>
+                          </Stack>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {vente.verres && vente.verres !== "recus" && (
+                          <Typography variant="body2" color="warning.main">
+                            {vente.verres === "a_commander" ? "Verres à commander" : "Verres en attente du fournisseur"}
+                          </Typography>
+                        )}
+                        <Button
+                          variant="contained"
+                          size="small"
+                          disabled={action.isPending || (Boolean(vente.verres) && vente.verres !== "recus")}
+                          onClick={() => action.mutate({ vente, quoi: "livrer" })}
+                        >
+                          {Number(vente.reste_a_payer) > 0 ? "Encaisser le solde et livrer" : "Livrer"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
               </TableBody>
             </Table>
           )}

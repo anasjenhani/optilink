@@ -21,6 +21,7 @@ function commande(reste: string) {
     reste_a_payer: reste,
     statut: reste === "0.000" ? "livree" : "en_commande",
     livraison_prevue_le: "2026-10-15",
+    peniche: 17,
     facture: null,
     client: { id: "c1", nom: "BEN SALAH Leila", matricule_fiscal: "" },
     lignes: [],
@@ -91,4 +92,14 @@ test("une commande dont les verres ne sont pas reçus ne se livre pas", async ()
   );
   expect(await screen.findByText("Verres en attente du fournisseur")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Encaisser le solde et livrer" })).toBeDisabled();
+});
+
+test("retrouve une commande par sa péniche", async () => {
+  afficher();
+  expect(await screen.findByText("T01-T2026-000003")).toBeInTheDocument();
+  expect(screen.getByText("17")).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Chercher par péniche"), { target: { value: "18" } });
+  expect(screen.queryByText("T01-T2026-000003")).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Chercher par péniche"), { target: { value: "17" } });
+  expect(screen.getByText("T01-T2026-000003")).toBeInTheDocument();
 });
