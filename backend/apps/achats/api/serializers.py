@@ -1,0 +1,74 @@
+from rest_framework import serializers
+
+from apps.ventes.api.serializers import client_resume
+
+from ..models import CommandeFournisseur, Fournisseur, LigneCommandeFournisseur
+
+
+class FournisseurSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source="public_id", read_only=True)
+    pays = serializers.CharField(source="pays.code", read_only=True)
+
+    class Meta:
+        model = Fournisseur
+        fields = ["id", "nom", "pays", "telephone", "email", "est_actif"]
+
+
+class VerreACommanderSerializer(serializers.Serializer):
+    """Ligne d'une commande client dont les verres restent à commander."""
+
+    ligne = serializers.IntegerField(source="pk")
+    commande_client = serializers.CharField(source="vente.numero")
+    client = serializers.SerializerMethodField()
+    commandee_le = serializers.DateTimeField(source="vente.cree_le")
+    livraison_prevue_le = serializers.DateField(source="vente.livraison_prevue_le")
+    article = serializers.CharField(source="article.reference")
+    libelle = serializers.CharField()
+    quantite = serializers.IntegerField()
+
+    def get_client(self, ligne) -> dict | None:
+        return client_resume(ligne.vente.client)
+
+
+class LigneCommandeSaisieSerializer(serializers.Serializer):
+    ligne = serializers.IntegerField(help_text="``ligne`` d'un verre à commander.")
+    details = serializers.CharField(required=False, allow_blank=True, max_length=300)
+
+
+class CommandeFournisseurSaisieSerializer(serializers.Serializer):
+    magasin = serializers.UUIDField()
+    fournisseur = serializers.UUIDField()
+    reference_fournisseur = serializers.CharField(required=False, allow_blank=True, max_length=60)
+    lignes = LigneCommandeSaisieSerializer(many=True, allow_empty=False)
+
+
+class LigneCommandeFournisseurSerializer(serializers.ModelSerializer):
+    commande_client = serializers.CharField(source="ligne_vente.vente.numero", read_only=True)
+    libelle = serializers.CharField(source="ligne_vente.libelle", read_only=True)
+
+    class Meta:
+        model = LigneCommandeFournisseur
+        fields = ["commande_client", "libelle", "quantite", "details"]
+
+
+class CommandeFournisseurSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source="public_id", read_only=True)
+    magasin = serializers.CharField(source="magasin.code", read_only=True)
+    fournisseur = serializers.CharField(source="fournisseur.nom", read_only=True)
+    passee_par = serializers.CharField(source="passee_par.get_username", read_only=True)
+    lignes = LigneCommandeFournisseurSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = CommandeFournisseur
+        fields = [
+            "id",
+            "numero",
+            "magasin",
+            "fournisseur",
+            "reference_fournisseur",
+            "statut",
+            "cree_le",
+            "passee_par",
+            "recue_le",
+            "lignes",
+        ]

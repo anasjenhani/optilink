@@ -155,10 +155,15 @@ export function Commandes() {
                       )}
                     </TableCell>
                     <TableCell>
+                      {vente.verres && vente.verres !== "recus" && (
+                        <Typography variant="body2" color="warning.main">
+                          {vente.verres === "a_commander" ? "Verres à commander" : "Verres en attente du fournisseur"}
+                        </Typography>
+                      )}
                       <Button
                         variant="contained"
                         size="small"
-                        disabled={action.isPending}
+                        disabled={action.isPending || (Boolean(vente.verres) && vente.verres !== "recus")}
                         onClick={() => action.mutate({ vente, quoi: "livrer" })}
                       >
                         {Number(vente.reste_a_payer) > 0 ? "Encaisser le solde et livrer" : "Livrer"}

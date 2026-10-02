@@ -128,3 +128,20 @@ def societe(tunis):
         matricule_fiscal="1234567/A/M/000",
         magasin_origine=tunis,
     )
+
+
+def recevoir_verres(vente, utilisateur):
+    """Commande au fournisseur les verres d'une commande client, puis les réceptionne."""
+    from apps.achats.models import Fournisseur
+    from apps.achats.services import passer_commande, receptionner
+
+    fournisseur, _ = Fournisseur.objects.get_or_create(
+        nom="Labo Verres", defaults={"pays": vente.magasin.pays}
+    )
+    lignes = [
+        {"ligne_vente": ligne.pk} for ligne in vente.lignes.all() if ligne.article.sur_commande
+    ]
+    commande = passer_commande(
+        magasin=vente.magasin, fournisseur=fournisseur, lignes=lignes, auteur=utilisateur
+    )
+    return receptionner(commande=commande, utilisateur=utilisateur)

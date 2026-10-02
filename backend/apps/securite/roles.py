@@ -132,6 +132,24 @@ PERMISSIONS_AVOIRS = {
     "Comptable": ["ventes.view_avoir"],
 }
 
+# Commandes de verres aux fournisseurs : passées et réceptionnées par l'opticien, les
+# responsables et le logisticien ; la liste des fournisseurs est tenue par les responsables.
+COMMANDES_FOURNISSEURS = [
+    "achats.view_fournisseur",
+    "achats.view_commandefournisseur",
+    "achats.add_commandefournisseur",
+    "achats.change_commandefournisseur",
+]
+FOURNISSEURS_COMPLET = ["achats.add_fournisseur", "achats.change_fournisseur"]
+PERMISSIONS_ACHATS = {
+    "Direction": ["achats.view_fournisseur", "achats.view_commandefournisseur"],
+    "Responsable régional": COMMANDES_FOURNISSEURS + FOURNISSEURS_COMPLET,
+    "Responsable magasin": COMMANDES_FOURNISSEURS + FOURNISSEURS_COMPLET,
+    "Opticien": COMMANDES_FOURNISSEURS,
+    "Logisticien": COMMANDES_FOURNISSEURS + FOURNISSEURS_COMPLET,
+    "Comptable": ["achats.view_fournisseur", "achats.view_commandefournisseur"],
+}
+
 for _par_role in (
     PERMISSIONS_CAISSE_STOCK,
     PERMISSIONS_CLIENTS_OPTIQUE,
@@ -139,6 +157,7 @@ for _par_role in (
     PERMISSIONS_FACTURES,
     PERMISSIONS_DEVIS,
     PERMISSIONS_AVOIRS,
+    PERMISSIONS_ACHATS,
 ):
     for _nom, _permissions in _par_role.items():
         ROLES_DE_DEPART[_nom] = ROLES_DE_DEPART[_nom] + _permissions

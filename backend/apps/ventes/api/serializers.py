@@ -82,6 +82,9 @@ class VenteSerializer(serializers.ModelSerializer):
     client = serializers.SerializerMethodField()
     reste_a_payer = serializers.DecimalField(max_digits=14, decimal_places=3, read_only=True)
     facture = serializers.SerializerMethodField(help_text="N° de la facture, si elle est émise.")
+    verres = serializers.SerializerMethodField(
+        help_text="Verres commandés au fournisseur : a_commander, commandes ou recus (null sinon)."
+    )
     lignes = LigneVenteSerializer(many=True, read_only=True)
     paiements = PaiementSerializer(many=True, read_only=True)
 
@@ -102,6 +105,7 @@ class VenteSerializer(serializers.ModelSerializer):
             "statut",
             "livraison_prevue_le",
             "livree_le",
+            "verres",
             "facture",
             "lignes",
             "paiements",
@@ -113,6 +117,13 @@ class VenteSerializer(serializers.ModelSerializer):
     def get_facture(self, vente) -> str | None:
         facture = getattr(vente, "facture", None)
         return facture.numero if facture else None
+
+    def get_verres(self, vente) -> str | None:
+        from apps.achats.services import etat_verres
+
+        if vente.statut != Vente.Statut.EN_COMMANDE:
+            return None
+        return etat_verres(vente)
 
 
 def client_resume(client):

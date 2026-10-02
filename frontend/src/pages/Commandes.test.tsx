@@ -75,3 +75,20 @@ test("encaisse un règlement puis livre contre le solde", async () => {
     { url: "/api/v1/ventes/v1/livrer/", corps: { paiements: [{ mode: "especes", montant: "449.500" }] } },
   ]);
 });
+
+test("une commande dont les verres ne sont pas reçus ne se livre pas", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/api/v1/magasins/") return json({ results: [TUNIS] });
+      return json({ results: [{ ...commande("449.500"), verres: "commandes" }] });
+    }),
+  );
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <Commandes />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByText("Verres en attente du fournisseur")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Encaisser le solde et livrer" })).toBeDisabled();
+});
