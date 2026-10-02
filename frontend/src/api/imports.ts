@@ -6,6 +6,10 @@ export type RapportImport = {
   crees: number;
   modifies: number;
   erreurs: { ligne: number; message: string }[];
+  /** Articles déjà au catalogue ou déjà en stock : à regarder avant d'importer. */
+  alertes: { ligne: number; message: string }[];
+  /** Rendu par une vérification sans erreur ; l'import de ce même fichier l'exige. */
+  jeton: string;
 };
 
 export const COLONNES_CATALOGUE = [
@@ -45,19 +49,22 @@ export const COLONNES_CATALOGUE = [
 ];
 export const COLONNES_STOCK = ["code_barres", "reference", "quantite"];
 
-export function importerCatalogue(fichier: File, apercu: boolean) {
+/** Sans jeton : vérification. Avec le jeton de la vérification : import. */
+export function importerCatalogue(fichier: File, jeton?: string) {
   const formulaire = new FormData();
   formulaire.append("fichier", fichier);
-  formulaire.append("apercu", String(apercu));
+  formulaire.append("apercu", String(!jeton));
+  if (jeton) formulaire.append("jeton", jeton);
   return envoyerFichier<RapportImport>("/api/v1/imports/catalogue/", formulaire);
 }
 
-export function importerStock(fichier: File, magasin: string, piece: string, apercu: boolean) {
+export function importerStock(fichier: File, magasin: string, piece: string, jeton?: string) {
   const formulaire = new FormData();
   formulaire.append("fichier", fichier);
   formulaire.append("magasin", magasin);
   formulaire.append("piece", piece);
-  formulaire.append("apercu", String(apercu));
+  formulaire.append("apercu", String(!jeton));
+  if (jeton) formulaire.append("jeton", jeton);
   return envoyerFichier<RapportImport>("/api/v1/imports/stock/", formulaire);
 }
 

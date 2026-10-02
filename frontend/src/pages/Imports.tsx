@@ -10,7 +10,7 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import {
   COLONNES_CATALOGUE,
@@ -21,6 +21,20 @@ import {
   type RapportImport,
 } from "../api/imports";
 import { listerMagasins } from "../api/magasins";
+
+function Alertes({ rapport }: { rapport: RapportImport }) {
+  if (rapport.alertes.length === 0) return null;
+  return (
+    <Alert severity="warning">
+      {rapport.alertes.length} article(s) déjà au catalogue ou en stock :
+      <List dense>
+        {rapport.alertes.slice(0, 100).map((a) => (
+          <ListItemText key={`${a.ligne}-${a.message}`} primary={`Ligne ${a.ligne} : ${a.message}`} />
+        ))}
+      </List>
+    </Alert>
+  );
+}
 
 function Rapport({ rapport }: { rapport: RapportImport }) {
   if (rapport.erreurs.length > 0) {
@@ -37,11 +51,14 @@ function Rapport({ rapport }: { rapport: RapportImport }) {
   }
   const quoi = `${rapport.crees} créé(s)${rapport.modifies ? `, ${rapport.modifies} mis à jour` : ""}`;
   return (
-    <Alert severity={rapport.apercu ? "info" : "success"}>
-      {rapport.apercu
-        ? `Fichier correct : ${rapport.lignes} ligne(s), ${quoi} à l'import.`
-        : `Import terminé : ${quoi}.`}
-    </Alert>
+    <>
+      <Alert severity={rapport.apercu ? "info" : "success"}>
+        {rapport.apercu
+          ? `Fichier vérifié : ${rapport.lignes} ligne(s), ${quoi} à l'import.`
+          : `Import terminé : ${quoi}.`}
+      </Alert>
+      {rapport.apercu && <Alertes rapport={rapport} />}
+    </>
   );
 }
 
@@ -52,6 +69,7 @@ function Bloc({
   nomModele,
   champs,
   pret = true,
+  contexte = "",
   envoyer,
 }: {
   titre: string;
@@ -60,12 +78,14 @@ function Bloc({
   nomModele: string;
   champs?: ReactNode;
   pret?: boolean;
-  envoyer: (fichier: File, apercu: boolean) => Promise<RapportImport>;
+  /** Ce qui, avec le fichier, entre dans la vérification (magasin, bon) : la changer l'annule. */
+  contexte?: string;
+  envoyer: (fichier: File, jeton?: string) => Promise<RapportImport>;
 }) {
   const queryClient = useQueryClient();
   const [fichier, setFichier] = useState<File | null>(null);
   const envoi = useMutation({
-    mutationFn: (apercu: boolean) => envoyer(fichier as File, apercu),
+    mutationFn: (jeton?: string) => envoyer(fichier as File, jeton),
     onSuccess: (rapport) => {
       if (!rapport.apercu && rapport.erreurs.length === 0) {
         setFichier(null);
@@ -74,6 +94,11 @@ function Bloc({
       }
     },
   });
+
+  // L'import n'est possible qu'après une vérification sans erreur de ce fichier.
+  const jeton = envoi.data?.apercu ? envoi.data.jeton : "";
+  const { reset } = envoi;
+  useEffect(() => reset(), [contexte, reset]);
 
   return (
     <Stack spacing={2}>
@@ -102,11 +127,11 @@ function Bloc({
         <Typography color="text.secondary">{fichier?.name ?? "Excel (.xlsx) ou CSV"}</Typography>
       </Stack>
       <Stack direction="row" spacing={2}>
-        <Button disabled={!fichier || !pret || envoi.isPending} onClick={() => envoi.mutate(true)}>
-          Vérifier
+        <Button variant="outlined" disabled={!fichier || !pret || envoi.isPending} onClick={() => envoi.mutate(undefined)}>
+          1. Vérifier
         </Button>
-        <Button variant="contained" disabled={!fichier || !pret || envoi.isPending} onClick={() => envoi.mutate(false)}>
-          Importer
+        <Button variant="contained" disabled={!jeton || envoi.isPending} onClick={() => envoi.mutate(jeton)}>
+          2. Importer
         </Button>
       </Stack>
       {envoi.isError && <Alert severity="error">{envoi.error.message}</Alert>}
@@ -145,6 +170,7 @@ export function Imports({ droits }: { droits: { catalogue: boolean; stock: boole
               colonnes={COLONNES_STOCK}
               nomModele="modele-entrees-stock.csv"
               pret={Boolean(magasin)}
+              contexte={`${magasin}|${piece}`}
               champs={
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
                   <TextField
@@ -168,7 +194,7 @@ export function Imports({ droits }: { droits: { catalogue: boolean; stock: boole
                   />
                 </Stack>
               }
-              envoyer={(fichier, apercu) => importerStock(fichier, magasin, piece, apercu)}
+              envoyer={(fichier, jeton) => importerStock(fichier, magasin, piece, jeton)}
             />
           )}
         </Stack>

@@ -35,36 +35,60 @@ const choisir = (titre: string, nom: string) =>
     target: { files: [new File(["x"], nom, { type: "text/csv" })] },
   });
 
-test("vérifie puis importe le catalogue", async () => {
-  const envois = afficher((_, corps) => ({
-    status: 200,
-    donnees: { apercu: corps.get("apercu") === "true", lignes: 3, crees: 2, modifies: 1, erreurs: [] },
-  }));
+test("vérifie, alerte sur les articles existants, puis importe avec le jeton", async () => {
+  const envois = afficher((_, corps) => {
+    const apercu = corps.get("apercu") === "true";
+    return {
+      status: 200,
+      donnees: {
+        apercu,
+        lignes: 3,
+        crees: 2,
+        modifies: 1,
+        erreurs: [],
+        alertes: [{ ligne: 2, message: "MON-1 existe déjà au catalogue : il sera mis à jour (en stock : Tunis Centre 4)." }],
+        jeton: apercu ? "j-123" : "",
+      },
+    };
+  });
   choisir("Catalogue", "catalogue.xlsx");
-  const [verifier] = screen.getAllByRole("button", { name: "Vérifier" });
-  fireEvent.click(verifier);
-  expect(await screen.findByText("Fichier correct : 3 ligne(s), 2 créé(s), 1 mis à jour à l'import.")).toBeInTheDocument();
-  fireEvent.click(screen.getAllByRole("button", { name: "Importer" })[0]);
+  const importer = () => screen.getAllByRole("button", { name: "2. Importer" })[0];
+  expect(importer()).toBeDisabled();
+  fireEvent.click(screen.getAllByRole("button", { name: "1. Vérifier" })[0]);
+  expect(await screen.findByText("Fichier vérifié : 3 ligne(s), 2 créé(s), 1 mis à jour à l'import.")).toBeInTheDocument();
+  expect(
+    screen.getByText("Ligne 2 : MON-1 existe déjà au catalogue : il sera mis à jour (en stock : Tunis Centre 4)."),
+  ).toBeInTheDocument();
+  fireEvent.click(importer());
   expect(await screen.findByText("Import terminé : 2 créé(s), 1 mis à jour.")).toBeInTheDocument();
-  expect(envois.map((e) => [e.url, e.corps.apercu, e.corps.fichier])).toEqual([
-    ["/api/v1/imports/catalogue/", "true", "catalogue.xlsx"],
-    ["/api/v1/imports/catalogue/", "false", "catalogue.xlsx"],
+  expect(envois.map((e) => [e.url, e.corps.apercu, e.corps.jeton, e.corps.fichier])).toEqual([
+    ["/api/v1/imports/catalogue/", "true", undefined, "catalogue.xlsx"],
+    ["/api/v1/imports/catalogue/", "false", "j-123", "catalogue.xlsx"],
   ]);
 });
 
-test("affiche les lignes refusées d'une entrée de stock", async () => {
+test("une entrée de stock en erreur ne peut pas être importée", async () => {
   const envois = afficher(() => ({
     status: 400,
-    donnees: { apercu: false, lignes: 2, crees: 1, modifies: 0, erreurs: [{ ligne: 3, message: "Article inconnu : 999." }] },
+    donnees: {
+      apercu: true,
+      lignes: 2,
+      crees: 1,
+      modifies: 0,
+      erreurs: [{ ligne: 3, message: "Article inconnu : 999." }],
+      alertes: [],
+      jeton: "",
+    },
   }));
   await screen.findByText("Tunis Centre");
   fireEvent.change(screen.getByLabelText("N° du bon de livraison"), { target: { value: "BL-778" } });
   choisir("Entrées de stock", "bl.csv");
-  fireEvent.click(screen.getAllByRole("button", { name: "Importer" })[1]);
+  fireEvent.click(screen.getAllByRole("button", { name: "1. Vérifier" })[1]);
   expect(await screen.findByText("Ligne 3 : Article inconnu : 999.")).toBeInTheDocument();
   expect(screen.getByText(/Rien n'a été enregistré/)).toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "2. Importer" })[1]).toBeDisabled();
   expect(envois[0]).toEqual({
     url: "/api/v1/imports/stock/",
-    corps: { fichier: "bl.csv", magasin: "m1", piece: "BL-778", apercu: "false" },
+    corps: { fichier: "bl.csv", magasin: "m1", piece: "BL-778", apercu: "true" },
   });
 });

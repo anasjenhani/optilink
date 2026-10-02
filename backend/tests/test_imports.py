@@ -65,8 +65,18 @@ def logisticien(affecter, client_de, tunis):
     )
 
 
-def importer(api, contenu, **extra):
-    return api.post("/api/v1/imports/catalogue/", {"fichier": contenu, **extra}, format="multipart")
+def importer(api, contenu, quoi="catalogue", **extra):
+    """Vérifie le fichier puis l'importe avec le jeton de la vérification, comme l'écran.
+
+    Avec ``apercu=True``, vérifie seulement ; une vérification en erreur est rendue telle quelle.
+    """
+    url = f"/api/v1/imports/{quoi}/"
+    verification = api.post(url, {"fichier": contenu, **extra, "apercu": True}, format="multipart")
+    if extra.get("apercu") or verification.status_code != 200:
+        return verification
+    contenu.seek(0)
+    jeton = verification.json()["jeton"]
+    return api.post(url, {"fichier": contenu, **extra, "jeton": jeton}, format="multipart")
 
 
 def test_import_du_catalogue_csv(logisticien, tunis, fournisseurs):
@@ -78,6 +88,8 @@ def test_import_du_catalogue_csv(logisticien, tunis, fournisseurs):
         "crees": 4,
         "modifies": 0,
         "erreurs": None,
+        "alertes": [],
+        "jeton": "",
     }
     monture = Article.objects.get(reference="MON-1")
     assert (monture.fournisseur.nom, monture.code_barres, monture.sur_commande) == (
@@ -188,27 +200,16 @@ def test_import_du_catalogue_reserve(affecter, client_de, tunis, fournisseurs):
 def test_entrees_de_stock(logisticien, tunis, reseau, fournisseurs, affecter, client_de):
     importer(logisticien, fichier(CATALOGUE))
     bon = "code_barres,reference,quantite\n8053672000001,,5\n,DIV-1,12\n"
-    reponse = logisticien.post(
-        "/api/v1/imports/stock/",
-        {"fichier": fichier(bon, "bl.csv"), "magasin": str(tunis.public_id), "piece": "BL-778"},
-        format="multipart",
-    )
+    tunis_ = {"magasin": str(tunis.public_id)}
+    reponse = importer(logisticien, fichier(bon, "bl.csv"), "stock", piece="BL-778", **tunis_)
     assert reponse.status_code == 200, reponse.json()
     assert reponse.json()["crees"] == 2
     monture = Article.objects.get(reference="MON-1")
     assert stock_disponible(tunis, monture) == 5
     assert set(MouvementStock.tous.values_list("reference", "type")) == {("BL-778", "reception")}
 
-    erreurs = logisticien.post(
-        "/api/v1/imports/stock/",
-        {
-            "fichier": fichier(
-                "reference;quantite\nMON-1;2\nVER-1;1\nINCONNU;1\nDIV-1;-3\n", "b.csv"
-            ),
-            "magasin": str(tunis.public_id),
-        },
-        format="multipart",
-    )
+    bon_faux = "reference;quantite\nMON-1;2\nVER-1;1\nINCONNU;1\nDIV-1;-3\n"
+    erreurs = importer(logisticien, fichier(bon_faux, "b.csv"), "stock", **tunis_)
     assert erreurs.status_code == 400
     messages = {e["ligne"]: e["message"] for e in erreurs.json()["erreurs"]}
     assert set(messages) == {3, 4, 5}
@@ -216,9 +217,47 @@ def test_entrees_de_stock(logisticien, tunis, reseau, fournisseurs, affecter, cl
     assert stock_disponible(tunis, monture) == 5  # rien enregistré, pas même la ligne valide
 
     # Hors de son magasin, le logisticien ne fait pas d'entrée de stock.
-    ailleurs = logisticien.post(
-        "/api/v1/imports/stock/",
-        {"fichier": fichier(bon, "bl.csv"), "magasin": str(reseau["lille"].public_id)},
-        format="multipart",
+    ailleurs = importer(
+        logisticien, fichier(bon, "bl.csv"), "stock", magasin=str(reseau["lille"].public_id)
     )
     assert ailleurs.status_code == 404
+
+
+def test_import_sans_verification_refuse(logisticien, fournisseurs):
+    direct = logisticien.post(
+        "/api/v1/imports/catalogue/", {"fichier": fichier(CATALOGUE)}, format="multipart"
+    )
+    assert direct.status_code == 400
+    assert "Vérifier ce fichier" in direct.json()["jeton"][0]
+    # Le jeton d'un fichier ne vaut pas pour un autre, même modifié d'un caractère.
+    jeton = importer(logisticien, fichier(CATALOGUE), apercu=True).json()["jeton"]
+    autre = logisticien.post(
+        "/api/v1/imports/catalogue/",
+        {"fichier": fichier(CATALOGUE.replace("489,000", "1,000")), "jeton": jeton},
+        format="multipart",
+    )
+    assert autre.status_code == 400
+    assert not Article.objects.exists()
+
+
+def test_alertes_sur_les_articles_deja_en_stock(logisticien, tunis, fournisseurs):
+    importer(logisticien, fichier(CATALOGUE))
+    tunis_ = {"magasin": str(tunis.public_id)}
+    bon = "code_barres;quantite\n8053672000001;5\n"
+    importer(logisticien, fichier(bon, "bl.csv"), "stock", **tunis_)
+
+    # Le catalogue réimporté signale les articles existants et leur stock.
+    verification = importer(logisticien, fichier(CATALOGUE), apercu=True).json()
+    alertes = {a["ligne"]: a["message"] for a in verification["alertes"]}
+    assert alertes[2] == (
+        "MON-1 existe déjà au catalogue : il sera mis à jour (en stock : Tunis Centre 5)."
+    )
+    assert alertes[5].endswith("(pas en stock).")
+
+    # Une nouvelle entrée signale le stock déjà présent, cumulé ligne après ligne.
+    bon = "code_barres;quantite\n8053672000001;2\n8053672000001;3\n3700000000017;1\n"
+    verification = importer(logisticien, fichier(bon, "bl.csv"), "stock", apercu=True, **tunis_)
+    assert verification.json()["alertes"] == [
+        {"ligne": 2, "message": "MON-1 déjà en stock à Tunis Centre : 5 ; 7 après l'entrée."},
+        {"ligne": 3, "message": "MON-1 déjà en stock à Tunis Centre : 7 ; 10 après l'entrée."},
+    ]

@@ -2,22 +2,37 @@
 
 Une ligne d'en-tête nomme les colonnes (casse, accents et espaces sans importance). Le fichier
 est contrôlé en entier : à la moindre erreur, rien n'est enregistré et chaque ligne fautive est
-signalée avec son numéro. ``apercu=True`` fait le même contrôle sans rien enregistrer.
+signalée avec son numéro. ``apercu=True`` fait le même contrôle sans rien enregistrer ; il
+signale aussi en alerte les articles déjà au catalogue ou déjà en stock. L'import lui-même
+exige le jeton de cette vérification, propre au fichier : on ne peut pas importer un fichier
+qu'on n'a pas vérifié.
 """
 
 import csv
+import hashlib
+import hmac
 import io
 import unicodedata
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Sum
 
 from apps.achats.models import Fournisseur
 from apps.reseau.models import TauxTva
 
-from .models import Article, Lentille, Monture, MouvementStock, PrixArticle, Verre
+from .models import (
+    Article,
+    Lentille,
+    Monture,
+    MouvementStock,
+    PrixArticle,
+    Verre,
+    stock_disponible,
+)
 
 TAILLE_MAX = 5 * 1024 * 1024
 LIGNES_MAX = 20000
@@ -34,9 +49,33 @@ class Rapport:
     crees: int = 0
     modifies: int = 0
     erreurs: list = field(default_factory=list)
+    alertes: list = field(default_factory=list)
+    jeton: str = ""
 
     def erreur(self, ligne, message):
         self.erreurs.append({"ligne": ligne, "message": message})
+
+    def alerte(self, ligne, message):
+        self.alertes.append({"ligne": ligne, "message": message})
+
+
+def jeton_de_verification(contenu, *contexte):
+    """Signature du fichier vérifié (et de son magasin) : l'import exige la même."""
+    message = hashlib.sha256(contenu).hexdigest() + "|" + "|".join(str(c) for c in contexte)
+    return hmac.new(settings.SECRET_KEY.encode(), message.encode(), hashlib.sha256).hexdigest()
+
+
+def _stocks_par_magasin(article):
+    """« Tunis Centre 4, Sfax 2 » : stock de l'article dans les magasins du périmètre."""
+    lignes = (
+        MouvementStock.objects.filter(article=article)
+        .values("magasin__nom")
+        .annotate(total=Sum("quantite"))
+        .order_by("magasin__nom")
+    )
+    return ", ".join(
+        f"{ligne['magasin__nom']} {ligne['total']}" for ligne in lignes if ligne["total"]
+    )
 
 
 class _Annuler(Exception):
@@ -236,6 +275,7 @@ def importer_catalogue(lignes, *, pays, apercu=False):
                     )
                     continue
                 vues[reference] = numero
+                existant = Article.objects.filter(reference=reference).first()
                 try:
                     with transaction.atomic():
                         cree = _importer_article(ligne, pays, fournisseurs, taux)
@@ -246,6 +286,12 @@ def importer_catalogue(lignes, *, pays, apercu=False):
                     rapport.crees += 1
                 else:
                     rapport.modifies += 1
+                    en_stock = _stocks_par_magasin(existant)
+                    rapport.alerte(
+                        numero,
+                        f"{reference} existe déjà au catalogue : il sera mis à jour"
+                        + (f" (en stock : {en_stock})." if en_stock else " (pas en stock)."),
+                    )
             if rapport.erreurs or apercu:
                 raise _Annuler
     except _Annuler:
@@ -310,6 +356,7 @@ def importer_stock(lignes, *, magasin, utilisateur, piece="", apercu=False):
     if "quantite" not in colonnes or not colonnes & {"code_barres", "reference"}:
         rapport.erreur(1, "Colonnes attendues : code_barres ou reference, et quantite.")
         return rapport
+    stocks = {}
     try:
         with transaction.atomic():
             for numero, ligne in lignes:
@@ -336,6 +383,16 @@ def importer_stock(lignes, *, magasin, utilisateur, piece="", apercu=False):
                 if not quantite or quantite < 0:
                     rapport.erreur(numero, "quantite : un nombre entier positif.")
                     continue
+                if article.pk not in stocks:
+                    stocks[article.pk] = stock_disponible(magasin, article)
+                avant = stocks[article.pk]
+                stocks[article.pk] = avant + quantite
+                if avant > 0:
+                    rapport.alerte(
+                        numero,
+                        f"{article.reference} déjà en stock à {magasin.nom} : {avant} ; "
+                        f"{avant + quantite} après l'entrée.",
+                    )
                 MouvementStock.tous.create(
                     magasin=magasin,
                     article=article,

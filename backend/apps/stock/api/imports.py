@@ -1,3 +1,5 @@
+import hmac
+
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, status
@@ -8,13 +10,24 @@ from rest_framework.views import APIView
 
 from apps.reseau.models import Magasin, Pays
 
-from ..imports import FichierIllisible, importer_catalogue, importer_stock, lire_tableau
+from ..imports import (
+    FichierIllisible,
+    importer_catalogue,
+    importer_stock,
+    jeton_de_verification,
+    lire_tableau,
+)
 
 
 class ImportSaisieSerializer(serializers.Serializer):
     fichier = serializers.FileField(help_text="Excel (.xlsx) ou CSV, ligne d'en-tête en premier.")
     apercu = serializers.BooleanField(
-        default=False, help_text="Contrôle le fichier sans rien enregistrer."
+        default=False, help_text="Vérification : contrôle le fichier sans rien enregistrer."
+    )
+    jeton = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Import : jeton rendu par la vérification de ce même fichier.",
     )
 
 
@@ -42,6 +55,12 @@ class RapportImportSerializer(serializers.Serializer):
     crees = serializers.IntegerField()
     modifies = serializers.IntegerField()
     erreurs = ErreurImportSerializer(many=True)
+    alertes = ErreurImportSerializer(
+        many=True, help_text="Articles déjà au catalogue ou déjà en stock : à regarder."
+    )
+    jeton = serializers.CharField(
+        help_text="Vérification sans erreur : à renvoyer avec l'import de ce fichier."
+    )
 
 
 class _Import(APIView):
@@ -51,11 +70,24 @@ class _Import(APIView):
         code = status.HTTP_400_BAD_REQUEST if rapport.erreurs else status.HTTP_200_OK
         return Response(RapportImportSerializer(rapport).data, status=code)
 
-    def _lire(self, fichier):
+    def _lire(self, donnees, *contexte):
+        """Lit le fichier ; un import exige le jeton de la vérification de ce même fichier."""
+        fichier = donnees["fichier"]
+        jeton = jeton_de_verification(fichier.read(), *contexte)
+        fichier.seek(0)
+        if not donnees["apercu"] and not hmac.compare_digest(donnees.get("jeton", ""), jeton):
+            message = "Vérifier ce fichier avant de l'importer."
+            return None, None, Response({"jeton": [message]}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            return lire_tableau(fichier), None
+            return lire_tableau(fichier), jeton, None
         except FichierIllisible as erreur:
-            return None, Response({"fichier": [str(erreur)]}, status=status.HTTP_400_BAD_REQUEST)
+            refus = Response({"fichier": [str(erreur)]}, status=status.HTTP_400_BAD_REQUEST)
+            return None, None, refus
+
+    def _rapport(self, rapport, jeton):
+        if rapport.apercu and not rapport.erreurs:
+            rapport.jeton = jeton
+        return self._repondre(rapport)
 
 
 class ImportCatalogueView(_Import):
@@ -82,10 +114,11 @@ class ImportCatalogueView(_Import):
         saisie.is_valid(raise_exception=True)
         donnees = saisie.validated_data
         pays = get_object_or_404(Pays, code=donnees["pays"].upper())
-        lignes, erreur = self._lire(donnees["fichier"])
-        if erreur:
-            return erreur
-        return self._repondre(importer_catalogue(lignes, pays=pays, apercu=donnees["apercu"]))
+        lignes, jeton, refus = self._lire(donnees, "catalogue", pays.code)
+        if refus:
+            return refus
+        rapport = importer_catalogue(lignes, pays=pays, apercu=donnees["apercu"])
+        return self._rapport(rapport, jeton)
 
 
 class ImportStockView(_Import):
@@ -107,9 +140,9 @@ class ImportStockView(_Import):
         magasin = get_object_or_404(Magasin.objects.all(), public_id=donnees["magasin"])
         if not request.user.has_perm("stock.add_mouvementstock", magasin):
             raise PermissionDenied("Pas de droit de saisie de stock sur ce magasin.")
-        lignes, erreur = self._lire(donnees["fichier"])
-        if erreur:
-            return erreur
+        lignes, jeton, refus = self._lire(donnees, "stock", magasin.pk, donnees.get("piece", ""))
+        if refus:
+            return refus
         rapport = importer_stock(
             lignes,
             magasin=magasin,
@@ -117,4 +150,4 @@ class ImportStockView(_Import):
             piece=donnees.get("piece", ""),
             apercu=donnees["apercu"],
         )
-        return self._repondre(rapport)
+        return self._rapport(rapport, jeton)
