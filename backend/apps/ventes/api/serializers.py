@@ -132,6 +132,7 @@ def client_resume(client):
     return {
         "id": str(client.public_id),
         "nom": str(client),
+        "societe": client.societe,
         "matricule_fiscal": client.matricule_fiscal,
     }
 
@@ -178,7 +179,13 @@ class FactureSerializer(serializers.ModelSerializer):
         ]
 
     def get_client(self, facture) -> dict | None:
-        return client_resume(facture.client)
+        # Tel qu'imprimé à l'émission, même si la fiche client a changé depuis.
+        return {
+            "id": str(facture.client.public_id),
+            "nom": facture.client_nom,
+            "adresse": facture.client_adresse,
+            "matricule_fiscal": facture.client_matricule_fiscal,
+        }
 
 
 class LigneDevisSaisieSerializer(LigneSaisieSerializer):

@@ -74,6 +74,45 @@ def test_magasin_d_origine_ne_change_pas(affecter, client_de, reseau, dupont):
     assert (dupont.telephone, dupont.magasin_origine) == ("0700000000", reseau["lille"])
 
 
+def test_fiche_complete_et_client_professionnel(affecter, client_de, reseau):
+    vendeur = affecter("vendeur", *CLIENTS, portee="magasin", magasin=reseau["lille"])
+    api = client_de(vendeur)
+    fiche = {
+        "civilite": "m",
+        "nom": "Ben Salah",
+        "prenom": "Karim",
+        "date_naissance": "1980-04-12",
+        "telephone": "71000000",
+        "telephone_2": "98123456",
+        "email": "karim@exemple.tn",
+        "adresse": "12 rue de Marseille",
+        "code_postal": "1000",
+        "ville": "Tunis",
+        "magasin_origine": str(reseau["lille"].public_id),
+    }
+    # Un matricule fiscal va avec la société.
+    sans_societe = api.post(
+        "/api/v1/clients/", {**fiche, "matricule_fiscal": "1234567/a/m/000"}, format="json"
+    )
+    assert sans_societe.status_code == 400
+    assert "societe" in sans_societe.json()
+
+    cree = api.post(
+        "/api/v1/clients/",
+        {**fiche, "societe": "Optique Services SARL", "matricule_fiscal": " 1234567/a/m/000 "},
+        format="json",
+    )
+    assert cree.status_code == 201, cree.json()
+    assert {k: cree.json()[k] for k in ("telephone_2", "societe", "matricule_fiscal")} == {
+        "telephone_2": "98123456",
+        "societe": "Optique Services SARL",
+        "matricule_fiscal": "1234567/A/M/000",
+    }
+    for recherche in ("98123", "optique services", "1234567"):
+        trouves = api.get("/api/v1/clients/", {"recherche": recherche}).json()["results"]
+        assert [c["nom"] for c in trouves] == ["Ben Salah"], recherche
+
+
 def test_pas_de_suppression_de_client(affecter, client_de, dupont):
     vendeur = affecter("vendeur", *CLIENTS, "crm.delete_client", portee="reseau")
     assert client_de(vendeur).delete(f"/api/v1/clients/{dupont.public_id}/").status_code == 405

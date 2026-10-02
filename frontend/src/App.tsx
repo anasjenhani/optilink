@@ -64,6 +64,7 @@ function Contenu({ session }: { session: EtatSession }) {
         <Clients
           droits={{
             creerClient: peut(session, "crm.add_client"),
+            modifierClient: peut(session, "crm.change_client"),
             voirOrdonnances: peut(session, "optique.view_prescription"),
             saisirOrdonnance: peut(session, "optique.add_prescription"),
           }}
