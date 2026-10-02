@@ -95,7 +95,6 @@ def _stocks(magasin, articles):
     return {ligne["article_id"]: ligne["total"] for ligne in lignes}
 
 
-@transaction.atomic
 def peniches_occupees(magasin):
     return set(
         Vente.tous.filter(
@@ -122,6 +121,7 @@ def _choisir_peniche(magasin, demandee):
     return libre
 
 
+@transaction.atomic
 def enregistrer_vente(
     *,
     magasin,

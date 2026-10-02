@@ -101,3 +101,23 @@ def test_peniche_par_l_api(tunis, verre, affecter, client_de):
     assert api.post("/api/v1/ventes/", corps, format="json").status_code == 400
     trouvees = api.get("/api/v1/ventes/", {"peniche": 42}).json()["results"]
     assert [v["numero"] for v in trouvees] == [cree.json()["numero"]]
+
+
+def test_la_commande_ouvre_sa_propre_transaction(commander, monkeypatch):
+    # Le verrou sur le magasin (select_for_update) exige une transaction ouverte par la vente
+    # elle-même, pas seulement celle qui entoure chaque test.
+    from django.db import connection
+
+    from apps.ventes import services
+
+    choisir = services._choisir_peniche
+    profondeurs = []
+
+    def espion(magasin, demandee):
+        profondeurs.append(len(connection.savepoint_ids))
+        return choisir(magasin, demandee)
+
+    monkeypatch.setattr(services, "_choisir_peniche", espion)
+    avant = len(connection.savepoint_ids)
+    commander()
+    assert profondeurs == [avant + 1]
