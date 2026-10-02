@@ -16,7 +16,7 @@ from apps.ventes.services import (
     livrer_commande,
     regler_commande,
 )
-from tests.conftest import recevoir_verres, tva
+from tests.conftest import peniche, recevoir_verres, tva
 
 
 @pytest.fixture
@@ -42,6 +42,7 @@ def commander(tunis, monture, verre, vendeur, acompte="200.000", **extra):
         lignes=[{"article": monture, "quantite": 1}, {"article": verre, "quantite": 2}],
         paiements=especes(acompte) if Decimal(acompte) else [],
         commande=True,
+        peniche=peniche(),
         **extra,
     )
 
@@ -118,7 +119,7 @@ def test_devis_de_verres_passe_en_commande(tunis, monture, verre, societe, creer
         lignes=[{"article": monture, "quantite": 1}, {"article": verre, "quantite": 2}],
     )
     vente = encaisser_devis(
-        devis=devis, vendeur=opticien, paiements=especes("300.000"), commande=True
+        devis=devis, vendeur=opticien, paiements=especes("300.000"), commande=True, peniche=5
     )
     assert (vente.statut, vente.client, vente.reste_a_payer) == (
         Vente.Statut.EN_COMMANDE,
@@ -163,6 +164,7 @@ def test_parcours_commande_par_l_api(tunis, monture, verre, reseau, affecter, cl
         ],
         "paiements": [{"mode": "carte", "montant": "200.000"}],
         "commande": True,
+        "peniche": 7,
         "livraison_prevue_le": "2026-10-15",
     }
     cree = api.post("/api/v1/ventes/", corps, format="json")

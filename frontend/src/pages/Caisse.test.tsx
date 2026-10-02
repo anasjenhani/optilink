@@ -125,7 +125,8 @@ test("un verre sur commande impose une commande avec acompte", async () => {
 
   expect(screen.getByRole("checkbox", { name: /Commande : verres commandés/ })).toBeChecked();
   fireEvent.change(screen.getByLabelText("Acompte"), { target: { value: "100" } });
-  fireEvent.change(screen.getByLabelText("Péniche"), { target: { value: "17" } });
+  expect(screen.getByRole("button", { name: "Enregistrer la commande" })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText(/Péniche/), { target: { value: "17" } });
   expect(screen.getByText(/Reste à la livraison : 260,000\sTND/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Enregistrer la commande" }));
 

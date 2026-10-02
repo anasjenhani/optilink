@@ -43,8 +43,13 @@ export const encaisserDevis = (
   id: string,
   paiement: { mode: ModePaiement; montant: string },
   commande = false,
+  peniche?: number,
 ) =>
   appeler<Vente>(`/api/v1/devis/${id}/encaisser/`, {
     methode: "POST",
-    corps: { paiements: Number(paiement.montant) > 0 ? [paiement] : [], commande },
+    corps: {
+      paiements: Number(paiement.montant) > 0 ? [paiement] : [],
+      commande,
+      ...(commande ? { peniche } : {}),
+    },
   });

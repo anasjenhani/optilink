@@ -37,24 +37,23 @@ def commander(tunis, verre, creer_utilisateur):
     return _commander
 
 
-def test_la_plus_petite_peniche_libre_par_defaut(commander):
-    assert [commander().peniche for _ in range(3)] == [1, 2, 3]
-
-
-def test_peniche_choisie_et_deja_occupee(commander):
+def test_le_vendeur_saisit_une_peniche_libre(commander):
     assert commander(peniche=17).peniche == 17
+    with pytest.raises(VenteInvalide, match="Saisir le numéro de la péniche"):
+        commander()
     with pytest.raises(VenteInvalide, match="péniche 17 contient déjà"):
         commander(peniche=17)
     with pytest.raises(VenteInvalide, match="de 1 à 200"):
         commander(peniche=201)
-    assert commander().peniche == 1
+    with pytest.raises(VenteInvalide, match="de 1 à 200"):
+        commander(peniche=0)
 
 
 def test_peniche_liberee_a_la_livraison_et_a_l_annulation(
     tunis, monture, commander, creer_utilisateur
 ):
     responsable = creer_utilisateur("responsable")
-    premiere, seconde = commander(), commander()
+    premiere, seconde = commander(peniche=1), commander(peniche=2)
     recevoir_verres(premiere, responsable)
     livrer_commande(
         vente=premiere,
@@ -64,23 +63,23 @@ def test_peniche_liberee_a_la_livraison_et_a_l_annulation(
     annuler_vente(vente=seconde, motif="client parti", emetteur=responsable)
     premiere.refresh_from_db()
     assert premiere.peniche == 1  # le numéro reste dans l'historique de la vente
-    assert [commander().peniche, commander().peniche] == [1, 2]
+    assert [commander(peniche=1).peniche, commander(peniche=2).peniche] == [1, 2]
     # Une vente remise tout de suite ne prend pas de péniche.
     vente = enregistrer_vente(
         magasin=tunis,
         vendeur=responsable,
         lignes=[{"article": monture, "quantite": 1}],
         paiements=[{"mode": "especes", "montant": Decimal("289.500")}],
+        peniche=3,
     )
     assert vente.peniche is None
 
 
-def test_toutes_les_peniches_occupees(tunis, commander):
-    tunis.nombre_peniches = 2
+def test_nombre_de_peniches_par_magasin(tunis, commander):
+    tunis.nombre_peniches = 50
     tunis.save()
-    commander(), commander()
-    with pytest.raises(VenteInvalide, match="Les 2 péniches sont occupées"):
-        commander()
+    with pytest.raises(VenteInvalide, match="de 1 à 50"):
+        commander(peniche=51)
 
 
 def test_peniche_par_l_api(tunis, verre, affecter, client_de):
@@ -110,14 +109,14 @@ def test_la_commande_ouvre_sa_propre_transaction(commander, monkeypatch):
 
     from apps.ventes import services
 
-    choisir = services._choisir_peniche
+    verifier = services._verifier_peniche
     profondeurs = []
 
-    def espion(magasin, demandee):
+    def espion(magasin, peniche):
         profondeurs.append(len(connection.savepoint_ids))
-        return choisir(magasin, demandee)
+        return verifier(magasin, peniche)
 
-    monkeypatch.setattr(services, "_choisir_peniche", espion)
+    monkeypatch.setattr(services, "_verifier_peniche", espion)
     avant = len(connection.savepoint_ids)
-    commander()
+    commander(peniche=1)
     assert profondeurs == [avant + 1]

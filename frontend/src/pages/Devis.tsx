@@ -91,6 +91,7 @@ export function Devis({ droits }: { droits: DroitsDevis }) {
   // Devis avec verres à commander : acompte à l'encaissement, solde à la livraison.
   const [enCommande, setEnCommande] = useState(false);
   const [acompte, setAcompte] = useState("");
+  const [peniche, setPeniche] = useState("");
   const [message, setMessage] = useState("");
 
   const clients = useQuery({
@@ -147,7 +148,7 @@ export function Devis({ droits }: { droits: DroitsDevis }) {
       if (quoi === "accepter") return accepterDevis(devis.id).then((d) => `Devis ${d.numero} accepté.`);
       if (quoi === "refuser") return refuserDevis(devis.id).then((d) => `Devis ${d.numero} refusé.`);
       const montant = enCommande ? acompte || "0" : devis.total_ttc;
-      return encaisserDevis(devis.id, { mode, montant }, enCommande).then((vente) =>
+      return encaisserDevis(devis.id, { mode, montant }, enCommande, Number(peniche)).then((vente) =>
         vente.statut === "en_commande"
           ? `Devis ${devis.numero} passé en commande ${vente.numero} : reste ${formaterTexte(vente.reste_a_payer, monnaie)} à la livraison.`
           : `Devis ${devis.numero} encaissé : ticket ${vente.numero}.`,
@@ -383,13 +384,23 @@ export function Devis({ droits }: { droits: DroitsDevis }) {
                         label="En commande (verres à commander)"
                       />
                       {enCommande && (
-                        <TextField
-                          size="small"
-                          type="number"
-                          label="Acompte"
-                          value={acompte}
-                          onChange={(e) => setAcompte(e.target.value)}
-                        />
+                        <>
+                          <TextField
+                            size="small"
+                            type="number"
+                            label="Acompte"
+                            value={acompte}
+                            onChange={(e) => setAcompte(e.target.value)}
+                          />
+                          <TextField
+                            size="small"
+                            type="number"
+                            required
+                            label="Péniche"
+                            value={peniche}
+                            onChange={(e) => setPeniche(e.target.value)}
+                          />
+                        </>
                       )}
                     </Stack>
                   )}
@@ -427,7 +438,7 @@ export function Devis({ droits }: { droits: DroitsDevis }) {
                               <Button
                                 size="small"
                                 variant="outlined"
-                                disabled={action.isPending}
+                                disabled={action.isPending || (enCommande && !peniche)}
                                 onClick={() => action.mutate({ devis, quoi: "encaisser" })}
                               >
                                 {enCommande ? "Commander" : "Encaisser"}

@@ -103,22 +103,16 @@ def peniches_occupees(magasin):
     )
 
 
-def _choisir_peniche(magasin, demandee):
+def _verifier_peniche(magasin, peniche):
+    """Le vendeur range la commande dans une péniche : elle doit exister et être libre."""
+    if peniche is None:
+        raise VenteInvalide("Saisir le numéro de la péniche où ranger la commande.")
     # Le verrou sur le magasin évite que deux caisses prennent la même péniche en même temps.
     magasin = Magasin.tous.select_for_update().get(pk=magasin.pk)
-    occupees = peniches_occupees(magasin)
-    if demandee is not None:
-        if not 1 <= demandee <= magasin.nombre_peniches:
-            raise VenteInvalide(f"Les péniches sont numérotées de 1 à {magasin.nombre_peniches}.")
-        if demandee in occupees:
-            raise VenteInvalide(f"La péniche {demandee} contient déjà une commande en cours.")
-        return demandee
-    libre = next((n for n in range(1, magasin.nombre_peniches + 1) if n not in occupees), None)
-    if libre is None:
-        raise VenteInvalide(
-            f"Les {magasin.nombre_peniches} péniches sont occupées : livrer une commande d'abord."
-        )
-    return libre
+    if not 1 <= peniche <= magasin.nombre_peniches:
+        raise VenteInvalide(f"Les péniches sont numérotées de 1 à {magasin.nombre_peniches}.")
+    if peniche in peniches_occupees(magasin):
+        raise VenteInvalide(f"La péniche {peniche} contient déjà une commande en cours.")
 
 
 @transaction.atomic
@@ -141,8 +135,7 @@ def enregistrer_vente(
     acompte (éventuellement nul) et paiera le solde à la livraison (``livrer_commande``) ; une
     vente qui comporte un article sur commande (verres…) est forcément une commande.
     Les articles sur commande ne sortent pas du stock du magasin.
-    Une commande est rangée dans une péniche libre du magasin : ``peniche`` si elle est donnée,
-    sinon la plus petite libre.
+    Une commande est rangée dans la péniche libre que saisit le vendeur (``peniche``).
     La facture, elle, se génère à part (``generer_facture``).
     Tout est écrit dans une seule transaction, ou rien.
     """
@@ -182,7 +175,7 @@ def enregistrer_vente(
         )
 
     if commande:
-        peniche = _choisir_peniche(magasin, peniche)
+        _verifier_peniche(magasin, peniche)
     # L'année du ticket est celle du magasin, pas celle du serveur.
     annee = _aujourd_hui(pays).year
     sequence = _prochain_numero(magasin, annee, TypeDocument.TICKET)

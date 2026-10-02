@@ -39,7 +39,7 @@ class VenteSaisieSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
         min_value=1,
-        help_text="Commande : n° de péniche ; par défaut la plus petite libre du magasin.",
+        help_text="Commande : n° de la péniche libre où le vendeur range l'équipement.",
     )
 
 
@@ -224,7 +224,7 @@ class EncaissementDevisSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
         min_value=1,
-        help_text="Commande : n° de péniche ; par défaut la plus petite libre du magasin.",
+        help_text="Commande : n° de la péniche libre où le vendeur range l'équipement.",
     )
 
 

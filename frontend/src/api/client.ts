@@ -38,6 +38,24 @@ export async function appeler<T>(url: string, options: { methode?: string; corps
   return donnees as T;
 }
 
+/**
+ * Envoi d'un fichier (multipart). Rend la réponse même en erreur 400 : un import refusé
+ * renvoie son rapport, ligne par ligne, que l'écran affiche.
+ */
+export async function envoyerFichier<T>(url: string, formulaire: FormData): Promise<T> {
+  const reponse = await fetch(url, {
+    method: "POST",
+    headers: { Accept: "application/json", "X-CSRFToken": decodeURIComponent(lireCookie("csrftoken") ?? "") },
+    credentials: "same-origin",
+    body: formulaire,
+  });
+  const donnees = await reponse.json().catch(() => ({}));
+  if (!reponse.ok && !(reponse.status === 400 && "erreurs" in donnees)) {
+    throw new ErreurApi(messageErreur(donnees) ?? `Erreur ${reponse.status}`, reponse.status);
+  }
+  return donnees as T;
+}
+
 /** Premier message lisible d'une réponse d'erreur DRF (``detail`` ou erreurs par champ). */
 function messageErreur(donnees: unknown): string | undefined {
   if (typeof donnees === "string") return donnees;

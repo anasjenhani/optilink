@@ -17,7 +17,7 @@ from apps.ventes.services import (
     generer_facture,
     regler_commande,
 )
-from tests.conftest import tva
+from tests.conftest import peniche, tva
 
 
 @pytest.fixture
@@ -138,6 +138,7 @@ def test_annulation_d_une_commande_rend_l_acompte(tunis, monture, verre, creer_u
         lignes=[{"article": monture, "quantite": 1}, {"article": verre, "quantite": 2}],
         paiements=especes("200.000"),
         commande=True,
+        peniche=peniche(),
     )
     regler_commande(vente=commande, paiements=especes("50.000"), utilisateur=vendeur)
     with pytest.raises(AvoirImpossible, match="l'annuler plutôt"):
@@ -169,6 +170,7 @@ def test_commande_annulee_sans_acompte_rien_a_rembourser(tunis, monture, verre, 
         lignes=[{"article": verre, "quantite": 2}],
         paiements=[],
         commande=True,
+        peniche=peniche(),
     )
     avoir = annuler_vente(vente=commande, motif="Erreur", emetteur=creer_utilisateur("r"))
     assert (avoir.montant_rembourse, avoir.mode_remboursement) == (Decimal("0"), "")
