@@ -7,6 +7,9 @@
 #   $env:OPTILINK_IP = "192.168.1.50"     adresse fixe sur le réseau du magasin
 #   $env:OPTILINK_MEMOIRE = "8192"        mémoire en Mo (4096 par défaut)
 #   $env:OPTILINK_CPUS = "4"              cœurs (2 par défaut)
+#   $env:OPTILINK_CARTE = "Intel(R) Ethernet Connection I219-V"
+#                                         carte réseau du PC pour le pont (VirtualBox) ; sinon
+#                                         Vagrant la demande. Liste : VBoxManage list bridgedifs
 
 IP = ENV.fetch("OPTILINK_IP", "192.168.1.50")
 
@@ -16,7 +19,7 @@ Vagrant.configure("2") do |config|
 
   # Carte « Bridged » : le serveur a sa propre adresse sur le réseau du magasin et les postes
   # de caisse le joignent. La carte NAT de Vagrant sert seulement à sortir vers Internet.
-  config.vm.network "public_network", ip: IP
+  config.vm.network "public_network", ip: IP, bridge: ENV["OPTILINK_CARTE"]
 
   config.vm.provider "virtualbox" do |vbox|
     vbox.name = "optilink-qualif"
