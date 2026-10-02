@@ -1,6 +1,7 @@
-# Serveur de qualification OptiLink dans VMware Workstation, en une commande : vagrant up
-# Prérequis sur le PC : VMware Workstation, Vagrant, Vagrant VMware Utility et
-# « vagrant plugin install vagrant-vmware-desktop ». Voir README, section Qualification.
+# Serveur de qualification OptiLink dans une machine virtuelle, en une commande : vagrant up
+# Prérequis sur le PC : Vagrant et VirtualBox (par défaut), ou VMware Workstation avec
+# Vagrant VMware Utility et « vagrant plugin install vagrant-vmware-desktop »
+# (alors : vagrant up --provider vmware_desktop). Voir README, section Qualification.
 #
 # Réglages possibles avant vagrant up (PowerShell) :
 #   $env:OPTILINK_IP = "192.168.1.50"     adresse fixe sur le réseau du magasin
@@ -16,6 +17,12 @@ Vagrant.configure("2") do |config|
   # Carte « Bridged » : le serveur a sa propre adresse sur le réseau du magasin et les postes
   # de caisse le joignent. La carte NAT de Vagrant sert seulement à sortir vers Internet.
   config.vm.network "public_network", ip: IP
+
+  config.vm.provider "virtualbox" do |vbox|
+    vbox.name = "optilink-qualif"
+    vbox.memory = ENV.fetch("OPTILINK_MEMOIRE", "4096").to_i
+    vbox.cpus = ENV.fetch("OPTILINK_CPUS", "2").to_i
+  end
 
   config.vm.provider "vmware_desktop" do |vmware|
     vmware.gui = false
