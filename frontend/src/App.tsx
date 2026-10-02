@@ -15,6 +15,7 @@ import { CodesSecours } from "./auth/CodesSecours";
 import { Connexion } from "./auth/Connexion";
 import { VerificationMfa } from "./auth/VerificationMfa";
 import { Accueil } from "./pages/Accueil";
+import { Caisse } from "./pages/Caisse";
 import { Magasins } from "./pages/Magasins";
 
 function Contenu({ session }: { session: EtatSession }) {
@@ -38,6 +39,7 @@ function Contenu({ session }: { session: EtatSession }) {
   if (session.mfa === "a_activer") return <ActivationMfa onConfirmee={setCodesSecours} />;
   return (
     <Stack spacing={3}>
+      {peut(session, "ventes.add_vente") && <Caisse />}
       {peut(session, "reseau.view_magasin") && <Magasins />}
       <Accueil />
     </Stack>

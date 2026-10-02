@@ -43,6 +43,8 @@ INSTALLED_APPS = [
     "core",
     "apps.securite",
     "apps.reseau",
+    "apps.stock",
+    "apps.ventes",
 ]
 
 MIDDLEWARE = [
