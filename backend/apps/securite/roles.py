@@ -111,11 +111,24 @@ PERMISSIONS_FACTURES = {
     "Comptable": ["ventes.view_facture"],
 }
 
+# Devis d'équipement : établis par toute l'équipe de vente ; l'encaissement suit le droit de
+# vente, une remise le droit de remise.
+DEVIS_COMPLET = ["ventes.view_devis", "ventes.add_devis", "ventes.change_devis"]
+PERMISSIONS_DEVIS = {
+    "Direction": ["ventes.view_devis"],
+    "Responsable régional": DEVIS_COMPLET,
+    "Responsable magasin": DEVIS_COMPLET,
+    "Opticien": DEVIS_COMPLET,
+    "Vendeur": DEVIS_COMPLET,
+    "Comptable": ["ventes.view_devis"],
+}
+
 for _par_role in (
     PERMISSIONS_CAISSE_STOCK,
     PERMISSIONS_CLIENTS_OPTIQUE,
     PERMISSIONS_PARAMETRAGE,
     PERMISSIONS_FACTURES,
+    PERMISSIONS_DEVIS,
 ):
     for _nom, _permissions in _par_role.items():
         ROLES_DE_DEPART[_nom] = ROLES_DE_DEPART[_nom] + _permissions

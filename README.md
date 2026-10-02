@@ -71,6 +71,12 @@ La caisse suppose une liaison permanente avec le serveur (lien de secours 4G rec
 - **Données de santé.** Les mesures sont chiffrées par l'application avant d'arriver en base (`core/chiffrement.py`, clés `PRESCRIPTIONS_CLES` hors de la base) : une copie de la base ou d'une sauvegarde ne les révèle pas. Seuls les rôles Opticien et Responsable magasin les voient. Chaque consultation et chaque saisie est inscrite dans `AccesPrescription`, verrouillé en ajout seul dans PostgreSQL ; la direction peut consulter ce journal. L'API ne liste les ordonnances que client par client (`/api/v1/prescriptions/?client=…`).
 - **Clé de chiffrement.** À générer une fois (voir `.env.example`) et à sauvegarder hors du serveur : sans elle, les ordonnances sont illisibles, y compris depuis une sauvegarde. Rotation : mettre la nouvelle clé en premier, garder l'ancienne derrière.
 
+## Devis d'équipement
+
+- **Devis** (`ventes.Devis`, écran Devis, `/api/v1/devis/`) : établi au nom d'un client, éventuellement sur une de ses ordonnances, avec monture, verres œil par œil (OD / OG), lentilles ou accessoires. Numéroté dans sa propre suite (`M01-D2026-000001`). Les prix du jour sont figés jusqu'à la date de validité (`DEVIS_VALIDITE_JOURS`, 30 jours par défaut, modifiable devis par devis). Le stock n'est pas vérifié : un devis peut porter sur des verres à commander.
+- **Suite du devis.** En cours, puis accepté ou refusé (`/accepter/`, `/refuser/`), puis encaissé (`/encaisser/`) : l'encaissement crée le ticket au **prix du devis**, même si le tarif a changé entre-temps, avec le client du devis ; la facture se génère ensuite comme pour toute vente. Un devis expiré, refusé ou déjà encaissé ne s'encaisse plus.
+- **Droits.** Toute l'équipe de vente établit des devis (`ventes.add_devis`) ; une remise exige `ventes.appliquer_remise`, l'encaissement `ventes.add_vente`, le rattachement d'une ordonnance l'accès aux ordonnances. Le vendeur voit qu'un devis existe, pas l'ordonnance associée. Direction et comptable : lecture. Devis et lignes sont cloisonnés par magasin dans PostgreSQL ; les changements de statut sont dans le journal d'audit.
+
 ## Démarrer en développement
 
 Prérequis : Docker avec Docker Compose.
@@ -129,4 +135,4 @@ Nginx redirige HTTP vers HTTPS (TLS 1.2 minimum, HSTS). La connexion Django vers
 - Reprise rapide par code PIN sur le poste de caisse
 - Notification de la direction à chaque changement de rôle ou d'affectation
 - Interface en arabe (écriture de droite à gauche) et en anglais
-- Lot Vendre, suite : client sur la vente, devis, avoirs et retours, tables spécialisées par famille d'article, export et anonymisation RGPD d'un client
+- Lot Vendre, suite : acomptes sur commande, avoirs et retours, tables spécialisées par famille d'article, export et anonymisation RGPD d'un client

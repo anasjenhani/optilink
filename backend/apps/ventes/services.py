@@ -1,13 +1,25 @@
+from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from zoneinfo import ZoneInfo
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
 from apps.stock.models import MouvementStock, PrixArticle
 
-from .models import PREFIXES, CompteurFacture, Facture, LigneVente, Paiement, TypeDocument, Vente
+from .models import (
+    PREFIXES,
+    CompteurFacture,
+    Devis,
+    Facture,
+    LigneDevis,
+    LigneVente,
+    Paiement,
+    TypeDocument,
+    Vente,
+)
 
 
 class VenteInvalide(Exception):
@@ -36,6 +48,41 @@ def _numero(magasin, type_document, annee, sequence):
     return f"{magasin.code}-{PREFIXES[type_document]}{annee}-{sequence:06d}"
 
 
+def _aujourd_hui(pays):
+    return timezone.localdate(timezone=ZoneInfo(pays.fuseau_horaire))
+
+
+def _chiffrer(pays, lignes):
+    """Prix des lignes dans la monnaie du pays.
+
+    Une ligne peut apporter son prix et son taux figés (``prix_unitaire_ttc``, ``taux_tva``),
+    comme celles d'un devis ; sinon le tarif en vigueur du pays s'applique.
+    Renvoie [(article, quantite, remise, total_ttc, total_ht, prix, taux, ligne)].
+    """
+    a_tarifer = {ligne["article"].pk for ligne in lignes if "prix_unitaire_ttc" not in ligne}
+    tarifs = {
+        prix.article_id: prix
+        for prix in PrixArticle.objects.select_related("tva").filter(
+            pays=pays, article__in=a_tarifer
+        )
+    }
+    detail = []
+    for ligne in lignes:
+        article, quantite = ligne["article"], ligne["quantite"]
+        if "prix_unitaire_ttc" in ligne:
+            prix, taux = ligne["prix_unitaire_ttc"], ligne["taux_tva"]
+        else:
+            tarif = tarifs.get(article.pk)
+            if tarif is None:
+                raise VenteInvalide(f"L'article {article.reference} n'a pas de prix en {pays}.")
+            prix, taux = tarif.prix_vente_ttc, tarif.tva.taux
+        remise = ligne.get("remise_pct") or Decimal("0")
+        total_ttc = arrondir(prix * quantite * (1 - remise / 100), pays.decimales)
+        total_ht = arrondir(total_ttc / (1 + taux / 100), pays.decimales)
+        detail.append((article, quantite, remise, total_ttc, total_ht, prix, taux, ligne))
+    return detail
+
+
 def _stocks(magasin, articles):
     lignes = (
         MouvementStock.tous.filter(magasin=magasin, article__in=articles)
@@ -46,7 +93,9 @@ def _stocks(magasin, articles):
 
 
 @transaction.atomic
-def enregistrer_vente(*, magasin, vendeur, lignes, paiements, client=None):
+def enregistrer_vente(
+    *, magasin, vendeur, lignes, paiements, client=None, articles_retires_admis=False
+):
     """Encaisse une vente : lignes, sortie de stock, paiements et numéro de ticket.
 
     ``lignes`` : [{"article", "quantite", "remise_pct"}] ; ``paiements`` : [{"mode", "montant"}].
@@ -62,29 +111,13 @@ def enregistrer_vente(*, magasin, vendeur, lignes, paiements, client=None):
     stocks = _stocks(magasin, [ligne["article"] for ligne in lignes])
     for ligne in lignes:
         article = ligne["article"]
-        if not article.est_actif:
+        if not article.est_actif and not articles_retires_admis:
             raise VenteInvalide(f"L'article {article.reference} n'est plus vendu.")
         if stocks.get(article.pk, 0) < quantites[article.pk]:
             raise VenteInvalide(f"Stock insuffisant pour {article.reference}.")
 
     pays = magasin.pays
-    tarifs = {
-        prix.article_id: prix
-        for prix in PrixArticle.objects.select_related("tva").filter(
-            pays=pays, article__in=quantites.keys()
-        )
-    }
-    detail = []
-    for ligne in lignes:
-        article, quantite = ligne["article"], ligne["quantite"]
-        tarif = tarifs.get(article.pk)
-        if tarif is None:
-            raise VenteInvalide(f"L'article {article.reference} n'a pas de prix en {pays}.")
-        remise = ligne.get("remise_pct") or Decimal("0")
-        total_ttc = arrondir(tarif.prix_vente_ttc * quantite * (1 - remise / 100), pays.decimales)
-        total_ht = arrondir(total_ttc / (1 + tarif.tva.taux / 100), pays.decimales)
-        detail.append((article, quantite, remise, total_ttc, total_ht, tarif))
-
+    detail = _chiffrer(pays, lignes)
     total_ttc = sum((d[3] for d in detail), Decimal("0"))
     total_ht = sum((d[4] for d in detail), Decimal("0"))
     total_paye = sum((arrondir(p["montant"], pays.decimales) for p in paiements), Decimal("0"))
@@ -94,8 +127,8 @@ def enregistrer_vente(*, magasin, vendeur, lignes, paiements, client=None):
             f"({total_ttc} {pays.devise})."
         )
 
-    # L'année de la facture est celle du magasin, pas celle du serveur.
-    annee = timezone.localdate(timezone=ZoneInfo(pays.fuseau_horaire)).year
+    # L'année du ticket est celle du magasin, pas celle du serveur.
+    annee = _aujourd_hui(pays).year
     sequence = _prochain_numero(magasin, annee, TypeDocument.TICKET)
     vente = Vente.tous.create(
         magasin=magasin,
@@ -115,12 +148,12 @@ def enregistrer_vente(*, magasin, vendeur, lignes, paiements, client=None):
             article=article,
             libelle=article.libelle,
             quantite=quantite,
-            prix_unitaire_ttc=tarif.prix_vente_ttc,
+            prix_unitaire_ttc=prix,
             remise_pct=remise,
-            taux_tva=tarif.tva.taux,
+            taux_tva=taux,
             total_ttc=ttc,
         )
-        for article, quantite, remise, ttc, _, tarif in detail
+        for article, quantite, remise, ttc, _, prix, taux, _ in detail
     )
     MouvementStock.tous.bulk_create(
         MouvementStock(
@@ -167,7 +200,7 @@ def generer_facture(*, vente, client, emetteur, mode_paiement_timbre=""):
         raise FactureImpossible(
             f"Encaisser le timbre fiscal ({timbre} {pays.devise}) : préciser le mode de paiement."
         )
-    annee = timezone.localdate(timezone=ZoneInfo(pays.fuseau_horaire)).year
+    annee = _aujourd_hui(pays).year
     sequence = _prochain_numero(vente.magasin, annee, TypeDocument.FACTURE)
     facture = Facture.tous.create(
         magasin=vente.magasin,
@@ -186,3 +219,140 @@ def generer_facture(*, vente, client, emetteur, mode_paiement_timbre=""):
         emise_par=emetteur,
     )
     return facture
+
+
+class DevisImpossible(Exception):
+    pass
+
+
+@transaction.atomic
+def etablir_devis(
+    *, magasin, auteur, client, lignes, prescription=None, valable_jusqu_au=None, remarques=""
+):
+    """Établit un devis au tarif du jour, figé jusqu'à sa date de validité.
+
+    ``lignes`` : [{"article", "quantite", "remise_pct", "oeil"}]. Le stock n'est pas vérifié :
+    un devis peut porter sur des verres à commander.
+    """
+    if not lignes:
+        raise DevisImpossible("Le devis ne contient aucun article.")
+    if client is None:
+        raise DevisImpossible("Un devis est établi au nom d'un client.")
+    if prescription is not None and prescription.client_id != client.pk:
+        raise DevisImpossible("Cette ordonnance appartient à un autre client.")
+    for ligne in lignes:
+        if not ligne["article"].est_actif:
+            raise DevisImpossible(f"L'article {ligne['article'].reference} n'est plus vendu.")
+    pays = magasin.pays
+    try:
+        detail = _chiffrer(pays, lignes)
+    except VenteInvalide as erreur:
+        raise DevisImpossible(str(erreur)) from erreur
+    aujourd_hui = _aujourd_hui(pays)
+    if valable_jusqu_au is None:
+        valable_jusqu_au = aujourd_hui + timedelta(days=settings.DEVIS_VALIDITE_JOURS)
+    if valable_jusqu_au < aujourd_hui:
+        raise DevisImpossible("La date de validité est déjà passée.")
+
+    total_ttc = sum((d[3] for d in detail), Decimal("0"))
+    total_ht = sum((d[4] for d in detail), Decimal("0"))
+    sequence = _prochain_numero(magasin, aujourd_hui.year, TypeDocument.DEVIS)
+    devis = Devis.tous.create(
+        magasin=magasin,
+        numero=_numero(magasin, TypeDocument.DEVIS, aujourd_hui.year, sequence),
+        annee=aujourd_hui.year,
+        sequence=sequence,
+        client=client,
+        prescription=prescription,
+        etabli_par=auteur,
+        devise=pays.devise,
+        total_ht=total_ht,
+        total_tva=total_ttc - total_ht,
+        total_ttc=total_ttc,
+        valable_jusqu_au=valable_jusqu_au,
+        remarques=remarques,
+    )
+    LigneDevis.objects.bulk_create(
+        LigneDevis(
+            devis=devis,
+            article=article,
+            libelle=article.libelle,
+            oeil=ligne.get("oeil", ""),
+            quantite=quantite,
+            prix_unitaire_ttc=prix,
+            remise_pct=remise,
+            taux_tva=taux,
+            total_ttc=ttc,
+        )
+        for article, quantite, remise, ttc, _, prix, taux, ligne in detail
+    )
+    return devis
+
+
+def _verrouiller(devis):
+    devis = Devis.tous.select_for_update().select_related("magasin__pays").get(pk=devis.pk)
+    if devis.statut in (Devis.Statut.REFUSE, Devis.Statut.ENCAISSE):
+        raise DevisImpossible(
+            f"Le devis {devis.numero} est déjà {devis.get_statut_display().lower()}."
+        )
+    return devis
+
+
+def _verifier_validite(devis):
+    if _aujourd_hui(devis.magasin.pays) > devis.valable_jusqu_au:
+        raise DevisImpossible(
+            f"Le devis {devis.numero} a expiré le {devis.valable_jusqu_au:%d/%m/%Y} : "
+            "établir un nouveau devis."
+        )
+
+
+@transaction.atomic
+def accepter_devis(*, devis):
+    devis = _verrouiller(devis)
+    _verifier_validite(devis)
+    devis.statut = Devis.Statut.ACCEPTE
+    devis.save(update_fields=["statut", "modifie_le"])
+    return devis
+
+
+@transaction.atomic
+def refuser_devis(*, devis):
+    devis = _verrouiller(devis)
+    devis.statut = Devis.Statut.REFUSE
+    devis.save(update_fields=["statut", "modifie_le"])
+    return devis
+
+
+@transaction.atomic
+def encaisser_devis(*, devis, vendeur, paiements):
+    """Encaisse un devis en caisse, au prix du devis : ticket, sortie de stock, paiements.
+
+    Possible tant que le devis est valable, qu'il ait été accepté avant ou non.
+    """
+    devis = _verrouiller(devis)
+    _verifier_validite(devis)
+    lignes = [
+        {
+            "article": ligne.article,
+            "quantite": ligne.quantite,
+            "remise_pct": ligne.remise_pct,
+            "prix_unitaire_ttc": ligne.prix_unitaire_ttc,
+            "taux_tva": ligne.taux_tva,
+        }
+        for ligne in devis.lignes.select_related("article")
+    ]
+    try:
+        vente = enregistrer_vente(
+            magasin=devis.magasin,
+            vendeur=vendeur,
+            lignes=lignes,
+            paiements=paiements,
+            client=devis.client,
+            articles_retires_admis=True,
+        )
+    except VenteInvalide as erreur:
+        raise DevisImpossible(str(erreur)) from erreur
+    devis.vente = vente
+    devis.statut = Devis.Statut.ENCAISSE
+    devis.save(update_fields=["vente", "statut", "modifie_le"])
+    return vente

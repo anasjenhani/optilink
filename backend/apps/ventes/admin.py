@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Facture, LigneVente, Paiement, Vente
+from .models import Devis, Facture, LigneDevis, LigneVente, Paiement, Vente
 
 
 class LigneVenteInline(admin.TabularInline):
@@ -44,6 +44,40 @@ class FactureAdmin(admin.ModelAdmin):
         return Facture.tous.select_related("magasin", "client")
 
     # Une facture se génère depuis l'application et ne se modifie jamais.
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class LigneDevisInline(admin.TabularInline):
+    model = LigneDevis
+    extra = 0
+
+
+@admin.register(Devis)
+class DevisAdmin(admin.ModelAdmin):
+    list_display = (
+        "numero",
+        "magasin",
+        "client",
+        "total_ttc",
+        "devise",
+        "statut",
+        "valable_jusqu_au",
+    )
+    list_filter = ("magasin", "statut")
+    search_fields = ("numero", "client__nom")
+    inlines = [LigneDevisInline]
+
+    def get_queryset(self, request):
+        return Devis.tous.select_related("magasin", "client")
+
+    # Un devis s'établit et change de statut depuis l'application.
     def has_add_permission(self, request):
         return False
 
