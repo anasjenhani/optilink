@@ -140,3 +140,34 @@ def test_creation_d_une_monture_dans_l_administration(creer_utilisateur, tunis):
     assert reponse.status_code == 302, reponse.content.decode()[:3000]
     fiche = Article.objects.get(reference="MON-9").monture
     assert (fiche.marque, fiche.genre, fiche.calibre) == ("Nano", "enfant", 44)
+
+
+def test_fournisseur_et_code_barres(api, tunis, catalogue):
+    from django.db import IntegrityError, transaction
+
+    from apps.achats.models import Fournisseur
+
+    essilor = Fournisseur.objects.create(nom="Essilor Tunisie", pays=tunis.pays)
+    verre = catalogue["verre"]
+    verre.fournisseur, verre.reference_fournisseur = essilor, "VX-COMF-16"
+    verre.save()
+    monture = catalogue["monture"]
+    monture.code_barres = "8053672000001"
+    monture.save()
+
+    def references(**params):
+        return [a["reference"] for a in api.get("/api/v1/articles/", params).json()["results"]]
+
+    assert references(fournisseur=str(essilor.public_id)) == ["VER-1"]
+    assert references(fournisseur="pas-un-uuid") == []
+    assert references(recherche="vx-comf-16") == ["VER-1"]
+    assert references(recherche="8053672000001") == ["MON-T"]
+    assert api.get(f"/api/v1/articles/{verre.public_id}/").json()["fournisseur"] == (
+        "Essilor Tunisie"
+    )
+    # Deux articles sans code-barres, oui ; deux avec le même, non.
+    Article.objects.create(reference="DIV-2", libelle="Chiffon", famille="divers")
+    with pytest.raises(IntegrityError), transaction.atomic():
+        Article.objects.create(
+            reference="MON-2", libelle="Autre", famille="monture", code_barres="8053672000001"
+        )

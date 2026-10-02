@@ -22,9 +22,17 @@ class VerreACommanderSerializer(serializers.Serializer):
     client = serializers.SerializerMethodField()
     commandee_le = serializers.DateTimeField(source="vente.cree_le")
     livraison_prevue_le = serializers.DateField(source="vente.livraison_prevue_le")
+    peniche = serializers.IntegerField(source="vente.peniche", allow_null=True)
     article = serializers.CharField(source="article.reference")
     libelle = serializers.CharField()
     quantite = serializers.IntegerField()
+    fournisseur = serializers.UUIDField(
+        source="article.fournisseur.public_id",
+        allow_null=True,
+        default=None,
+        help_text="Fournisseur habituel de l'article.",
+    )
+    reference_fournisseur = serializers.CharField(source="article.reference_fournisseur")
 
     def get_client(self, ligne) -> dict | None:
         return client_resume(ligne.vente.client)

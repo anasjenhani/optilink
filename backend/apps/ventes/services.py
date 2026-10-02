@@ -7,6 +7,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
+from apps.reseau.models import Magasin
 from apps.stock.models import MouvementStock, PrixArticle
 
 from .models import (
@@ -95,6 +96,32 @@ def _stocks(magasin, articles):
 
 
 @transaction.atomic
+def peniches_occupees(magasin):
+    return set(
+        Vente.tous.filter(
+            magasin=magasin, statut=Vente.Statut.EN_COMMANDE, peniche__isnull=False
+        ).values_list("peniche", flat=True)
+    )
+
+
+def _choisir_peniche(magasin, demandee):
+    # Le verrou sur le magasin évite que deux caisses prennent la même péniche en même temps.
+    magasin = Magasin.tous.select_for_update().get(pk=magasin.pk)
+    occupees = peniches_occupees(magasin)
+    if demandee is not None:
+        if not 1 <= demandee <= magasin.nombre_peniches:
+            raise VenteInvalide(f"Les péniches sont numérotées de 1 à {magasin.nombre_peniches}.")
+        if demandee in occupees:
+            raise VenteInvalide(f"La péniche {demandee} contient déjà une commande en cours.")
+        return demandee
+    libre = next((n for n in range(1, magasin.nombre_peniches + 1) if n not in occupees), None)
+    if libre is None:
+        raise VenteInvalide(
+            f"Les {magasin.nombre_peniches} péniches sont occupées : livrer une commande d'abord."
+        )
+    return libre
+
+
 def enregistrer_vente(
     *,
     magasin,
@@ -104,6 +131,7 @@ def enregistrer_vente(
     client=None,
     commande=False,
     livraison_prevue_le=None,
+    peniche=None,
     articles_retires_admis=False,
 ):
     """Enregistre une vente : lignes, sortie de stock, paiements et numéro de ticket.
@@ -113,6 +141,8 @@ def enregistrer_vente(
     acompte (éventuellement nul) et paiera le solde à la livraison (``livrer_commande``) ; une
     vente qui comporte un article sur commande (verres…) est forcément une commande.
     Les articles sur commande ne sortent pas du stock du magasin.
+    Une commande est rangée dans une péniche libre du magasin : ``peniche`` si elle est donnée,
+    sinon la plus petite libre.
     La facture, elle, se génère à part (``generer_facture``).
     Tout est écrit dans une seule transaction, ou rien.
     """
@@ -151,6 +181,8 @@ def enregistrer_vente(
             f"({total_ttc} {pays.devise})."
         )
 
+    if commande:
+        peniche = _choisir_peniche(magasin, peniche)
     # L'année du ticket est celle du magasin, pas celle du serveur.
     annee = _aujourd_hui(pays).year
     sequence = _prochain_numero(magasin, annee, TypeDocument.TICKET)
@@ -167,6 +199,7 @@ def enregistrer_vente(
         total_ttc=total_ttc,
         statut=Vente.Statut.EN_COMMANDE if commande else Vente.Statut.LIVREE,
         livraison_prevue_le=livraison_prevue_le if commande else None,
+        peniche=peniche if commande else None,
         livree_le=None if commande else timezone.now(),
         livree_par=None if commande else vendeur,
     )
@@ -419,7 +452,9 @@ def refuser_devis(*, devis):
 
 
 @transaction.atomic
-def encaisser_devis(*, devis, vendeur, paiements, commande=False, livraison_prevue_le=None):
+def encaisser_devis(
+    *, devis, vendeur, paiements, commande=False, livraison_prevue_le=None, peniche=None
+):
     """Encaisse un devis en caisse, au prix du devis : ticket, sortie de stock, paiements.
 
     Possible tant que le devis est valable, qu'il ait été accepté avant ou non. En
@@ -446,6 +481,7 @@ def encaisser_devis(*, devis, vendeur, paiements, commande=False, livraison_prev
             client=devis.client,
             commande=commande,
             livraison_prevue_le=livraison_prevue_le,
+            peniche=peniche,
             articles_retires_admis=True,
         )
     except VenteInvalide as erreur:

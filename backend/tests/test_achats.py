@@ -120,6 +120,8 @@ def test_droits_des_roles_sur_les_commandes_fournisseurs(db):
 def test_parcours_commande_fournisseur_par_l_api(
     tunis, monture, verre, labo, reseau, affecter, client_de, creer_utilisateur
 ):
+    verre.fournisseur, verre.reference_fournisseur = labo, "VX-16"
+    verre.save()
     commande_client(tunis, monture, verre, creer_utilisateur("vendeur"))
     opticien = affecter(
         "opticien",
@@ -138,6 +140,8 @@ def test_parcours_commande_fournisseur_par_l_api(
         "/api/v1/commandes-fournisseurs/a-commander/", {"magasin": str(tunis.public_id)}
     ).json()
     assert [(v["libelle"], v["quantite"]) for v in a_commander] == [("Verre progressif", 2)]
+    assert (a_commander[0]["peniche"], a_commander[0]["reference_fournisseur"]) == (1, "VX-16")
+    assert a_commander[0]["fournisseur"] == str(labo.public_id)
 
     cree = api.post(
         "/api/v1/commandes-fournisseurs/",

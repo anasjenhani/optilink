@@ -51,6 +51,8 @@ export function Caisse() {
   const [enCommande, setEnCommande] = useState(false);
   const [acompte, setAcompte] = useState("");
   const [livraisonPrevue, setLivraisonPrevue] = useState("");
+  // Vide : le serveur prend la plus petite péniche libre du magasin.
+  const [peniche, setPeniche] = useState("");
   // Client facultatif sur le ticket ; il sera repris pour la facture, générée à part.
   const [avecClient, setAvecClient] = useState(false);
   const [rechercheClient, setRechercheClient] = useState("");
@@ -82,7 +84,13 @@ export function Caisse() {
           commande && montantAcompte === 0
             ? []
             : [{ mode, montant: versTexte(commande ? montantAcompte : total, monnaie.decimales) }],
-        ...(commande ? { commande: true, ...(livraisonPrevue ? { livraison_prevue_le: livraisonPrevue } : {}) } : {}),
+        ...(commande
+          ? {
+              commande: true,
+              ...(livraisonPrevue ? { livraison_prevue_le: livraisonPrevue } : {}),
+              ...(peniche ? { peniche: Number(peniche) } : {}),
+            }
+          : {}),
       }),
     onSuccess: (enregistree) => {
       setDerniereVente(enregistree);
@@ -90,12 +98,24 @@ export function Caisse() {
       setEnCommande(false);
       setAcompte("");
       setLivraisonPrevue("");
+      setPeniche("");
       setAvecClient(false);
       setClient(null);
       setRechercheClient("");
       void queryClient.invalidateQueries({ queryKey: ["articles"] });
     },
   });
+
+  // Une douchette tape le code-barres puis Entrée : l'article va directement au panier.
+  async function scanner(code: string) {
+    if (!magasin || !code) return;
+    const trouves = await chercherArticles(magasin, code);
+    const article = trouves.find((a) => a.code_barres === code);
+    if (article && (article.sur_commande || article.stock)) {
+      ajouter(article);
+      setRecherche("");
+    }
+  }
 
   function ajouter(article: Article) {
     setDerniereVente(null);
@@ -143,9 +163,15 @@ export function Caisse() {
             </TextField>
             <TextField
               label="Rechercher un article"
-              helperText="Référence, libellé ou code-barres"
+              helperText="Référence, libellé, marque ou code-barres (douchette)"
               value={recherche}
               onChange={(e) => setRecherche(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void scanner(recherche.trim());
+                }
+              }}
               sx={{ flexGrow: 1 }}
             />
           </Stack>
@@ -278,6 +304,16 @@ export function Caisse() {
                 onChange={(e) => setLivraisonPrevue(e.target.value)}
                 slotProps={{ inputLabel: { shrink: true } }}
               />
+              <TextField
+                label="Péniche"
+                type="number"
+                value={peniche}
+                onChange={(e) => setPeniche(e.target.value)}
+                helperText="Vide : la première libre"
+                slotProps={{
+                  htmlInput: { min: 1, max: magasins.data?.find((m) => m.id === magasin)?.nombre_peniches },
+                }}
+              />
             </Stack>
           )}
 
@@ -313,6 +349,7 @@ export function Caisse() {
             <Alert severity="success">
               {derniereVente.statut === "en_commande" ? "Commande" : "Ticket"} {derniereVente.numero},{" "}
               {formaterTexte(derniereVente.total_ttc, { devise: derniereVente.devise, decimales: monnaie.decimales })}
+              {derniereVente.peniche && `, péniche ${derniereVente.peniche}`}
               {derniereVente.statut === "en_commande" &&
                 `, reste ${formaterTexte(derniereVente.reste_a_payer, { devise: derniereVente.devise, decimales: monnaie.decimales })} à la livraison`}
               .

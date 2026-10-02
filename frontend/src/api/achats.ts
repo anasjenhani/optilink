@@ -7,9 +7,13 @@ export type VerreACommander = {
   commande_client: string;
   client: { id: string; nom: string } | null;
   livraison_prevue_le: string | null;
+  peniche: number | null;
   article: string;
   libelle: string;
   quantite: number;
+  /** Fournisseur habituel de l'article, proposé d'office. */
+  fournisseur: string | null;
+  reference_fournisseur: string;
 };
 
 export type CommandeFournisseur = {

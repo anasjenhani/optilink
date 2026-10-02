@@ -55,7 +55,7 @@ class VenteViewSet(
 
     serializer_class = VenteSerializer
     lookup_field = "public_id"
-    filterset_fields = ["numero", "statut", "magasin__public_id"]
+    filterset_fields = ["numero", "statut", "peniche", "magasin__public_id"]
 
     def get_queryset(self):
         return Vente.objects.select_related(
@@ -128,6 +128,7 @@ class VenteViewSet(
                 client=client,
                 commande=donnees["commande"],
                 livraison_prevue_le=donnees.get("livraison_prevue_le"),
+                peniche=donnees.get("peniche"),
             )
         except VenteInvalide as erreur:
             return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)
@@ -314,6 +315,7 @@ class DevisViewSet(
             paiements=donnees["paiements"],
             commande=donnees["commande"],
             livraison_prevue_le=donnees.get("livraison_prevue_le"),
+            peniche=donnees.get("peniche"),
         )
         if isinstance(resultat, Response):
             return resultat

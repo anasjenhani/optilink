@@ -82,6 +82,12 @@ class Vente(ModeleDeBase):
     total_ttc = models.DecimalField(max_digits=14, decimal_places=3)
     statut = models.CharField(max_length=12, choices=Statut.choices, default=Statut.LIVREE)
     livraison_prevue_le = models.DateField(null=True, blank=True)
+    peniche = models.PositiveSmallIntegerField(
+        "péniche",
+        null=True,
+        blank=True,
+        help_text="Bac où l'équipement de la commande attend sa livraison ; libre après.",
+    )
     livree_le = models.DateTimeField(null=True, blank=True)
     livree_par = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
@@ -97,7 +103,13 @@ class Vente(ModeleDeBase):
         constraints = [
             models.UniqueConstraint(
                 fields=["magasin", "annee", "sequence"], name="facture_sans_doublon"
-            )
+            ),
+            # Une péniche ne contient qu'une commande en cours ; livrée ou annulée, elle se libère.
+            models.UniqueConstraint(
+                fields=["magasin", "peniche"],
+                condition=models.Q(statut="en_commande", peniche__isnull=False),
+                name="une_commande_par_peniche",
+            ),
         ]
 
     def __str__(self):

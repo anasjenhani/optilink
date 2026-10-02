@@ -35,6 +35,12 @@ class VenteSaisieSerializer(serializers.Serializer):
         default=False, help_text="Commande : acompte maintenant, solde à la livraison."
     )
     livraison_prevue_le = serializers.DateField(required=False, allow_null=True)
+    peniche = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=1,
+        help_text="Commande : n° de péniche ; par défaut la plus petite libre du magasin.",
+    )
 
 
 class ReglementSerializer(serializers.Serializer):
@@ -104,6 +110,7 @@ class VenteSerializer(serializers.ModelSerializer):
             "reste_a_payer",
             "statut",
             "livraison_prevue_le",
+            "peniche",
             "livree_le",
             "verres",
             "facture",
@@ -213,6 +220,12 @@ class EncaissementDevisSerializer(serializers.Serializer):
         default=False, help_text="Commande : acompte maintenant, solde à la livraison."
     )
     livraison_prevue_le = serializers.DateField(required=False, allow_null=True)
+    peniche = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=1,
+        help_text="Commande : n° de péniche ; par défaut la plus petite libre du magasin.",
+    )
 
 
 class LigneDevisSerializer(serializers.ModelSerializer):

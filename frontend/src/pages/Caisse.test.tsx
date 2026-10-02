@@ -112,7 +112,7 @@ test("un verre sur commande impose une commande avec acompte", async () => {
       if (url.startsWith("/api/v1/articles/")) return json({ results: [VERRE] });
       ventes.push(JSON.parse(init?.body as string));
       return json(
-        { id: "v3", numero: "T01-T2026-000003", devise: "TND", total_ttc: "360.000", reste_a_payer: "260.000", statut: "en_commande", lignes: [] },
+        { id: "v3", numero: "T01-T2026-000003", devise: "TND", total_ttc: "360.000", reste_a_payer: "260.000", statut: "en_commande", peniche: 17, lignes: [] },
         201,
       );
     }),
@@ -125,13 +125,33 @@ test("un verre sur commande impose une commande avec acompte", async () => {
 
   expect(screen.getByRole("checkbox", { name: /Commande : verres commandés/ })).toBeChecked();
   fireEvent.change(screen.getByLabelText("Acompte"), { target: { value: "100" } });
+  fireEvent.change(screen.getByLabelText("Péniche"), { target: { value: "17" } });
   expect(screen.getByText(/Reste à la livraison : 260,000\sTND/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Enregistrer la commande" }));
 
-  expect(await screen.findByText(/Commande T01-T2026-000003.*reste 260,000\sTND à la livraison/)).toBeInTheDocument();
+  expect(
+    await screen.findByText(/Commande T01-T2026-000003.*péniche 17, reste 260,000\sTND à la livraison/),
+  ).toBeInTheDocument();
   expect(ventes[0]).toMatchObject({
     lignes: [{ article: "a2", quantite: 2 }],
     paiements: [{ mode: "carte", montant: "100.000" }],
     commande: true,
+    peniche: 17,
   });
+});
+
+test("la douchette ajoute l'article au panier par son code-barres", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/api/v1/magasins/") return json({ results: [MAGASIN] });
+      return json({ results: [{ ...MONTURE, code_barres: "8053672000001" }] });
+    }),
+  );
+  afficher();
+  const champ = await screen.findByLabelText(/Rechercher un article/);
+  fireEvent.change(champ, { target: { value: "8053672000001" } });
+  fireEvent.keyDown(champ, { key: "Enter" });
+  expect(await screen.findByText(/Total : 289,500\sTND/)).toBeInTheDocument();
+  expect(champ).toHaveValue("");
 });

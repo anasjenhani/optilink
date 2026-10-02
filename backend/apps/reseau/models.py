@@ -77,6 +77,11 @@ class Magasin(ModeleDeBase):
     code_postal = models.CharField(max_length=10, blank=True)
     ville = models.CharField(max_length=100, blank=True)
     telephone = models.CharField(max_length=20, blank=True)
+    nombre_peniches = models.PositiveSmallIntegerField(
+        "nombre de péniches",
+        default=200,
+        help_text="Bacs numérotés de 1 à ce nombre où l'on range l'équipement d'une commande.",
+    )
     est_actif = models.BooleanField(default=True)
 
     objects = ParMagasinManager(champ="id")

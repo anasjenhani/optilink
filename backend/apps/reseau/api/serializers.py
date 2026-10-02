@@ -34,5 +34,6 @@ class MagasinSerializer(serializers.ModelSerializer):
             "code_postal",
             "ville",
             "telephone",
+            "nombre_peniches",
             "est_actif",
         ]

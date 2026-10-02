@@ -10,7 +10,15 @@ export type Pays = {
   libelle_identifiant_prescripteur: string;
 };
 
-export type Magasin = { id: string; code: string; nom: string; region: string; ville: string; pays: Pays };
+export type Magasin = {
+  id: string;
+  code: string;
+  nom: string;
+  region: string;
+  ville: string;
+  pays: Pays;
+  nombre_peniches: number;
+};
 
 export const listerMagasins = () =>
   appeler<{ results: Magasin[] }>("/api/v1/magasins/").then((page) => page.results);

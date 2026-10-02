@@ -59,6 +59,7 @@ def decrire(fiche):
 
 class ArticleSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source="public_id", read_only=True)
+    fournisseur = serializers.SlugRelatedField(slug_field="nom", read_only=True)
     stock = serializers.IntegerField(
         read_only=True, allow_null=True, help_text="Quantité en stock du magasin demandé."
     )
@@ -90,6 +91,8 @@ class ArticleSerializer(serializers.ModelSerializer):
             "description",
             "caracteristiques",
             "code_barres",
+            "fournisseur",
+            "reference_fournisseur",
             "sur_commande",
             "prix_vente_ttc",
             "taux_tva",
