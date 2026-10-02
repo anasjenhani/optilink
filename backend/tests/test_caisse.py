@@ -28,21 +28,6 @@ def articles(reseau):
     return {"monture": monture, "lentilles": lentilles}
 
 
-@pytest.fixture
-def affecter(creer_role, creer_utilisateur):
-    roles = {}
-
-    def _affecter(nom, *permissions, **perimetre):
-        cle = tuple(sorted(permissions))
-        if cle not in roles:
-            roles[cle] = creer_role(f"Rôle {len(roles)}", *permissions)
-        utilisateur = creer_utilisateur(nom)
-        Affectation.objects.create(utilisateur=utilisateur, role=roles[cle], **perimetre)
-        return utilisateur
-
-    return _affecter
-
-
 VENDRE = ("ventes.add_vente", "ventes.view_vente", "stock.view_article")
 
 

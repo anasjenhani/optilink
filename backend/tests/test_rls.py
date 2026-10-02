@@ -35,19 +35,46 @@ def test_le_compte_applicatif_n_echappe_pas_a_la_rls(db):
         assert cursor.fetchone() == (False, False)
 
 
-def test_la_base_ne_montre_que_les_magasins_du_perimetre(reseau):
+def test_la_base_ne_montre_que_les_mouvements_du_perimetre(reseau):
+    from apps.stock.models import Article, MouvementStock
+
+    article = Article.objects.create(
+        reference="P", libelle="P", famille="monture", prix_vente_ttc=10
+    )
+    for magasin in reseau.values():
+        if isinstance(magasin, Magasin):
+            MouvementStock.tous.create(
+                magasin=magasin, article=article, quantite=1, type="reception"
+            )
+
+    def visibles():
+        return codes_visibles(
+            "stock_mouvementstock m JOIN reseau_magasin g ON g.id = m.magasin_id", "g.code"
+        )
+
     rls.poser({reseau["lille"].id})
-    assert codes_visibles() == ["M01"]
-    assert list(Magasin.tous.values_list("code", flat=True)) == ["M01"]
+    assert visibles() == ["M01"]
+    assert MouvementStock.tous.count() == 1
 
     rls.poser(None)
-    assert codes_visibles() == ["M01", "M02", "M03"]
+    assert visibles() == ["M01", "M02", "M03"]
 
     rls.poser(frozenset())
-    assert codes_visibles() == []
+    assert visibles() == []
 
     rls.effacer()
+    assert visibles() == ["M01", "M02", "M03"]
+
+
+def test_magasins_lisibles_mais_modifiables_dans_le_perimetre_seulement(reseau):
+    rls.poser({reseau["lille"].id})
+    # Lecture ouverte : un client partagé pointe vers un magasin d'origine hors périmètre.
     assert codes_visibles() == ["M01", "M02", "M03"]
+    with connection.cursor() as cursor:
+        cursor.execute("UPDATE reseau_magasin SET nom = 'x'")
+        assert cursor.rowcount == 1
+    with pytest.raises(DatabaseError, match="row-level security"), transaction.atomic():
+        Magasin.tous.create(code="M09", nom="Hors", region=reseau["nord"])
 
 
 def test_ventes_et_lignes_cloisonnees(reseau):
@@ -83,10 +110,31 @@ def test_ecrire_hors_perimetre_est_refuse(reseau):
     )
 
 
-@pytest.mark.parametrize("table", ["securite_evenementsecurite", "auditlog_logentry"])
+@pytest.mark.parametrize(
+    "table", ["securite_evenementsecurite", "auditlog_logentry", "optique_accesprescription"]
+)
 def test_journaux_en_ajout_seul(reseau, table):
+    from apps.crm.models import Client
+    from apps.optique.models import AccesPrescription, Prescription
+    from apps.securite.models import Utilisateur
+
     EvenementSecurite.objects.create(type=EvenementSecurite.Type.CONNEXION_REUSSIE)
     assert LogEntry.objects.exists()  # la création des magasins est journalisée
+    opticien = Utilisateur.objects.create_user("opticien")
+    client = Client.objects.create(nom="A", prenom="B", magasin_origine=reseau["lille"])
+    prescription = Prescription(
+        client=client,
+        type="lunettes",
+        date_prescription="2026-01-01",
+        prescripteur="Dr",
+        magasin_saisie=reseau["lille"],
+        saisie_par=opticien,
+    )
+    prescription.mesures = {}
+    prescription.save()
+    AccesPrescription.objects.create(
+        utilisateur=opticien, prescription=prescription, action="consultation"
+    )
     for requete in (f"UPDATE {table} SET id = id", f"DELETE FROM {table}"):
         with pytest.raises(DatabaseError, match="ajout seul"), transaction.atomic():
             with connection.cursor() as cursor:
