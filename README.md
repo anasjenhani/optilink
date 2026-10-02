@@ -181,6 +181,15 @@ Environnement d'essai sur **un seul serveur** (2 cœurs, 4 Go de mémoire, 80 Go
 3. `docker compose -f docker-compose.yml -f docker-compose.qualif.yml up -d --build`
 4. `docker compose -f docker-compose.yml -f docker-compose.qualif.yml exec backend python manage.py createsuperuser`, puis créer pays, magasin, fournisseurs et comptes dans l'administration (`charger_demo` ajoute des articles d'essai).
 
+### Avec Vagrant et VMware Workstation
+
+Le `Vagrantfile` crée la machine virtuelle (Ubuntu 24.04, 2 cœurs, 4 Go, carte « Bridged » à adresse fixe) et y lance `deploy/qualification/provision.sh`, qui installe Docker depuis son dépôt officiel, génère les secrets (`.env`) et un certificat auto-signé, ouvre le pare-feu (SSH, 80, 443) et démarre OptiLink. Le script se relance sans risque (`vagrant provision`) : secrets et certificat sont gardés. Il sert aussi sur un Ubuntu installé à la main : `sudo OPTILINK_SOURCE=. OPTILINK_IP=192.168.1.50 bash deploy/qualification/provision.sh`.
+
+1. Sur le PC Windows : VMware Workstation, puis `winget install --id Hashicorp.Vagrant -e`, `winget install --id Hashicorp.VagrantVMwareUtility -e`, redémarrage, et `vagrant plugin install vagrant-vmware-desktop`.
+2. Dans le dossier d'OptiLink : `$env:OPTILINK_IP = "192.168.1.50"` (une adresse libre du réseau du magasin), puis `vagrant up --provider vmware_desktop`. Vagrant demande sur quelle carte réseau du PC faire le pont.
+3. `vagrant ssh`, puis `cd /opt/optilink && sudo docker compose -f docker-compose.yml -f docker-compose.qualif.yml exec backend python manage.py createsuperuser`.
+4. OptiLink répond sur `https://<adresse>` ; le navigateur signale le certificat auto-signé, à accepter (ou à installer sur les postes).
+
 Restaurer une sauvegarde : `docker compose -f docker-compose.yml -f docker-compose.qualif.yml exec -T postgres pg_restore -U postgres -d optilink --clean --if-exists < sauvegardes/optilink-AAAA-MM-JJ.dump`. Copier régulièrement `./sauvegardes` sur un autre support, et garder `PRESCRIPTIONS_CLES` hors du serveur.
 
 ## Suite
