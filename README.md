@@ -32,11 +32,13 @@ frontend/
 
 Chaque utilisateur reçoit des **affectations** : un rôle (groupe Django) sur une portée, un magasin, une région ou tout le réseau, avec des dates de début et de fin. À chaque requête, `PerimetreMagasinMiddleware` calcule les magasins autorisés, et le manager `ParMagasinManager` filtre automatiquement les requêtes des modèles de magasin. Les tâches Celery et les commandes d'administration ne sont pas filtrées. Pour lire volontairement hors périmètre, utiliser le manager `tous`.
 
+PostgreSQL applique le même cloisonnement de son côté (Row-Level Security, `core/rls.py`) sur les magasins, les ventes, leurs lignes et paiements, les compteurs de factures et les mouvements de stock. Le middleware pose le périmètre dans la session PostgreSQL (`app.perimetre`) au début de chaque requête et l'efface à la fin ; une requête SQL qui oublierait le filtre, ou passerait par le manager `tous`, ne voit et n'écrit donc que les magasins autorisés. Hors requête HTTP (Celery, migrations, commandes), la variable est vide et la base ne filtre pas. La RLS ne s'applique pas à un super-utilisateur PostgreSQL : l'application doit se connecter avec un compte `NOSUPERUSER NOBYPASSRLS`, et `migrate` affiche l'avertissement `optilink.W001` si ce n'est pas le cas.
+
 ## Sécurité
 
 - **Rôles et permissions (RBAC).** Les droits viennent uniquement des rôles des affectations en cours (`PermissionsParAffectationBackend`). Les neuf rôles de départ du document d'architecture sont créés au premier `migrate` ; le siège les ajuste ensuite dans l'administration. Sur un objet rattaché à un magasin, seuls les rôles dont le périmètre couvre ce magasin comptent. Côté API, `PermissionsParAction` exige la permission de chaque action (déclarée dans `permissions_requises`, sinon la permission standard du modèle) et refuse tout ce qui n'est pas déclaré.
 - **Double authentification (MFA).** Connexion en deux temps : mot de passe, puis code d'une application d'authentification (TOTP) ou un des 10 codes de secours remis à l'activation. Sans MFA validée, l'API ne répond qu'aux routes `/api/v1/auth/`. L'administration Django exige aussi le code. Tentatives limitées par Nginx, par l'API (`THROTTLE_CONNEXION`, `THROTTLE_MFA`) et par django-otp (délai croissant après chaque code faux).
-- **Journal d'audit.** django-auditlog enregistre auteur, date, adresse IP, ancienne et nouvelle valeur pour les magasins, régions, comptes (hors mot de passe), affectations et rôles. Les connexions, déconnexions, codes MFA et désactivations sont dans `EvenementSecurite`, que l'application ne peut ni modifier ni supprimer. Les deux se consultent dans l'administration.
+- **Journal d'audit.** django-auditlog enregistre auteur, date, adresse IP, ancienne et nouvelle valeur pour les magasins, régions, comptes (hors mot de passe), affectations et rôles. Les connexions, déconnexions, codes MFA et désactivations sont dans `EvenementSecurite`, qui ne peut être ni modifié ni supprimé. Pour ces deux journaux, le verrou est aussi posé dans PostgreSQL : un déclencheur refuse tout `UPDATE` ou `DELETE`, quelle que soit la requête. Un compte qui a un historique ne se supprime donc pas : on le désactive. Les deux journaux se consultent dans l'administration.
 - **Comptes inactifs.** Une tâche Celery quotidienne désactive les comptes sans connexion depuis 90 jours (`COMPTES_INACTIFS_JOURS`), hors super-utilisateurs.
 
 ## Prototype caisse et stock
@@ -66,7 +68,7 @@ Premier accès : se connecter à l'application avec le compte créé, scanner le
 - Documentation de l'API : http://localhost/api/docs/
 - État de la plateforme : http://localhost/api/v1/sante/
 
-La base de développement tourne dans le conteneur `postgres`, sur le port 5432 de la machine locale uniquement.
+La base de développement tourne dans le conteneur `postgres`, sur le port 5432 de la machine locale uniquement. Au premier démarrage, `docker/postgres/01-compte-applicatif.sh` y crée le compte applicatif `DB_USER` (non super-utilisateur, pour que la Row-Level Security s'applique). Ce script ne tourne que sur un volume vide : une base de développement créée avant ce changement se recrée avec `docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v`.
 
 ### Sans Docker
 
@@ -95,7 +97,7 @@ La CI GitHub Actions lance les tests backend sur un vrai PostgreSQL 17, les cont
 
 ## Production
 
-1. PostgreSQL 17 sur son serveur dédié, avec une base `optilink` et un compte applicatif propriétaire de cette base (pas le super-utilisateur `postgres`).
+1. PostgreSQL 17 sur son serveur dédié, avec une base `optilink` et un compte applicatif propriétaire de cette base, créé `NOSUPERUSER NOBYPASSRLS` (le script `docker/postgres/01-compte-applicatif.sh` montre les commandes). Avec le super-utilisateur `postgres`, la Row-Level Security serait ignorée.
 2. `.env` avec une vraie `DJANGO_SECRET_KEY`, `DB_HOST` pointant vers le serveur PostgreSQL, `DB_USER`/`DB_PASSWORD` du compte applicatif.
 3. Certificat TLS dans `certs/optilink.crt` et `certs/optilink.key`.
 4. `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`
@@ -104,7 +106,6 @@ Nginx redirige HTTP vers HTTPS (TLS 1.2 minimum, HSTS). La connexion Django vers
 
 ## Suite du lot 1
 
-- Row-Level Security PostgreSQL en complément du filtre applicatif, et droits SQL empêchant la modification des journaux
 - Reprise rapide par code PIN sur le poste de caisse
 - Notification de la direction à chaque changement de rôle ou d'affectation
 - Lot Vendre : clients, dossiers optiques, devis, avoirs, tables spécialisées par famille d'article

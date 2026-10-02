@@ -18,13 +18,11 @@ jobs:
       postgres:
         image: postgres:17
         env:
-          POSTGRES_DB: optilink
-          POSTGRES_USER: optilink
-          POSTGRES_PASSWORD: ci-optilink
+          POSTGRES_PASSWORD: ci-postgres
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U optilink"
+          --health-cmd "pg_isready -U postgres"
           --health-interval 5s
           --health-retries 10
     env:
@@ -40,6 +38,12 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: backend/requirements*.txt
+      - name: Compte applicatif sans droits de super-utilisateur (la RLS s'applique)
+        env:
+          PGPASSWORD: ci-postgres
+        run: |
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE optilink LOGIN NOSUPERUSER NOBYPASSRLS CREATEDB PASSWORD 'ci-optilink'"
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE optilink OWNER optilink"
       - run: pip install -r requirements-dev.txt
       - run: ruff check .
       - run: ruff format --check .

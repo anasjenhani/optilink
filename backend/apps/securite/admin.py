@@ -22,6 +22,10 @@ class UtilisateurAdmin(UserAdmin):
     readonly_fields = ("last_login", "date_joined")
     list_filter = ("is_active", "is_staff", "is_superuser")
 
+    # Un compte garde son historique d'audit : on le désactive, on ne le supprime pas.
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(EvenementSecurite)
 class EvenementSecuriteAdmin(admin.ModelAdmin):
