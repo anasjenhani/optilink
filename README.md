@@ -10,7 +10,7 @@ L'architecture complète est décrite dans le document d'architecture OptiLink. 
 | --- | --- |
 | Frontend | React, TypeScript, Material UI, TanStack Query, Vite |
 | Backend | Python 3.12, Django 5.2 LTS, Django REST Framework |
-| Base de données | SQL Server 2022 (pilote `mssql-django`, ODBC Driver 18) |
+| Base de données | PostgreSQL 17 (pilote `psycopg` 3) |
 | Cache et traitements | Redis, Celery (worker et Beat) |
 | Infrastructure | Docker Compose, Nginx, HTTPS |
 
@@ -66,7 +66,7 @@ Premier accès : se connecter à l'application avec le compte créé, scanner le
 - Documentation de l'API : http://localhost/api/docs/
 - État de la plateforme : http://localhost/api/v1/sante/
 
-Le mot de passe SQL Server (`DB_PASSWORD`) doit respecter la politique de SQL Server : au moins 8 caractères avec majuscules, minuscules, chiffres et symboles.
+La base de développement tourne dans le conteneur `postgres`, sur le port 5432 de la machine locale uniquement.
 
 ### Sans Docker
 
@@ -82,7 +82,7 @@ npm install
 npm run dev                 # http://localhost:5173, relaie /api vers Django
 ```
 
-SQLite ne sert qu'aux essais rapides ; la CI teste sur SQL Server.
+SQLite ne sert qu'aux essais rapides ; la CI teste sur PostgreSQL.
 
 ## Tests et contrôles
 
@@ -91,20 +91,20 @@ cd backend && DB_ENGINE=sqlite pytest && ruff check . && ruff format --check .
 cd frontend && npm run typecheck && npm test && npm run build
 ```
 
-La CI GitHub Actions lance les tests backend sur un vrai SQL Server 2022, les contrôles frontend, puis construit les deux images Docker.
+La CI GitHub Actions lance les tests backend sur un vrai PostgreSQL 17, les contrôles frontend, puis construit les deux images Docker.
 
 ## Production
 
-1. SQL Server sur son serveur dédié, avec une base `optilink` et un compte applicatif propre (pas `sa`).
-2. `.env` avec une vraie `DJANGO_SECRET_KEY`, `DB_HOST` pointant vers le serveur SQL, `DB_USER`/`DB_PASSWORD` du compte applicatif.
+1. PostgreSQL 17 sur son serveur dédié, avec une base `optilink` et un compte applicatif propriétaire de cette base (pas le super-utilisateur `postgres`).
+2. `.env` avec une vraie `DJANGO_SECRET_KEY`, `DB_HOST` pointant vers le serveur PostgreSQL, `DB_USER`/`DB_PASSWORD` du compte applicatif.
 3. Certificat TLS dans `certs/optilink.crt` et `certs/optilink.key`.
 4. `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`
 
-Nginx redirige HTTP vers HTTPS (TLS 1.2 minimum, HSTS). La connexion Django vers SQL Server est chiffrée ; le certificat du serveur SQL est vérifié sauf si `DB_TRUST_SERVER_CERTIFICATE=1`.
+Nginx redirige HTTP vers HTTPS (TLS 1.2 minimum, HSTS). La connexion Django vers PostgreSQL exige TLS (`DB_SSLMODE=require` par défaut) ; en production, utiliser `DB_SSLMODE=verify-full` avec `DB_SSLROOTCERT` (certificat de l'autorité, monté dans le conteneur) pour vérifier aussi le certificat du serveur.
 
 ## Suite du lot 1
 
-- Row-Level Security SQL Server en complément du filtre applicatif, et droits SQL empêchant la modification des journaux
+- Row-Level Security PostgreSQL en complément du filtre applicatif, et droits SQL empêchant la modification des journaux
 - Reprise rapide par code PIN sur le poste de caisse
 - Notification de la direction à chaque changement de rôle ou d'affectation
 - Lot Vendre : clients, dossiers optiques, devis, avoirs, tables spécialisées par famille d'article

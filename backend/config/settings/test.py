@@ -6,5 +6,5 @@ PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 CELERY_TASK_ALWAYS_EAGER = True
 
-if env("DB_ENGINE", "mssql") == "sqlite":
+if env("DB_ENGINE", "postgresql") == "sqlite":
     DATABASES["default"]["NAME"] = ":memory:"

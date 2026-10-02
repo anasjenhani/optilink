@@ -15,24 +15,24 @@ jobs:
       run:
         working-directory: backend
     services:
-      sqlserver:
-        image: mcr.microsoft.com/mssql/server:2022-latest
+      postgres:
+        image: postgres:17
         env:
-          ACCEPT_EULA: "Y"
-          MSSQL_SA_PASSWORD: Ci-Optilink-2026!
+          POSTGRES_DB: optilink
+          POSTGRES_USER: optilink
+          POSTGRES_PASSWORD: ci-optilink
         ports:
-          - 1433:1433
+          - 5432:5432
         options: >-
-          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'Ci-Optilink-2026!' -Q 'SELECT 1' -b -o /dev/null"
-          --health-interval 10s
-          --health-start-period 30s
-          --health-retries 12
+          --health-cmd "pg_isready -U optilink"
+          --health-interval 5s
+          --health-retries 10
     env:
-      DB_ENGINE: mssql
+      DB_ENGINE: postgresql
       DB_HOST: localhost
-      DB_USER: sa
-      DB_PASSWORD: Ci-Optilink-2026!
-      DB_TRUST_SERVER_CERTIFICATE: "1"
+      DB_USER: optilink
+      DB_PASSWORD: ci-optilink
+      DB_SSLMODE: disable
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -40,38 +40,14 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: backend/requirements*.txt
-      - name: Pilote ODBC Driver 18 pour SQL Server
-        run: |
-          if ! dpkg -s msodbcsql18 >/dev/null 2>&1; then
-            # L'image du runner déclare souvent déjà le dépôt Microsoft : ne l'ajouter que s'il manque.
-            if ! grep -rqs packages.microsoft.com /etc/apt/sources.list /etc/apt/sources.list.d/; then
-              curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
-                | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
-              curl -fsSL https://packages.microsoft.com/config/ubuntu/24.04/prod.list \
-                | sudo tee /etc/apt/sources.list.d/mssql-release.list
-            fi
-            sudo apt-get update
-            sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc
-          fi
       - run: pip install -r requirements-dev.txt
       - run: ruff check .
       - run: ruff format --check .
-      - name: Base optilink (vérification de l'historique des migrations)
-        run: |
-          python - <<'PY'
-          import os, pyodbc
-          cnx = pyodbc.connect(
-              "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost,1433;"
-              f"UID=sa;PWD={os.environ['DB_PASSWORD']};Encrypt=yes;TrustServerCertificate=yes",
-              autocommit=True,
-          )
-          cnx.execute("IF DB_ID('optilink') IS NULL CREATE DATABASE optilink")
-          PY
       - name: Migrations à jour
         run: python manage.py makemigrations --check --dry-run
         env:
           DJANGO_SETTINGS_MODULE: config.settings.test
-      - name: Tests sur SQL Server
+      - name: Tests sur PostgreSQL
         run: pytest
       - name: Schéma OpenAPI valide
         run: python manage.py spectacular --validate --fail-on-warn > /dev/null
