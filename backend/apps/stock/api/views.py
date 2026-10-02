@@ -26,8 +26,11 @@ from .serializers import ArticleSerializer, MouvementStockSerializer
     list=extend_schema(
         parameters=[
             OpenApiParameter(
-                "recherche", OpenApiTypes.STR, description="Référence, libellé ou code-barres"
+                "recherche",
+                OpenApiTypes.STR,
+                description="Référence, libellé, code-barres, marque, modèle ou gamme",
             ),
+            OpenApiParameter("marque", OpenApiTypes.STR, description="Marque (toutes familles)"),
             OpenApiParameter(
                 "magasin",
                 OpenApiTypes.UUID,
@@ -44,13 +47,28 @@ class ArticleViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ["famille"]
 
     def get_queryset(self):
-        articles = Article.objects.filter(est_actif=True)
+        articles = Article.objects.filter(est_actif=True).select_related(
+            "monture", "verre", "lentille"
+        )
         recherche = self.request.query_params.get("recherche", "").strip()
         if recherche:
             articles = articles.filter(
                 Q(reference__icontains=recherche)
                 | Q(libelle__icontains=recherche)
                 | Q(code_barres=recherche)
+                | Q(monture__marque__icontains=recherche)
+                | Q(monture__modele__icontains=recherche)
+                | Q(verre__marque__icontains=recherche)
+                | Q(verre__gamme__icontains=recherche)
+                | Q(lentille__marque__icontains=recherche)
+                | Q(lentille__modele__icontains=recherche)
+            )
+        marque = self.request.query_params.get("marque", "").strip()
+        if marque:
+            articles = articles.filter(
+                Q(monture__marque__iexact=marque)
+                | Q(verre__marque__iexact=marque)
+                | Q(lentille__marque__iexact=marque)
             )
         magasin_id = self.request.query_params.get("magasin")
         if not magasin_id:

@@ -167,7 +167,13 @@ export function Caisse() {
               >
                 <ListItemText
                   primary={`${article.libelle} · ${formaterTexte(article.prix_vente_ttc, monnaie)}`}
-                  secondary={`${article.reference} · ${article.sur_commande ? "sur commande" : `stock ${article.stock ?? "?"}`}`}
+                  secondary={[
+                    article.reference,
+                    article.description,
+                    article.sur_commande ? "sur commande" : `stock ${article.stock ?? "?"}`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 />
               </ListItem>
             ))}

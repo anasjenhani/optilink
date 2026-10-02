@@ -1,8 +1,60 @@
+from django.forms.models import model_to_dict
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.reseau.models import Magasin
 
-from ..models import Article, MouvementStock
+from ..models import Article, Lentille, Monture, MouvementStock, Verre
+
+
+def _signe(valeur):
+    return f"+{valeur}" if valeur > 0 else str(valeur)
+
+
+def decrire(fiche):
+    """Résumé d'une fiche sur une ligne, dans la notation des opticiens."""
+    if fiche is None:
+        return ""
+    morceaux = [" ".join(filter(None, [fiche.marque, getattr(fiche, "modele", "")]))]
+    if isinstance(fiche, Monture):
+        mesures = ""
+        if fiche.calibre and fiche.pont:
+            mesures = f"{fiche.calibre}□{fiche.pont}" + (
+                f"-{fiche.branche}" if fiche.branche else ""
+            )
+        morceaux += [
+            fiche.couleur,
+            mesures,
+            fiche.get_type_display() if fiche.type else "",
+            "solaire" if fiche.solaire else "",
+        ]
+    elif isinstance(fiche, Verre):
+        morceaux = [
+            " ".join(filter(None, [fiche.marque, fiche.gamme])),
+            fiche.get_geometrie_display(),
+            f"indice {fiche.indice}" if fiche.indice else "",
+            fiche.get_matiere_display() if fiche.matiere else "",
+            fiche.traitements,
+            "photochromique" if fiche.photochromique else "",
+        ]
+    elif isinstance(fiche, Lentille):
+        puissance = ""
+        if fiche.puissance is not None:
+            puissance = _signe(fiche.puissance)
+            if fiche.cylindre:
+                puissance += f" ({_signe(fiche.cylindre)} à {fiche.axe}°)"
+            if fiche.addition:
+                puissance += f" add {_signe(fiche.addition)}"
+        morceaux += [
+            fiche.get_renouvellement_display(),
+            fiche.get_type_display(),
+            f"R {fiche.rayon}" if fiche.rayon else "",
+            f"Ø {fiche.diametre}" if fiche.diametre else "",
+            puissance,
+            f"boîte de {fiche.lentilles_par_boite}" if fiche.lentilles_par_boite else "",
+        ]
+    return " · ".join(m for m in morceaux if m)
 
 
 class ArticleSerializer(serializers.ModelSerializer):
@@ -21,6 +73,12 @@ class ArticleSerializer(serializers.ModelSerializer):
         max_digits=5, decimal_places=2, read_only=True, allow_null=True
     )
     devise = serializers.CharField(read_only=True, allow_null=True)
+    description = serializers.SerializerMethodField(
+        help_text="Caractéristiques résumées sur une ligne."
+    )
+    caracteristiques = serializers.SerializerMethodField(
+        help_text="Fiche de la famille (monture, verre, lentille) ; null pour un article divers."
+    )
 
     class Meta:
         model = Article
@@ -29,6 +87,8 @@ class ArticleSerializer(serializers.ModelSerializer):
             "reference",
             "libelle",
             "famille",
+            "description",
+            "caracteristiques",
             "code_barres",
             "sur_commande",
             "prix_vente_ttc",
@@ -36,6 +96,20 @@ class ArticleSerializer(serializers.ModelSerializer):
             "devise",
             "stock",
         ]
+
+    def get_description(self, article) -> str:
+        return decrire(article.caracteristiques)
+
+    @extend_schema_field(OpenApiTypes.OBJECT)
+    def get_caracteristiques(self, article):
+        fiche = article.caracteristiques
+        if fiche is None:
+            return None
+        donnees = model_to_dict(fiche, exclude=["article"])
+        return {
+            cle: str(v) if v is not None and not isinstance(v, (bool, int, str)) else v
+            for cle, v in donnees.items()
+        }
 
 
 class MouvementStockSerializer(serializers.ModelSerializer):

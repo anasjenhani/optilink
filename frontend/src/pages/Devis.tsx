@@ -267,7 +267,7 @@ export function Devis({ droits }: { droits: DroitsDevis }) {
                   >
                     <ListItemText
                       primary={`${article.libelle} · ${formaterTexte(article.prix_vente_ttc, monnaie)}`}
-                      secondary={article.reference}
+                      secondary={[article.reference, article.description].filter(Boolean).join(" · ")}
                     />
                   </ListItem>
                 ))}

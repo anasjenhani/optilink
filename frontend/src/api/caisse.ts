@@ -4,7 +4,10 @@ export type Article = {
   id: string;
   reference: string;
   libelle: string;
-  famille: string;
+  famille: Famille;
+  /** Caractéristiques de la famille sur une ligne (« Ray-Ban RB5154 · écaille · 51□21-145 »). */
+  description: string;
+  caracteristiques: Record<string, string | number | boolean | null> | null;
   /** Commandé au fournisseur pour chaque client (verres…) : pas de stock, vente en commande. */
   sur_commande: boolean;
   prix_vente_ttc: string;
@@ -12,6 +15,15 @@ export type Article = {
   devise: string;
   stock: number | null;
 };
+
+export type Famille = "monture" | "verre" | "lentille" | "divers";
+
+export const FAMILLES: { valeur: Famille; libelle: string }[] = [
+  { valeur: "monture", libelle: "Montures" },
+  { valeur: "verre", libelle: "Verres" },
+  { valeur: "lentille", libelle: "Lentilles" },
+  { valeur: "divers", libelle: "Divers" },
+];
 
 export type ModePaiement = "carte" | "especes" | "cheque";
 
@@ -42,9 +54,9 @@ export type SaisieVente = {
 
 export type Reglement = { mode: ModePaiement; montant: string };
 
-export const chercherArticles = (magasin: string, recherche: string) =>
+export const chercherArticles = (magasin: string, recherche: string, famille: Famille | "" = "") =>
   appeler<{ results: Article[] }>(
-    `/api/v1/articles/?${new URLSearchParams({ magasin, recherche })}`,
+    `/api/v1/articles/?${new URLSearchParams({ magasin, recherche, ...(famille && { famille }) })}`,
   ).then((page) => page.results);
 
 export const encaisser = (saisie: SaisieVente) =>
