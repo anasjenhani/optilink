@@ -81,7 +81,42 @@ PERMISSIONS_CLIENTS_OPTIQUE = {
     "Vendeur": CLIENTS_COMPLET,
 }
 
-for _par_role in (PERMISSIONS_CAISSE_STOCK, PERMISSIONS_CLIENTS_OPTIQUE):
+# Paramétrage par pays (taux de TVA, timbre, monnaie) : réglé par l'administrateur, consulté
+# par la direction. Les prix de vente suivent la colonne Stock « Complet ».
+PRIX_COMPLET = ["stock.view_prixarticle", "stock.add_prixarticle", "stock.change_prixarticle"]
+PERMISSIONS_PARAMETRAGE = {
+    "Administrateur système": [
+        "reseau.view_pays",
+        "reseau.add_pays",
+        "reseau.change_pays",
+        "reseau.view_tauxtva",
+        "reseau.add_tauxtva",
+        "reseau.change_tauxtva",
+        "reseau.delete_tauxtva",
+    ],
+    "Direction": ["reseau.view_pays", "reseau.view_tauxtva", "stock.view_prixarticle"],
+    "Responsable régional": PRIX_COMPLET,
+    "Responsable magasin": PRIX_COMPLET,
+    "Logisticien": PRIX_COMPLET,
+    "Comptable": ["reseau.view_pays", "reseau.view_tauxtva", "stock.view_prixarticle"],
+}
+
+# Factures : générées à part, une fois la vente entièrement payée.
+FACTURES_COMPLET = ["ventes.view_facture", "ventes.add_facture"]
+PERMISSIONS_FACTURES = {
+    "Direction": ["ventes.view_facture"],
+    "Responsable régional": FACTURES_COMPLET,
+    "Responsable magasin": FACTURES_COMPLET,
+    "Opticien": FACTURES_COMPLET,
+    "Comptable": ["ventes.view_facture"],
+}
+
+for _par_role in (
+    PERMISSIONS_CAISSE_STOCK,
+    PERMISSIONS_CLIENTS_OPTIQUE,
+    PERMISSIONS_PARAMETRAGE,
+    PERMISSIONS_FACTURES,
+):
     for _nom, _permissions in _par_role.items():
         ROLES_DE_DEPART[_nom] = ROLES_DE_DEPART[_nom] + _permissions
 

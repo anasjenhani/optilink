@@ -14,4 +14,4 @@ class MagasinViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         # Appelé à chaque requête : le filtre de périmètre doit être évalué maintenant,
         # jamais à l'import du module.
-        return Magasin.objects.select_related("region")
+        return Magasin.objects.select_related("region", "pays")

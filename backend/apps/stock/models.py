@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Sum
@@ -10,7 +11,7 @@ from core.models import ModeleDeBase
 
 
 class Article(ModeleDeBase):
-    """Article du catalogue, commun à tout le réseau.
+    """Article du catalogue, commun à tout le réseau ; son prix dépend du pays (``PrixArticle``).
 
     Prototype : une seule table. Les familles recevront leurs tables spécialisées (monture,
     verre, lentille) au lot Vendre.
@@ -26,10 +27,6 @@ class Article(ModeleDeBase):
     libelle = models.CharField(max_length=200)
     famille = models.CharField(max_length=20, choices=Famille.choices)
     code_barres = models.CharField(max_length=40, blank=True, db_index=True)
-    prix_vente_ttc = models.DecimalField(
-        max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal("0"))]
-    )
-    taux_tva = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("20.00"))
     est_actif = models.BooleanField(default=True)
 
     class Meta:
@@ -38,6 +35,41 @@ class Article(ModeleDeBase):
 
     def __str__(self):
         return f"{self.reference} {self.libelle}"
+
+
+class PrixArticle(models.Model):
+    """Prix de vente d'un article dans un pays, dans la monnaie de ce pays, et son taux de TVA.
+
+    Le taux est une référence vers les taux du pays : quand l'administrateur modifie un taux,
+    tous les articles qui l'utilisent suivent. Une vente déjà faite garde le taux qu'elle a
+    appliqué. Sans prix pour son pays, un article ne peut pas être vendu dans un magasin.
+    """
+
+    article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name="prix")
+    pays = models.ForeignKey("reseau.Pays", on_delete=models.PROTECT, related_name="+")
+    prix_vente_ttc = models.DecimalField(
+        max_digits=14, decimal_places=3, validators=[MinValueValidator(Decimal("0"))]
+    )
+    tva = models.ForeignKey(
+        "reseau.TauxTva", on_delete=models.PROTECT, related_name="prix", verbose_name="TVA"
+    )
+
+    class Meta:
+        verbose_name = "prix de vente"
+        verbose_name_plural = "prix de vente"
+        constraints = [models.UniqueConstraint(fields=["article", "pays"], name="un_prix_par_pays")]
+
+    def __str__(self):
+        return f"{self.article.reference} {self.prix_vente_ttc} {self.pays.devise}"
+
+    def clean(self):
+        if self.pays_id and self.tva_id and self.tva.pays_id != self.pays_id:
+            raise ValidationError({"tva": "Ce taux de TVA appartient à un autre pays."})
+        prix = Decimal(self.prix_vente_ttc or 0)
+        if self.pays_id and prix != prix.quantize(Decimal(1).scaleb(-self.pays.decimales)):
+            raise ValidationError(
+                {"prix_vente_ttc": f"{self.pays.devise} : {self.pays.decimales} décimales au plus."}
+            )
 
 
 class MouvementStock(models.Model):

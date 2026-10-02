@@ -22,6 +22,11 @@ class Client(ModeleDeBase):
     adresse = models.CharField(max_length=200, blank=True)
     code_postal = models.CharField(max_length=10, blank=True)
     ville = models.CharField(max_length=100, blank=True)
+    matricule_fiscal = models.CharField(
+        max_length=30,
+        blank=True,
+        help_text="Entreprise cliente : identifiant fiscal sur la facture.",
+    )
     magasin_origine = models.ForeignKey(
         "reseau.Magasin", on_delete=models.PROTECT, related_name="+"
     )

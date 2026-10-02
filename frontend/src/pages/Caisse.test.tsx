@@ -3,16 +3,28 @@ import { fireEvent, render, screen } from "@testing-library/react";
 
 import { Caisse } from "./Caisse";
 
-const MAGASIN = { id: "m1", code: "M01", nom: "Lille", region: "Nord", ville: "Lille" };
+const TUNISIE = {
+  code: "TN",
+  nom: "Tunisie",
+  devise: "TND",
+  decimales: 3,
+  indicatif_telephonique: "+216",
+  timbre_fiscal: "1.000",
+  libelle_identifiant_prescripteur: "N° d'inscription à l'Ordre des médecins",
+};
+const MAGASIN = { id: "m1", code: "T01", nom: "Tunis", region: "Grand Tunis", ville: "Tunis", pays: TUNISIE };
 const MONTURE = {
   id: "a1",
   reference: "MON-1",
   libelle: "Monture titane",
   famille: "monture",
-  prix_vente_ttc: "149.90",
-  taux_tva: "20.00",
+  prix_vente_ttc: "289.500",
+  taux_tva: "19.00",
+  devise: "TND",
   stock: 3,
 };
+
+const SOCIETE = { id: "c1", nom: "Optique Services", prenom: "SARL", telephone: "71000000" };
 
 function json(donnees: unknown, status = 200) {
   return Promise.resolve(new Response(JSON.stringify(donnees), { status }));
@@ -36,6 +48,7 @@ function simuler(reponseVente: () => Promise<Response>) {
     vi.fn((url: string, init?: RequestInit) => {
       if (url === "/api/v1/magasins/") return json({ results: [MAGASIN] });
       if (url.startsWith("/api/v1/articles/")) return json({ results: [MONTURE] });
+      if (url.startsWith("/api/v1/clients/")) return json({ results: [SOCIETE] });
       ventes.push(JSON.parse(init?.body as string));
       return reponseVente();
     }),
@@ -50,21 +63,35 @@ async function remplirPanier() {
   fireEvent.click(screen.getByRole("button", { name: "Ajouter un" }));
 }
 
-test("encaisse le panier et affiche le numéro de facture", async () => {
-  const ventes = simuler(() => json({ id: "v1", numero: "M01-2026-000001", total_ttc: "299.80", lignes: [] }, 201));
+test("encaisse le panier en dinars et affiche le ticket", async () => {
+  const ventes = simuler(() =>
+    json({ id: "v1", numero: "T01-T2026-000001", devise: "TND", total_ttc: "579.000", lignes: [] }, 201),
+  );
   await remplirPanier();
 
-  expect(screen.getByText("Total : 299.80 €")).toBeInTheDocument();
+  // Dinar à 3 décimales ; pas de timbre en caisse (il ne concerne que la facture).
+  expect(screen.getByText(/Total : 579,000\sTND/)).toBeInTheDocument();
+  expect(screen.queryByText(/timbre/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Encaisser" }));
 
-  expect(await screen.findByText(/facture M01-2026-000001/)).toBeInTheDocument();
+  expect(await screen.findByText(/Ticket T01-T2026-000001/)).toBeInTheDocument();
   expect(ventes).toEqual([
-    {
-      magasin: "m1",
-      lignes: [{ article: "a1", quantite: 2 }],
-      paiements: [{ mode: "carte", montant: "299.80" }],
-    },
+    { magasin: "m1", lignes: [{ article: "a1", quantite: 2 }], paiements: [{ mode: "carte", montant: "579.000" }] },
   ]);
+});
+
+test("rattache un client au ticket", async () => {
+  const ventes = simuler(() =>
+    json({ id: "v2", numero: "T01-T2026-000002", devise: "TND", total_ttc: "579.000", lignes: [] }, 201),
+  );
+  await remplirPanier();
+  fireEvent.click(screen.getByLabelText(/Rattacher un client/));
+  fireEvent.change(screen.getByLabelText(/^Client/), { target: { value: "optique" } });
+  fireEvent.click(await screen.findByText("OPTIQUE SERVICES SARL"));
+  fireEvent.click(screen.getByRole("button", { name: "Encaisser" }));
+
+  expect(await screen.findByText(/Ticket T01-T2026-000002/)).toBeInTheDocument();
+  expect(ventes[0]).toMatchObject({ client: "c1" });
 });
 
 test("affiche le refus de l'API", async () => {

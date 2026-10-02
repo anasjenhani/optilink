@@ -10,6 +10,17 @@ class ArticleSerializer(serializers.ModelSerializer):
     stock = serializers.IntegerField(
         read_only=True, allow_null=True, help_text="Quantité en stock du magasin demandé."
     )
+    prix_vente_ttc = serializers.DecimalField(
+        max_digits=14,
+        decimal_places=3,
+        read_only=True,
+        allow_null=True,
+        help_text="Prix dans le pays du magasin demandé.",
+    )
+    taux_tva = serializers.DecimalField(
+        max_digits=5, decimal_places=2, read_only=True, allow_null=True
+    )
+    devise = serializers.CharField(read_only=True, allow_null=True)
 
     class Meta:
         model = Article
@@ -21,6 +32,7 @@ class ArticleSerializer(serializers.ModelSerializer):
             "code_barres",
             "prix_vente_ttc",
             "taux_tva",
+            "devise",
             "stock",
         ]
 

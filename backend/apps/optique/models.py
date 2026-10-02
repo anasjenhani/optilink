@@ -1,5 +1,4 @@
 from django.conf import settings
-from django.core.validators import RegexValidator
 from django.db import models
 
 from core import chiffrement
@@ -23,11 +22,10 @@ class Prescription(ModeleDeBase):
     type = models.CharField(max_length=10, choices=Type.choices)
     date_prescription = models.DateField()
     prescripteur = models.CharField(max_length=200, help_text="Nom de l'ophtalmologiste.")
-    prescripteur_rpps = models.CharField(
-        "n° RPPS",
-        max_length=11,
+    prescripteur_identifiant = models.CharField(
+        max_length=30,
         blank=True,
-        validators=[RegexValidator(r"^\d{11}$", "Le n° RPPS compte 11 chiffres.")],
+        help_text="Selon le pays : n° d'inscription à l'Ordre des médecins, n° RPPS…",
     )
     mesures_chiffrees = models.TextField(editable=False)
     magasin_saisie = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")

@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.conf import settings
 from django.db import models
 
@@ -5,36 +7,61 @@ from core.managers import ParMagasinManager
 from core.models import ModeleDeBase
 
 
+class TypeDocument(models.TextChoices):
+    TICKET = "ticket", "Ticket de caisse"
+    FACTURE = "facture", "Facture"
+
+
+# Préfixe du numéro : M01-T2026-000001 pour un ticket, M01-F2026-000001 pour une facture.
+# Chaque type de document a sa propre suite de numéros.
+PREFIXES = {TypeDocument.TICKET: "T", TypeDocument.FACTURE: "F"}
+
+
 class CompteurFacture(models.Model):
-    """Dernier numéro de facture attribué, par magasin et par année (numérotation sans trou)."""
+    """Dernier numéro attribué par magasin, année et type de document (numérotation sans trou).
+
+    Tickets et factures ont chacun leur suite.
+    """
 
     magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
     annee = models.PositiveSmallIntegerField()
+    type_document = models.CharField(max_length=10, choices=TypeDocument.choices)
     dernier = models.PositiveIntegerField(default=0)
 
     class Meta:
         verbose_name = "compteur de factures"
         constraints = [
-            models.UniqueConstraint(fields=["magasin", "annee"], name="compteur_unique_par_annee")
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "type_document"], name="compteur_unique_par_annee"
+            )
         ]
 
     def __str__(self):
-        return f"{self.magasin_id}/{self.annee} : {self.dernier}"
+        return f"{self.magasin_id}/{self.annee}/{self.type_document} : {self.dernier}"
 
 
 class Vente(ModeleDeBase):
-    """Vente encaissée et facturée. Jamais modifiée : une correction passera par un avoir."""
+    """Vente encaissée en caisse, avec son ticket. Jamais modifiée : une correction passera par
+    un avoir.
+
+    La facture n'est pas émise en caisse : c'est une étape à part (``Facture``), possible
+    seulement quand la vente est entièrement payée.
+    """
 
     magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
-    numero = models.CharField(max_length=40, unique=True)
+    numero = models.CharField(max_length=40, unique=True, help_text="N° de ticket.")
     annee = models.PositiveSmallIntegerField()
     sequence = models.PositiveIntegerField()
+    client = models.ForeignKey(
+        "crm.Client", on_delete=models.PROTECT, null=True, blank=True, related_name="ventes"
+    )
     vendeur = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
     )
-    total_ht = models.DecimalField(max_digits=12, decimal_places=2)
-    total_tva = models.DecimalField(max_digits=12, decimal_places=2)
-    total_ttc = models.DecimalField(max_digits=12, decimal_places=2)
+    devise = models.CharField(max_length=3, help_text="Monnaie du pays du magasin à la vente.")
+    total_ht = models.DecimalField(max_digits=14, decimal_places=3)
+    total_tva = models.DecimalField(max_digits=14, decimal_places=3)
+    total_ttc = models.DecimalField(max_digits=14, decimal_places=3)
 
     objects = ParMagasinManager()
     tous = models.Manager()
@@ -52,16 +79,65 @@ class Vente(ModeleDeBase):
     def __str__(self):
         return self.numero
 
+    @property
+    def reste_a_payer(self):
+        paye = sum((p.montant for p in self.paiements.all()), Decimal("0"))
+        return self.total_ttc - paye
+
+
+class Facture(ModeleDeBase):
+    """Facture émise à part, au nom d'un client, pour une vente entièrement payée.
+
+    Numérotée sans trou par magasin et par année (suite distincte des tickets), jamais modifiée.
+    Elle porte le droit de timbre du pays.
+    """
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    vente = models.OneToOneField(Vente, on_delete=models.PROTECT, related_name="facture")
+    client = models.ForeignKey("crm.Client", on_delete=models.PROTECT, related_name="factures")
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    devise = models.CharField(max_length=3)
+    total_ht = models.DecimalField(max_digits=14, decimal_places=3)
+    total_tva = models.DecimalField(max_digits=14, decimal_places=3)
+    total_ttc = models.DecimalField(max_digits=14, decimal_places=3)
+    timbre_fiscal = models.DecimalField(max_digits=10, decimal_places=3, default=0)
+    net_a_payer = models.DecimalField(
+        max_digits=14, decimal_places=3, help_text="Total TTC + droit de timbre."
+    )
+    mode_paiement_timbre = models.CharField(
+        max_length=20, blank=True, help_text="Comment le client a réglé le timbre."
+    )
+    emise_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-cree_le"]
+        verbose_name = "facture"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="facture_numerotee_sans_doublon"
+            )
+        ]
+
+    def __str__(self):
+        return self.numero
+
 
 class LigneVente(models.Model):
     vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="lignes")
     article = models.ForeignKey("stock.Article", on_delete=models.PROTECT, related_name="+")
     libelle = models.CharField(max_length=200)
     quantite = models.PositiveIntegerField()
-    prix_unitaire_ttc = models.DecimalField(max_digits=10, decimal_places=2)
+    prix_unitaire_ttc = models.DecimalField(max_digits=14, decimal_places=3)
     remise_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     taux_tva = models.DecimalField(max_digits=5, decimal_places=2)
-    total_ttc = models.DecimalField(max_digits=12, decimal_places=2)
+    total_ttc = models.DecimalField(max_digits=14, decimal_places=3)
 
     class Meta:
         verbose_name = "ligne de vente"
@@ -78,10 +154,10 @@ class Paiement(models.Model):
 
     vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="paiements")
     mode = models.CharField(max_length=20, choices=Mode.choices)
-    montant = models.DecimalField(max_digits=12, decimal_places=2)
+    montant = models.DecimalField(max_digits=14, decimal_places=3)
 
     class Meta:
         verbose_name = "paiement"
 
     def __str__(self):
-        return f"{self.get_mode_display()} {self.montant} €"
+        return f"{self.get_mode_display()} {self.montant}"

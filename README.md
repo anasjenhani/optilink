@@ -28,6 +28,19 @@ frontend/
   nginx/         configurations HTTP (dev) et HTTPS (production)
 ```
 
+## Pays : Tunisie d'abord, puis d'autres pays
+
+OptiLink est conçu pour la Tunisie en premier lieu et s'ouvrira à d'autres pays. Rien de propre à un pays n'est écrit dans le code : chaque magasin est rattaché à un **pays** (`reseau.Pays`, modifiable dans l'administration) qui porte :
+
+- la monnaie et son nombre de décimales : dinar tunisien (TND) à 3 décimales, les millimes. Tous les montants sont stockés avec 3 décimales et arrondis à l'unité de la monnaie du magasin ;
+- les taux de TVA (Tunisie : 19 %, 13 %, 7 %), réglés par l'administrateur dans l'administration (rôle Administrateur système) : chaque prix d'article pointe vers un de ces taux, donc modifier un taux s'applique à tous les articles qui l'utilisent ; une vente déjà faite garde le taux appliqué ; chaque modification est tracée dans le journal d'audit ;
+- le droit de timbre (Tunisie : 1,000 TND), ajouté **aux factures seulement** et payé par le client : `net_a_payer = total_ttc + timbre_fiscal`. Un ticket de caisse n'en a pas ;
+- le fuseau horaire (année de numérotation des factures), l'indicatif téléphonique, et l'identifiant du prescripteur sur une ordonnance (Tunisie : n° d'inscription à l'Ordre des médecins ; France : n° RPPS à 11 chiffres).
+
+Un article a un prix et un taux de TVA par pays (`PrixArticle`) ; sans prix dans le pays du magasin, il n'y est pas vendable. Une vente garde la devise de son magasin. La Tunisie et la France sont créées à la migration ; un magasin existant est rattaché à la Tunisie.
+
+**Ticket, puis facture à part.** La caisse émet un ticket (`M01-T2026-000001`), sans timbre, avec un client facultatif. La facture n'est pas faite en caisse : c'est une étape à part (écran Factures, `POST /api/v1/factures/`), possible seulement quand la vente est **entièrement payée**. Elle est établie au nom d'un client (avec son matricule fiscal s'il s'agit d'une entreprise), numérotée dans sa propre suite (`M01-F2026-000001`) et porte le droit de timbre, payé par le client au moment de la facture. Une vente n'a qu'une facture. Droit `ventes.add_facture` : opticien, responsable de magasin et responsable régional ; le vendeur encaisse mais ne facture pas.
+
 ## Cloisonnement par magasin
 
 Chaque utilisateur reçoit des **affectations** : un rôle (groupe Django) sur une portée, un magasin, une région ou tout le réseau, avec des dates de début et de fin. À chaque requête, `PerimetreMagasinMiddleware` calcule les magasins autorisés, et le manager `ParMagasinManager` filtre automatiquement les requêtes des modèles de magasin. Les tâches Celery et les commandes d'administration ne sont pas filtrées. Pour lire volontairement hors périmètre, utiliser le manager `tous`.
@@ -44,10 +57,10 @@ PostgreSQL applique le même cloisonnement de son côté (Row-Level Security, `c
 ## Prototype caisse et stock
 
 - **Stock** (`apps.stock`) : `Article` (catalogue commun au réseau) et `MouvementStock` ; le stock d'un article dans un magasin est la somme de ses mouvements, jamais modifiés.
-- **Ventes** (`apps.ventes`) : `enregistrer_vente` écrit dans une seule transaction la vente, ses lignes, les sorties de stock, les paiements et le numéro de facture. Numérotation sans trou par magasin et par année (`M01-2026-000001`) : le compteur est verrouillé pendant la transaction et un échec annule aussi l'incrément.
+- **Ventes** (`apps.ventes`) : `enregistrer_vente` écrit dans une seule transaction la vente, ses lignes, les sorties de stock, les paiements et le numéro de facture. Numérotation sans trou par magasin et par année (`M01-2026-000001`) : tickets et factures ont chacun leur compteur, verrouillé pendant la transaction et un échec annule aussi l'incrément.
 - Contrôles : stock suffisant, paiements égaux au total, droit de vente sur le magasin choisi, remise réservée aux rôles qui ont `ventes.appliquer_remise`.
 - API : `/api/v1/articles/?magasin=…&recherche=…`, `/api/v1/ventes/`, `/api/v1/mouvements-stock/` (réceptions et ajustements).
-- Essai rapide : `python manage.py charger_demo` crée quelques articles et 10 unités de chacun dans chaque magasin actif.
+- Essai rapide : `python manage.py charger_demo` crée quelques articles avec un prix en Tunisie (TND) et en France, et 10 unités de chacun dans chaque magasin actif qui n'en a pas encore.
 
 La caisse suppose une liaison permanente avec le serveur (lien de secours 4G recommandé) ; un mode hors ligne changerait la numérotation et la gestion du stock.
 
@@ -115,4 +128,5 @@ Nginx redirige HTTP vers HTTPS (TLS 1.2 minimum, HSTS). La connexion Django vers
 
 - Reprise rapide par code PIN sur le poste de caisse
 - Notification de la direction à chaque changement de rôle ou d'affectation
+- Interface en arabe (écriture de droite à gauche) et en anglais
 - Lot Vendre, suite : client sur la vente, devis, avoirs et retours, tables spécialisées par famille d'article, export et anonymisation RGPD d'un client
