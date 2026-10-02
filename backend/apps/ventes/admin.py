@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Devis, Facture, LigneDevis, LigneVente, Paiement, Vente
+from .models import Avoir, Devis, Facture, LigneAvoir, LigneDevis, LigneVente, Paiement, Vente
 
 
 class LigneVenteInline(admin.TabularInline):
@@ -78,6 +78,32 @@ class DevisAdmin(admin.ModelAdmin):
         return Devis.tous.select_related("magasin", "client")
 
     # Un devis s'établit et change de statut depuis l'application.
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class LigneAvoirInline(admin.TabularInline):
+    model = LigneAvoir
+    extra = 0
+
+
+@admin.register(Avoir)
+class AvoirAdmin(admin.ModelAdmin):
+    list_display = ("numero", "magasin", "vente", "total_ttc", "montant_rembourse", "cree_le")
+    list_filter = ("magasin", "annulation")
+    search_fields = ("numero", "vente__numero")
+    inlines = [LigneAvoirInline]
+
+    def get_queryset(self, request):
+        return Avoir.tous.select_related("magasin", "vente")
+
+    # Un avoir s'émet depuis l'application et ne se modifie jamais.
     def has_add_permission(self, request):
         return False
 

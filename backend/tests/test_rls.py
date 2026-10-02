@@ -162,3 +162,25 @@ def test_devis_et_leurs_lignes_cloisonnes(tunis, monture, societe, reseau, creer
     rls.poser({reseau["lille"].id})
     assert codes_visibles("ventes_devis", "numero") == []
     assert codes_visibles("ventes_lignedevis", "libelle") == []
+
+
+def test_avoirs_et_leurs_lignes_cloisonnes(tunis, monture, reseau, creer_utilisateur):
+    from decimal import Decimal
+
+    from apps.ventes.services import annuler_vente, enregistrer_vente
+
+    vente = enregistrer_vente(
+        magasin=tunis,
+        vendeur=creer_utilisateur("v"),
+        lignes=[{"article": monture, "quantite": 1}],
+        paiements=[{"mode": "carte", "montant": Decimal("289.500")}],
+    )
+    annuler_vente(
+        vente=vente, motif="x", emetteur=creer_utilisateur("r"), mode_remboursement="carte"
+    )
+    rls.poser({tunis.id})
+    assert len(codes_visibles("ventes_avoir", "numero")) == 1
+    assert len(codes_visibles("ventes_ligneavoir", "libelle")) == 1
+    rls.poser({reseau["lille"].id})
+    assert codes_visibles("ventes_avoir", "numero") == []
+    assert codes_visibles("ventes_ligneavoir", "libelle") == []
