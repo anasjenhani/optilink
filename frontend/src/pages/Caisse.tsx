@@ -51,7 +51,7 @@ export function Caisse() {
   const [enCommande, setEnCommande] = useState(false);
   const [acompte, setAcompte] = useState("");
   const [livraisonPrevue, setLivraisonPrevue] = useState("");
-  // Vide : le serveur prend la plus petite péniche libre du magasin.
+  // Bac numéroté où le vendeur range l'équipement de la commande.
   const [peniche, setPeniche] = useState("");
   // Client facultatif sur le ticket ; il sera repris pour la facture, générée à part.
   const [avecClient, setAvecClient] = useState(false);
@@ -88,7 +88,7 @@ export function Caisse() {
           ? {
               commande: true,
               ...(livraisonPrevue ? { livraison_prevue_le: livraisonPrevue } : {}),
-              ...(peniche ? { peniche: Number(peniche) } : {}),
+              peniche: Number(peniche),
             }
           : {}),
       }),
@@ -307,9 +307,10 @@ export function Caisse() {
               <TextField
                 label="Péniche"
                 type="number"
+                required
                 value={peniche}
                 onChange={(e) => setPeniche(e.target.value)}
-                helperText="Vide : la première libre"
+                helperText="N° du bac où ranger la commande"
                 slotProps={{
                   htmlInput: { min: 1, max: magasins.data?.find((m) => m.id === magasin)?.nombre_peniches },
                 }}
@@ -337,7 +338,7 @@ export function Caisse() {
             <Button
               variant="contained"
               size="large"
-              disabled={panier.length === 0 || vente.isPending}
+              disabled={panier.length === 0 || vente.isPending || (commande && !peniche)}
               onClick={() => vente.mutate()}
             >
               {commande ? "Enregistrer la commande" : "Encaisser"}

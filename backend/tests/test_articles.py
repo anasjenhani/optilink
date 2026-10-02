@@ -5,6 +5,7 @@ from decimal import Decimal
 import pytest
 from django.core.exceptions import ValidationError
 
+from apps.achats.models import Fournisseur
 from apps.stock.models import Article, Lentille, Monture, PrixArticle, Verre
 from tests.conftest import tva
 
@@ -48,6 +49,8 @@ def catalogue(tunis, monture):
         lentilles_par_boite=6,
     )
     etui = Article.objects.create(reference="DIV-1", libelle="Étui rigide", famille="divers")
+    labo = Fournisseur.objects.create(nom="Fournisseur test", pays=tunis.pays)
+    Article.objects.update(fournisseur=labo)
     for article in (verre, lentille, etui):
         PrixArticle.objects.create(
             article=article,
@@ -55,7 +58,15 @@ def catalogue(tunis, monture):
             prix_vente_ttc=Decimal("10.000"),
             tva=tva(tunis.pays, 19),
         )
-    return {"monture": monture, "verre": verre, "lentille": lentille, "divers": etui}
+    return {
+        nom: Article.objects.get(pk=article.pk)
+        for nom, article in {
+            "monture": monture,
+            "verre": verre,
+            "lentille": lentille,
+            "divers": etui,
+        }.items()
+    }
 
 
 @pytest.fixture
@@ -122,11 +133,13 @@ def test_creation_d_une_monture_dans_l_administration(creer_utilisateur, tunis):
     ).persistent_id
     session.save()
 
+    labo = Fournisseur.objects.create(nom="Nano Vista", pays=tunis.pays)
     vide = {"TOTAL_FORMS": "0", "INITIAL_FORMS": "0", "MIN_NUM_FORMS": "0", "MAX_NUM_FORMS": "1"}
     formulaire = {
         "reference": "MON-9",
         "libelle": "Monture enfant",
         "famille": "monture",
+        "fournisseur": str(labo.pk),
         "est_actif": "on",
         **{f"monture-{k}": v for k, v in {**vide, "TOTAL_FORMS": "1"}.items()},
         "monture-0-marque": "Nano",
@@ -144,8 +157,6 @@ def test_creation_d_une_monture_dans_l_administration(creer_utilisateur, tunis):
 
 def test_fournisseur_et_code_barres(api, tunis, catalogue):
     from django.db import IntegrityError, transaction
-
-    from apps.achats.models import Fournisseur
 
     essilor = Fournisseur.objects.create(nom="Essilor Tunisie", pays=tunis.pays)
     verre = catalogue["verre"]

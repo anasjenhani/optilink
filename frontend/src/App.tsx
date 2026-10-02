@@ -22,6 +22,7 @@ import { Clients } from "./pages/Clients";
 import { Commandes } from "./pages/Commandes";
 import { Devis } from "./pages/Devis";
 import { Factures } from "./pages/Factures";
+import { Imports } from "./pages/Imports";
 import { Magasins } from "./pages/Magasins";
 import { Verres } from "./pages/Verres";
 
@@ -72,6 +73,14 @@ function Contenu({ session }: { session: EtatSession }) {
         />
       )}
       {peut(session, "stock.view_article") && <Catalogue />}
+      {(peut(session, "stock.add_article") || peut(session, "stock.add_mouvementstock")) && (
+        <Imports
+          droits={{
+            catalogue: peut(session, "stock.add_article") && peut(session, "stock.change_prixarticle"),
+            stock: peut(session, "stock.add_mouvementstock"),
+          }}
+        />
+      )}
       {peut(session, "reseau.view_magasin") && <Magasins />}
       <Accueil />
     </Stack>

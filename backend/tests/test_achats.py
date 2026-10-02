@@ -16,7 +16,7 @@ from apps.achats.services import (
 )
 from apps.stock.models import Article, PrixArticle
 from apps.ventes.services import enregistrer_vente, livrer_commande
-from tests.conftest import tva
+from tests.conftest import peniche, tva
 
 
 @pytest.fixture
@@ -42,6 +42,7 @@ def commande_client(tunis, monture, verre, vendeur, solde=False):
         lignes=[{"article": monture, "quantite": 1}, {"article": verre, "quantite": 2}],
         paiements=[{"mode": "carte", "montant": Decimal("649.500" if solde else "200.000")}],
         commande=True,
+        peniche=peniche(),
     )
 
 

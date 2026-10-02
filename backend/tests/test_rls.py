@@ -192,7 +192,7 @@ def test_commandes_fournisseurs_cloisonnees(tunis, monture, reseau, creer_utilis
     from apps.achats.models import Fournisseur
     from apps.stock.models import Article, PrixArticle
     from apps.ventes.services import enregistrer_vente
-    from tests.conftest import recevoir_verres, tva
+    from tests.conftest import peniche, recevoir_verres, tva
 
     verre = Article.objects.create(
         reference="V", libelle="Verre", famille="verre", sur_commande=True
@@ -207,6 +207,7 @@ def test_commandes_fournisseurs_cloisonnees(tunis, monture, reseau, creer_utilis
         lignes=[{"article": verre, "quantite": 1}],
         paiements=[],
         commande=True,
+        peniche=peniche(),
     )
     recevoir_verres(vente, creer_utilisateur("o"))
     rls.poser({tunis.id})

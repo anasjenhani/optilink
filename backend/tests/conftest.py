@@ -134,6 +134,20 @@ def societe(tunis):
     )
 
 
+_peniches = iter(())
+
+
+@pytest.fixture(autouse=True)
+def _peniches_libres():
+    global _peniches
+    _peniches = iter(range(1, 201))
+
+
+def peniche():
+    """Prochaine péniche libre du magasin de test : le vendeur la saisit à chaque commande."""
+    return next(_peniches)
+
+
 def recevoir_verres(vente, utilisateur):
     """Commande au fournisseur les verres d'une commande client, puis les réceptionne."""
     from apps.achats.models import Fournisseur

@@ -139,12 +139,14 @@ test("passe un devis en commande avec acompte", async () => {
   const liste = await screen.findByRole("list", { name: "Devis du client" });
   fireEvent.click(screen.getByRole("checkbox", { name: /En commande/ }));
   fireEvent.change(screen.getByLabelText("Acompte"), { target: { value: "300" } });
+  expect(within(liste).getByRole("button", { name: "Commander" })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText(/Péniche/), { target: { value: "12" } });
   fireEvent.click(within(liste).getByRole("button", { name: "Commander" }));
 
   expect(await screen.findByText(/encaissé|passé en commande/)).toBeInTheDocument();
   expect(envois[0]).toEqual({
     url: "/api/v1/devis/d1/encaisser/",
-    corps: { paiements: [{ mode: "carte", montant: "300" }], commande: true },
+    corps: { paiements: [{ mode: "carte", montant: "300" }], commande: true, peniche: 12 },
   });
 });
 

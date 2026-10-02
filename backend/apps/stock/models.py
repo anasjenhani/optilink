@@ -28,11 +28,11 @@ class Article(ModeleDeBase):
     libelle = models.CharField(max_length=200)
     famille = models.CharField(max_length=20, choices=Famille.choices)
     code_barres = models.CharField(max_length=40, blank=True, db_index=True)
+    # Obligatoire à la saisie et à l'import ; vide seulement pour les articles d'avant.
     fournisseur = models.ForeignKey(
         "achats.Fournisseur",
         on_delete=models.PROTECT,
         null=True,
-        blank=True,
         related_name="articles",
     )
     reference_fournisseur = models.CharField(

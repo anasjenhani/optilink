@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.core.management.base import BaseCommand
 
+from apps.achats.models import Fournisseur
 from apps.reseau.models import Magasin, Pays, TauxTva
 from apps.stock.models import Article, Lentille, Monture, MouvementStock, PrixArticle, Verre
 
@@ -46,6 +47,16 @@ ARTICLES = [
     ),
 ]
 
+
+# Fournisseur de chaque article de démonstration, par préfixe de référence.
+FOURNISSEURS = {
+    "MON-RB": "Luxottica Tunisie",
+    "MON-OA": "Lindberg",
+    "SOL": "Safilo Tunisie",
+    "LEN": "Johnson & Johnson Vision",
+    "VER": "Essilor Tunisie",
+    "ACC": "Optique Accessoires",
+}
 
 # Caractéristiques des articles de démonstration, par référence.
 FICHES = {
@@ -127,11 +138,16 @@ class Command(BaseCommand):
         pays = {p.code: p for p in Pays.objects.all()}
         magasins = list(Magasin.tous.filter(est_actif=True))
         for reference, libelle, famille, tarifs in ARTICLES:
+            nom = next(n for prefixe, n in FOURNISSEURS.items() if reference.startswith(prefixe))
+            fournisseur, _ = Fournisseur.objects.get_or_create(
+                nom=nom, defaults={"pays": pays["TN"]}
+            )
             article, _ = Article.objects.get_or_create(
                 reference=reference,
                 defaults={
                     "libelle": libelle,
                     "famille": famille,
+                    "fournisseur": fournisseur,
                     "sur_commande": famille == "verre",
                 },
             )
