@@ -57,6 +57,7 @@ PostgreSQL applique le même cloisonnement de son côté (Row-Level Security, `c
 ## Prototype caisse et stock
 
 - **Stock** (`apps.stock`) : `Article` (catalogue commun au réseau) et `MouvementStock` ; le stock d'un article dans un magasin est la somme de ses mouvements, jamais modifiés.
+- **Familles d'articles** : monture, verre, lentille et divers. Les trois premières ont leur fiche (`Monture` : marque, modèle, couleur, matière, type, genre, calibre □ pont - branche, solaire ; `Verre` : marque, gamme, géométrie, indice, matière, traitements, photochromique, teinte, diamètre ; `Lentille` : marque, modèle, renouvellement, type, rayon, diamètre, puissance, cylindre, axe, addition, nombre par boîte). Les articles divers (étuis, produits d'entretien…) n'ont que leur libellé. Les articles se créent dans l'administration Django, où la fiche de la famille se remplit avec l'article. L'écran Catalogue les liste par famille avec prix et stock du magasin, et la caisse et les devis affichent leurs caractéristiques. API `/api/v1/articles/?famille=…&marque=…&recherche=…` (recherche aussi sur marque, modèle et gamme).
 - **Ventes** (`apps.ventes`) : `enregistrer_vente` écrit dans une seule transaction la vente, ses lignes, les sorties de stock, les paiements et le numéro de facture. Numérotation sans trou par magasin et par année (`M01-2026-000001`) : tickets et factures ont chacun leur compteur, verrouillé pendant la transaction et un échec annule aussi l'incrément.
 - Contrôles : stock suffisant, paiements égaux au total, droit de vente sur le magasin choisi, remise réservée aux rôles qui ont `ventes.appliquer_remise`.
 - API : `/api/v1/articles/?magasin=…&recherche=…`, `/api/v1/ventes/`, `/api/v1/mouvements-stock/` (réceptions et ajustements).
@@ -155,4 +156,5 @@ Nginx redirige HTTP vers HTTPS (TLS 1.2 minimum, HSTS). La connexion Django vers
 - Reprise rapide par code PIN sur le poste de caisse
 - Notification de la direction à chaque changement de rôle ou d'affectation
 - Interface en arabe (écriture de droite à gauche) et en anglais
-- Lot Vendre, suite : tables spécialisées par famille d'article, export et anonymisation RGPD d'un client
+- Lot Vendre, suite : export et anonymisation RGPD d'un client
+- Création des articles depuis l'application (aujourd'hui dans l'administration)

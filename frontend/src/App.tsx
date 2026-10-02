@@ -17,6 +17,7 @@ import { VerificationMfa } from "./auth/VerificationMfa";
 import { Accueil } from "./pages/Accueil";
 import { Avoirs } from "./pages/Avoirs";
 import { Caisse } from "./pages/Caisse";
+import { Catalogue } from "./pages/Catalogue";
 import { Clients } from "./pages/Clients";
 import { Commandes } from "./pages/Commandes";
 import { Devis } from "./pages/Devis";
@@ -70,6 +71,7 @@ function Contenu({ session }: { session: EtatSession }) {
           }}
         />
       )}
+      {peut(session, "stock.view_article") && <Catalogue />}
       {peut(session, "reseau.view_magasin") && <Magasins />}
       <Accueil />
     </Stack>

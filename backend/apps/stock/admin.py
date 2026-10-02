@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Article, MouvementStock, PrixArticle
+from .models import Article, Lentille, Monture, MouvementStock, PrixArticle, Verre
 
 
 class PrixArticleInline(admin.TabularInline):
@@ -8,12 +8,74 @@ class PrixArticleInline(admin.TabularInline):
     extra = 1
 
 
+class MontureInline(admin.StackedInline):
+    model = Monture
+    fields = (
+        ("marque", "modele"),
+        ("couleur", "matiere"),
+        ("type", "genre", "solaire"),
+        ("calibre", "pont", "branche"),
+    )
+
+
+class VerreInline(admin.StackedInline):
+    model = Verre
+    fields = (
+        ("marque", "gamme"),
+        ("geometrie", "indice", "matiere"),
+        "traitements",
+        ("photochromique", "teinte", "diametre"),
+    )
+
+
+class LentilleInline(admin.StackedInline):
+    model = Lentille
+    fields = (
+        ("marque", "modele"),
+        ("renouvellement", "type", "lentilles_par_boite"),
+        ("rayon", "diametre"),
+        ("puissance", "cylindre", "axe", "addition"),
+    )
+
+
+CARACTERISTIQUES = {
+    Article.Famille.MONTURE: MontureInline,
+    Article.Famille.VERRE: VerreInline,
+    Article.Famille.LENTILLE: LentilleInline,
+}
+
+
 @admin.register(Article)
 class ArticleAdmin(admin.ModelAdmin):
-    inlines = [PrixArticleInline]
-    list_display = ("reference", "libelle", "famille", "est_actif")
+    list_display = ("reference", "libelle", "famille", "marque", "est_actif")
     list_filter = ("famille", "est_actif")
-    search_fields = ("reference", "libelle", "code_barres")
+    search_fields = (
+        "reference",
+        "libelle",
+        "code_barres",
+        "monture__marque",
+        "monture__modele",
+        "verre__marque",
+        "verre__gamme",
+        "lentille__marque",
+        "lentille__modele",
+    )
+
+    def get_inlines(self, request, obj):
+        # À la création, la fiche de la famille choisie est la seule enregistrée : les autres
+        # restent vides. Ensuite, seule celle de la famille de l'article est proposée.
+        if obj is None:
+            return [*CARACTERISTIQUES.values(), PrixArticleInline]
+        fiche = CARACTERISTIQUES.get(obj.famille)
+        return [fiche, PrixArticleInline] if fiche else [PrixArticleInline]
+
+    @admin.display(description="marque")
+    def marque(self, article):
+        fiche = article.caracteristiques
+        return fiche.marque if fiche else ""
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("monture", "verre", "lentille")
 
 
 @admin.register(MouvementStock)

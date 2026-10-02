@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand
 
 from apps.reseau.models import Magasin, Pays, TauxTva
-from apps.stock.models import Article, MouvementStock, PrixArticle
+from apps.stock.models import Article, Lentille, Monture, MouvementStock, PrixArticle, Verre
 
 # Prix de démonstration par pays : (prix TTC, taux de TVA). Taux réels à valider.
 ARTICLES = [
@@ -37,14 +37,84 @@ ARTICLES = [
         "verre",
         {"TN": ("180.000", "7"), "FR": ("190.00", "5.50")},
     ),
-    ("ACC-ET-005", "Étui rigide", "accessoire", {"TN": ("25.000", "19"), "FR": ("15.00", "20")}),
+    ("ACC-ET-005", "Étui rigide", "divers", {"TN": ("25.000", "19"), "FR": ("15.00", "20")}),
     (
         "ACC-SP-006",
         "Spray nettoyant 30 ml",
-        "accessoire",
+        "divers",
         {"TN": ("12.500", "19"), "FR": ("6.90", "20")},
     ),
 ]
+
+
+# Caractéristiques des articles de démonstration, par référence.
+FICHES = {
+    "MON-RB-001": (
+        Monture,
+        {
+            "marque": "Ray-Ban",
+            "modele": "RB5154",
+            "couleur": "écaille",
+            "matiere": "acétate",
+            "type": "cerclee",
+            "genre": "mixte",
+            "calibre": 51,
+            "pont": 21,
+            "branche": 145,
+        },
+    ),
+    "MON-OA-002": (
+        Monture,
+        {
+            "marque": "Lindberg",
+            "modele": "Air Titanium",
+            "couleur": "noir",
+            "matiere": "titane",
+            "type": "percee",
+            "genre": "homme",
+            "calibre": 52,
+            "pont": 18,
+            "branche": 140,
+        },
+    ),
+    "SOL-PO-003": (
+        Monture,
+        {
+            "marque": "Polaroid",
+            "modele": "PLD 2108",
+            "couleur": "noir",
+            "type": "cerclee",
+            "genre": "mixte",
+            "calibre": 55,
+            "pont": 17,
+            "branche": 145,
+            "solaire": True,
+        },
+    ),
+    "LEN-MJ-004": (
+        Lentille,
+        {
+            "marque": "Acuvue",
+            "modele": "Moist",
+            "renouvellement": "journaliere",
+            "type": "spherique",
+            "rayon": Decimal("8.5"),
+            "diametre": Decimal("14.2"),
+            "lentilles_par_boite": 30,
+        },
+    ),
+    "VER-PR-007": (
+        Verre,
+        {
+            "marque": "Essilor",
+            "gamme": "Varilux Comfort",
+            "geometrie": "progressif",
+            "indice": Decimal("1.600"),
+            "matiere": "organique",
+            "traitements": "antireflet, durci",
+        },
+    ),
+}
 
 
 class Command(BaseCommand):
@@ -65,6 +135,9 @@ class Command(BaseCommand):
                     "sur_commande": famille == "verre",
                 },
             )
+            if reference in FICHES:
+                modele, valeurs = FICHES[reference]
+                modele.objects.get_or_create(article=article, defaults=valeurs)
             for code, (prix, taux) in tarifs.items():
                 if code in pays:
                     tva = TauxTva.objects.filter(pays=pays[code], taux=Decimal(taux)).first()

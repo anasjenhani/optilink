@@ -110,7 +110,7 @@ def test_une_seule_facture_par_vente_et_client_obligatoire(
 
 
 def test_article_sans_prix_dans_le_pays_invendable(tunis, creer_utilisateur):
-    article = Article.objects.create(reference="X", libelle="X", famille="accessoire")
+    article = Article.objects.create(reference="X", libelle="X", famille="divers")
     MouvementStock.tous.create(magasin=tunis, article=article, quantite=1, type="reception")
     with pytest.raises(VenteInvalide, match="pas de prix en Tunisie"):
         enregistrer_vente(
@@ -124,7 +124,7 @@ def test_article_sans_prix_dans_le_pays_invendable(tunis, creer_utilisateur):
 def test_prix_controle_selon_la_monnaie(tunis, reseau):
     from django.core.exceptions import ValidationError
 
-    article = Article.objects.create(reference="Y", libelle="Y", famille="accessoire")
+    article = Article.objects.create(reference="Y", libelle="Y", famille="divers")
     PrixArticle(
         article=article, pays=tunis.pays, prix_vente_ttc=Decimal("12.345"), tva=tva(tunis.pays, 19)
     ).full_clean()
