@@ -46,6 +46,11 @@ export function Caisse() {
   const [panier, setPanier] = useState<Ligne[]>([]);
   const [mode, setMode] = useState<ModePaiement>("carte");
   const [derniereVente, setDerniereVente] = useState<Vente | null>(null);
+  // Commande : acompte maintenant, solde à la livraison. Obligatoire dès qu'un article est
+  // commandé au fournisseur (verres…).
+  const [enCommande, setEnCommande] = useState(false);
+  const [acompte, setAcompte] = useState("");
+  const [livraisonPrevue, setLivraisonPrevue] = useState("");
   // Client facultatif sur le ticket ; il sera repris pour la facture, générée à part.
   const [avecClient, setAvecClient] = useState(false);
   const [rechercheClient, setRechercheClient] = useState("");
@@ -63,6 +68,9 @@ export function Caisse() {
   });
 
   const total = panier.reduce((somme, l) => somme + unites(l.article.prix_vente_ttc) * l.quantite, 0);
+  const commandeImposee = panier.some((l) => l.article.sur_commande);
+  const commande = enCommande || commandeImposee;
+  const montantAcompte = Math.min(unites(acompte || "0"), total);
 
   const vente = useMutation({
     mutationFn: () =>
@@ -70,11 +78,18 @@ export function Caisse() {
         magasin,
         client: avecClient ? client?.id : undefined,
         lignes: panier.map((l) => ({ article: l.article.id, quantite: l.quantite })),
-        paiements: [{ mode, montant: versTexte(total, monnaie.decimales) }],
+        paiements:
+          commande && montantAcompte === 0
+            ? []
+            : [{ mode, montant: versTexte(commande ? montantAcompte : total, monnaie.decimales) }],
+        ...(commande ? { commande: true, ...(livraisonPrevue ? { livraison_prevue_le: livraisonPrevue } : {}) } : {}),
       }),
     onSuccess: (enregistree) => {
       setDerniereVente(enregistree);
       setPanier([]);
+      setEnCommande(false);
+      setAcompte("");
+      setLivraisonPrevue("");
       setAvecClient(false);
       setClient(null);
       setRechercheClient("");
@@ -145,14 +160,14 @@ export function Caisse() {
                 key={article.id}
                 disableGutters
                 secondaryAction={
-                  <Button size="small" onClick={() => ajouter(article)} disabled={!article.stock}>
+                  <Button size="small" onClick={() => ajouter(article)} disabled={!article.sur_commande && !article.stock}>
                     Ajouter
                   </Button>
                 }
               >
                 <ListItemText
                   primary={`${article.libelle} · ${formaterTexte(article.prix_vente_ttc, monnaie)}`}
-                  secondary={`${article.reference} · stock ${article.stock ?? "?"}`}
+                  secondary={`${article.reference} · ${article.sur_commande ? "sur commande" : `stock ${article.stock ?? "?"}`}`}
                 />
               </ListItem>
             ))}
@@ -179,7 +194,7 @@ export function Caisse() {
                       <IconButton
                         size="small"
                         aria-label="Ajouter un"
-                        disabled={ligne.quantite >= (ligne.article.stock ?? 0)}
+                        disabled={!ligne.article.sur_commande && ligne.quantite >= (ligne.article.stock ?? 0)}
                         onClick={() => changerQuantite(ligne, 1)}
                       >
                         +
@@ -227,6 +242,39 @@ export function Caisse() {
             </>
           )}
 
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={commande}
+                disabled={commandeImposee}
+                onChange={(e) => setEnCommande(e.target.checked)}
+              />
+            }
+            label={
+              commandeImposee
+                ? "Commande : verres commandés au fournisseur, solde à la livraison"
+                : "Commande : acompte maintenant, solde à la livraison"
+            }
+          />
+          {commande && (
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <TextField
+                label="Acompte"
+                type="number"
+                value={acompte}
+                onChange={(e) => setAcompte(e.target.value)}
+                helperText={`Reste à la livraison : ${formater(total - montantAcompte, monnaie)}`}
+              />
+              <TextField
+                label="Livraison prévue le"
+                type="date"
+                value={livraisonPrevue}
+                onChange={(e) => setLivraisonPrevue(e.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+            </Stack>
+          )}
+
           <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
             <Typography variant="h5" sx={{ flexGrow: 1 }}>
               Total : {formater(total, monnaie)}
@@ -250,15 +298,18 @@ export function Caisse() {
               disabled={panier.length === 0 || vente.isPending}
               onClick={() => vente.mutate()}
             >
-              Encaisser
+              {commande ? "Enregistrer la commande" : "Encaisser"}
             </Button>
           </Stack>
 
           {vente.isError && <Alert severity="error">{vente.error.message}</Alert>}
           {derniereVente && (
             <Alert severity="success">
-              Ticket {derniereVente.numero},{" "}
-              {formaterTexte(derniereVente.total_ttc, { devise: derniereVente.devise, decimales: monnaie.decimales })}.
+              {derniereVente.statut === "en_commande" ? "Commande" : "Ticket"} {derniereVente.numero},{" "}
+              {formaterTexte(derniereVente.total_ttc, { devise: derniereVente.devise, decimales: monnaie.decimales })}
+              {derniereVente.statut === "en_commande" &&
+                `, reste ${formaterTexte(derniereVente.reste_a_payer, { devise: derniereVente.devise, decimales: monnaie.decimales })} à la livraison`}
+              .
             </Alert>
           )}
         </Stack>

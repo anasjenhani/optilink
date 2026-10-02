@@ -77,6 +77,12 @@ La caisse suppose une liaison permanente avec le serveur (lien de secours 4G rec
 - **Suite du devis.** En cours, puis accepté ou refusé (`/accepter/`, `/refuser/`), puis encaissé (`/encaisser/`) : l'encaissement crée le ticket au **prix du devis**, même si le tarif a changé entre-temps, avec le client du devis ; la facture se génère ensuite comme pour toute vente. Un devis expiré, refusé ou déjà encaissé ne s'encaisse plus.
 - **Droits.** Toute l'équipe de vente établit des devis (`ventes.add_devis`) ; une remise exige `ventes.appliquer_remise`, l'encaissement `ventes.add_vente`, le rattachement d'une ordonnance l'accès aux ordonnances. Le vendeur voit qu'un devis existe, pas l'ordonnance associée. Direction et comptable : lecture. Devis et lignes sont cloisonnés par magasin dans PostgreSQL ; les changements de statut sont dans le journal d'audit.
 
+## Commandes avec acompte
+
+- **Commande** : une vente enregistrée en caisse avec `commande: true` (case « Commande » de la caisse, ou « En commande » sur un devis). Le client verse un acompte, éventuellement nul ; la vente reste « en commande » avec son reste à payer et une date de livraison prévue.
+- **Articles sur commande** (`Article.sur_commande`, les verres par défaut) : commandés au fournisseur pour chaque client, ils n'ont pas de stock. Une vente qui en contient est forcément une commande. Les autres articles (monture…) sortent du stock dès la commande.
+- **Règlements et livraison** (écran Commandes) : `POST /api/v1/ventes/{id}/reglement/` encaisse un règlement sans dépasser le reste ; `POST /api/v1/ventes/{id}/livrer/` remet l'équipement et exige le solde, encaissé au plus tard à ce moment-là. Chaque paiement garde sa date et la personne qui l'a reçu. La facture reste possible seulement une fois la vente soldée.
+
 ## Démarrer en développement
 
 Prérequis : Docker avec Docker Compose.
@@ -135,4 +141,4 @@ Nginx redirige HTTP vers HTTPS (TLS 1.2 minimum, HSTS). La connexion Django vers
 - Reprise rapide par code PIN sur le poste de caisse
 - Notification de la direction à chaque changement de rôle ou d'affectation
 - Interface en arabe (écriture de droite à gauche) et en anglais
-- Lot Vendre, suite : acomptes sur commande, avoirs et retours, tables spécialisées par famille d'article, export et anonymisation RGPD d'un client
+- Lot Vendre, suite : avoirs et retours, commandes fournisseurs de verres, tables spécialisées par famille d'article, export et anonymisation RGPD d'un client

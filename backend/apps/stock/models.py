@@ -27,6 +27,10 @@ class Article(ModeleDeBase):
     libelle = models.CharField(max_length=200)
     famille = models.CharField(max_length=20, choices=Famille.choices)
     code_barres = models.CharField(max_length=40, blank=True, db_index=True)
+    sur_commande = models.BooleanField(
+        default=False,
+        help_text="Commandé au fournisseur pour chaque client (verres…) : hors stock du magasin.",
+    )
     est_actif = models.BooleanField(default=True)
 
     class Meta:
