@@ -36,6 +36,10 @@ INSTALLED_APPS = [
     "rest_framework",
     "django_filters",
     "drf_spectacular",
+    "django_otp",
+    "django_otp.plugins.otp_totp",
+    "django_otp.plugins.otp_static",
+    "auditlog",
     "core",
     "apps.securite",
     "apps.reseau",
@@ -48,6 +52,8 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django_otp.middleware.OTPMiddleware",
+    "auditlog.middleware.AuditlogMiddleware",
     "core.middleware.PerimetreMagasinMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -101,6 +107,8 @@ else:
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "securite.Utilisateur"
+# Les permissions viennent uniquement des rôles des affectations en cours.
+AUTHENTICATION_BACKENDS = ["apps.securite.backends.PermissionsParAffectationBackend"]
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -134,14 +142,26 @@ CELERY_BROKER_URL = env("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = None
 CELERY_TASK_ACKS_LATE = True
 CELERY_TIMEZONE = TIME_ZONE
+CELERY_BEAT_SCHEDULE = {
+    "desactiver-comptes-inactifs": {
+        "task": "apps.securite.tasks.desactiver_comptes_inactifs",
+        "schedule": 24 * 60 * 60,
+    },
+}
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication",
     ],
+    # Refus par défaut : session ouverte, MFA validée et permission de l'action.
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticated",
+        "core.permissions.MfaVerifiee",
+        "core.permissions.PermissionsParAction",
     ],
+    "DEFAULT_THROTTLE_RATES": {
+        "connexion": env("THROTTLE_CONNEXION", "10/min"),
+        "mfa": env("THROTTLE_MFA", "10/min"),
+    },
     "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
@@ -154,6 +174,16 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
 }
 
+# Sécurité : MFA, sessions et comptes.
+MFA_OBLIGATOIRE = env_bool("MFA_OBLIGATOIRE", True)
+OTP_TOTP_ISSUER = "OptiLink"
+COMPTES_INACTIFS_JOURS = int(env("COMPTES_INACTIFS_JOURS", "90"))
+
+# Journal d'audit : le manager de base évite que le filtre de périmètre masque l'état précédent.
+AUDITLOG_USE_BASE_MANAGER = True
+
+SESSION_COOKIE_AGE = int(env("SESSION_DUREE_SECONDES", str(10 * 60 * 60)))
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"

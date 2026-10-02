@@ -7,3 +7,6 @@ celery[redis]>=5.5,<6
 django-redis>=5.4
 whitenoise>=6.9
 gunicorn>=23.0
+django-otp>=1.7,<2
+django-auditlog>=3.4,<4
+qrcode>=8.2
