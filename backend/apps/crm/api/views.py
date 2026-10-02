@@ -12,7 +12,9 @@ from .serializers import ClientSerializer
     list=extend_schema(
         parameters=[
             OpenApiParameter(
-                "recherche", OpenApiTypes.STR, description="Nom, prénom, téléphone ou e-mail"
+                "recherche",
+                OpenApiTypes.STR,
+                description="Nom, prénom, téléphones, e-mail, société ou matricule fiscal",
             )
         ]
     )
@@ -38,7 +40,10 @@ class ClientViewSet(
                 Q(nom__icontains=mot)
                 | Q(prenom__icontains=mot)
                 | Q(telephone__icontains=mot)
+                | Q(telephone_2__icontains=mot)
                 | Q(email__icontains=mot)
+                | Q(societe__icontains=mot)
+                | Q(matricule_fiscal__icontains=mot)
             )
         return clients
 

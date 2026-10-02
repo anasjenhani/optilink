@@ -57,6 +57,15 @@ def test_facture_generee_a_part_avec_timbre(tunis, monture, societe, creer_utili
     assert facture.total_ttc == Decimal("289.500")
     assert (facture.timbre_fiscal, facture.net_a_payer) == (Decimal("1.000"), Decimal("290.500"))
     assert facture.mode_paiement_timbre == "especes"
+    # La facture est au nom de la société et garde ce qui était sur la fiche à l'émission.
+    societe.societe, societe.ville = "Autre nom SA", "Sfax"
+    societe.save()
+    facture.refresh_from_db()
+    assert (facture.client_nom, facture.client_adresse, facture.client_matricule_fiscal) == (
+        "Optique Services SARL",
+        "12 rue de Marseille, 1000 Tunis",
+        "1234567/A/M/000",
+    )
 
 
 def test_tickets_et_factures_ont_chacun_leur_suite(tunis, monture, societe, creer_utilisateur):

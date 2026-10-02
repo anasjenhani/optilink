@@ -18,14 +18,21 @@ class Client(ModeleDeBase):
     prenom = models.CharField(max_length=100)
     date_naissance = models.DateField(null=True, blank=True)
     telephone = models.CharField(max_length=20, blank=True, db_index=True)
+    telephone_2 = models.CharField("téléphone 2", max_length=20, blank=True, db_index=True)
     email = models.EmailField(blank=True)
     adresse = models.CharField(max_length=200, blank=True)
     code_postal = models.CharField(max_length=10, blank=True)
     ville = models.CharField(max_length=100, blank=True)
+    societe = models.CharField(
+        "société",
+        max_length=200,
+        blank=True,
+        help_text="Client professionnel : raison sociale, au nom de laquelle on facture.",
+    )
     matricule_fiscal = models.CharField(
         max_length=30,
         blank=True,
-        help_text="Entreprise cliente : identifiant fiscal sur la facture.",
+        help_text="Client professionnel : identifiant fiscal sur la facture.",
     )
     magasin_origine = models.ForeignKey(
         "reseau.Magasin", on_delete=models.PROTECT, related_name="+"
@@ -43,3 +50,13 @@ class Client(ModeleDeBase):
 
     def __str__(self):
         return f"{self.nom.upper()} {self.prenom}"
+
+    @property
+    def nom_de_facturation(self):
+        """La société pour un client professionnel, sinon la personne."""
+        return self.societe or str(self)
+
+    @property
+    def adresse_complete(self):
+        ville = " ".join(filter(None, [self.code_postal, self.ville]))
+        return ", ".join(filter(None, [self.adresse, ville]))

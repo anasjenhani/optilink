@@ -22,10 +22,12 @@ class ClientSerializer(serializers.ModelSerializer):
             "prenom",
             "date_naissance",
             "telephone",
+            "telephone_2",
             "email",
             "adresse",
             "code_postal",
             "ville",
+            "societe",
             "matricule_fiscal",
             "magasin_origine",
             "accepte_relances",
@@ -38,4 +40,12 @@ class ClientSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if self.instance is not None:
             attrs.pop("magasin_origine", None)
+        if "matricule_fiscal" in attrs:
+            attrs["matricule_fiscal"] = attrs["matricule_fiscal"].strip().upper()
+        societe = attrs.get("societe", getattr(self.instance, "societe", ""))
+        matricule = attrs.get("matricule_fiscal", getattr(self.instance, "matricule_fiscal", ""))
+        if matricule and not societe:
+            raise serializers.ValidationError(
+                {"societe": "Un matricule fiscal va avec le nom de la société."}
+            )
         return attrs

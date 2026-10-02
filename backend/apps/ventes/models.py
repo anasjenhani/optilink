@@ -119,6 +119,10 @@ class Facture(ModeleDeBase):
     magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
     vente = models.OneToOneField(Vente, on_delete=models.PROTECT, related_name="facture")
     client = models.ForeignKey("crm.Client", on_delete=models.PROTECT, related_name="factures")
+    # Copiés de la fiche client à l'émission : modifier la fiche ne change pas la facture.
+    client_nom = models.CharField(max_length=200, blank=True)
+    client_adresse = models.CharField(max_length=320, blank=True)
+    client_matricule_fiscal = models.CharField(max_length=30, blank=True)
     numero = models.CharField(max_length=40, unique=True)
     annee = models.PositiveSmallIntegerField()
     sequence = models.PositiveIntegerField()

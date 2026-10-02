@@ -20,13 +20,19 @@ import {
   creerClient,
   formaterOeil,
   listerPrescriptions,
+  modifierClient,
   saisirPrescription,
   type Client,
   type MesureOeil,
 } from "../api/clients";
 import { listerMagasins } from "../api/magasins";
 
-type Droits = { creerClient: boolean; voirOrdonnances: boolean; saisirOrdonnance: boolean };
+type Droits = {
+  creerClient: boolean;
+  modifierClient: boolean;
+  voirOrdonnances: boolean;
+  saisirOrdonnance: boolean;
+};
 
 function ChoixMagasin({ valeur, onChange }: { valeur: string; onChange: (id: string) => void }) {
   const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
@@ -47,54 +53,144 @@ function ChoixMagasin({ valeur, onChange }: { valeur: string; onChange: (id: str
   );
 }
 
-function NouveauClient({ onCree }: { onCree: (client: Client) => void }) {
-  const [saisie, setSaisie] = useState({ nom: "", prenom: "", telephone: "", email: "", magasin_origine: "" });
-  const [relances, setRelances] = useState(false);
-  const creation = useMutation({
-    mutationFn: () => creerClient({ ...saisie, accepte_relances: relances }),
-    onSuccess: onCree,
+const FICHE_VIDE = {
+  civilite: "" as Client["civilite"],
+  nom: "",
+  prenom: "",
+  date_naissance: "",
+  telephone: "",
+  telephone_2: "",
+  email: "",
+  adresse: "",
+  code_postal: "",
+  ville: "",
+  societe: "",
+  matricule_fiscal: "",
+  magasin_origine: "",
+  accepte_relances: false,
+};
+type SaisieFiche = typeof FICHE_VIDE;
+
+function versFiche(client: Client): SaisieFiche {
+  return { ...client, date_naissance: client.date_naissance ?? "" };
+}
+
+/** Création d'un client, ou modification de sa fiche quand ``client`` est donné. */
+function FicheClient({ client, onEnregistre }: { client?: Client; onEnregistre: (client: Client) => void }) {
+  const [saisie, setSaisie] = useState<SaisieFiche>(client ? versFiche(client) : FICHE_VIDE);
+  const [professionnel, setProfessionnel] = useState(Boolean(client?.societe || client?.matricule_fiscal));
+  const enregistrement = useMutation({
+    mutationFn: () => {
+      const fiche = {
+        ...saisie,
+        date_naissance: saisie.date_naissance || null,
+        societe: professionnel ? saisie.societe : "",
+        matricule_fiscal: professionnel ? saisie.matricule_fiscal : "",
+      };
+      if (!client) return creerClient(fiche);
+      const { magasin_origine: _, ...modifications } = fiche;
+      return modifierClient(client.id, modifications);
+    },
+    onSuccess: onEnregistre,
   });
   const choisirMagasin = useCallback(
     (id: string) => setSaisie((s) => ({ ...s, magasin_origine: id })),
     [],
   );
-  const champ = (nom: keyof typeof saisie, label: string) => (
+  const champ = (nom: Exclude<keyof SaisieFiche, "accepte_relances" | "civilite">, label: string, type = "text") => (
     <TextField
       size="small"
+      type={type}
       label={label}
       value={saisie[nom]}
       onChange={(e) => setSaisie({ ...saisie, [nom]: e.target.value })}
+      slotProps={type === "date" ? { inputLabel: { shrink: true } } : undefined}
     />
   );
 
   function envoyer(e: FormEvent) {
     e.preventDefault();
-    creation.mutate();
+    enregistrement.mutate();
   }
 
   return (
-    <Stack component="form" spacing={2} onSubmit={envoyer} aria-label="Nouveau client">
+    <Stack component="form" spacing={2} onSubmit={envoyer} aria-label={client ? "Fiche client" : "Nouveau client"}>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+        <TextField
+          select
+          size="small"
+          label="Civilité"
+          value={saisie.civilite}
+          onChange={(e) => setSaisie({ ...saisie, civilite: e.target.value as Client["civilite"] })}
+          sx={{ minWidth: 100 }}
+        >
+          <MenuItem value="">–</MenuItem>
+          <MenuItem value="mme">Mme</MenuItem>
+          <MenuItem value="m">M.</MenuItem>
+        </TextField>
         {champ("nom", "Nom")}
         {champ("prenom", "Prénom")}
+        {champ("date_naissance", "Date de naissance", "date")}
       </Stack>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-        {champ("telephone", "Téléphone")}
+        {champ("telephone", "Téléphone 1")}
+        {champ("telephone_2", "Téléphone 2")}
         {champ("email", "E-mail")}
-        <ChoixMagasin
-          valeur={saisie.magasin_origine}
-          onChange={choisirMagasin}
-        />
+      </Stack>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+        {champ("adresse", "Adresse")}
+        {champ("code_postal", "Code postal")}
+        {champ("ville", "Ville")}
+        {!client && <ChoixMagasin valeur={saisie.magasin_origine} onChange={choisirMagasin} />}
       </Stack>
       <FormControlLabel
-        control={<Checkbox checked={relances} onChange={(e) => setRelances(e.target.checked)} />}
+        control={<Checkbox checked={professionnel} onChange={(e) => setProfessionnel(e.target.checked)} />}
+        label="Client professionnel (société)"
+      />
+      {professionnel && (
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+          {champ("societe", "Nom de la société")}
+          {champ("matricule_fiscal", "Matricule fiscal")}
+        </Stack>
+      )}
+      <FormControlLabel
+        control={
+          <Checkbox
+            checked={saisie.accepte_relances}
+            onChange={(e) => setSaisie({ ...saisie, accepte_relances: e.target.checked })}
+          />
+        }
         label="Accepte les relances par e-mail ou SMS"
       />
-      {creation.isError && <Alert severity="error">{creation.error.message}</Alert>}
-      <Button type="submit" variant="contained" disabled={creation.isPending || !saisie.nom || !saisie.prenom}>
-        Créer le client
+      {enregistrement.isError && <Alert severity="error">{enregistrement.error.message}</Alert>}
+      <Button
+        type="submit"
+        variant="contained"
+        disabled={enregistrement.isPending || !saisie.nom || !saisie.prenom}
+      >
+        {client ? "Enregistrer la fiche" : "Créer le client"}
       </Button>
     </Stack>
+  );
+}
+
+function Coordonnees({ client }: { client: Client }) {
+  const ville = [client.code_postal, client.ville].filter(Boolean).join(" ");
+  const lignes = [
+    client.societe && `${client.societe}${client.matricule_fiscal ? ` · MF ${client.matricule_fiscal}` : ""}`,
+    [client.telephone, client.telephone_2, client.email].filter(Boolean).join(" · "),
+    [client.adresse, ville].filter(Boolean).join(", "),
+    client.date_naissance && `Né(e) le ${new Date(client.date_naissance).toLocaleDateString("fr-FR")}`,
+  ].filter(Boolean);
+  if (!lignes.length) return <Typography color="text.secondary">Pas de coordonnées</Typography>;
+  return (
+    <>
+      {lignes.map((ligne) => (
+        <Typography key={ligne as string} color="text.secondary">
+          {ligne}
+        </Typography>
+      ))}
+    </>
   );
 }
 
@@ -239,6 +335,8 @@ export function Clients({ droits }: { droits: Droits }) {
   const [recherche, setRecherche] = useState("");
   const [choisi, setChoisi] = useState<Client | null>(null);
   const [creation, setCreation] = useState(false);
+  const [edition, setEdition] = useState(false);
+  const queryClient = useQueryClient();
   const clients = useQuery({
     queryKey: ["clients", recherche],
     queryFn: () => chercherClients(recherche),
@@ -268,8 +366,8 @@ export function Clients({ droits }: { droits: Droits }) {
           </Stack>
 
           {creation && (
-            <NouveauClient
-              onCree={(client) => {
+            <FicheClient
+              onEnregistre={(client) => {
                 setCreation(false);
                 setChoisi(client);
               }}
@@ -280,10 +378,17 @@ export function Clients({ droits }: { droits: Droits }) {
           {clients.data?.length === 0 && <Typography color="text.secondary">Aucun client trouvé.</Typography>}
           <List dense>
             {clients.data?.map((client) => (
-              <ListItemButton key={client.id} selected={choisi?.id === client.id} onClick={() => setChoisi(client)}>
+              <ListItemButton
+                key={client.id}
+                selected={choisi?.id === client.id}
+                onClick={() => {
+                  setChoisi(client);
+                  setEdition(false);
+                }}
+              >
                 <ListItemText
                   primary={`${client.nom.toUpperCase()} ${client.prenom}`}
-                  secondary={[client.telephone, client.email, client.ville].filter(Boolean).join(" · ")}
+                  secondary={[client.societe, client.telephone, client.email, client.ville].filter(Boolean).join(" · ")}
                 />
               </ListItemButton>
             ))}
@@ -295,9 +400,26 @@ export function Clients({ droits }: { droits: Droits }) {
               <Typography variant="h6" component="h3">
                 {choisi.nom.toUpperCase()} {choisi.prenom}
               </Typography>
-              <Typography color="text.secondary">
-                {[choisi.telephone, choisi.email].filter(Boolean).join(" · ") || "Pas de coordonnées"}
-              </Typography>
+              {edition ? (
+                <FicheClient
+                  key={choisi.id}
+                  client={choisi}
+                  onEnregistre={(client) => {
+                    setEdition(false);
+                    setChoisi(client);
+                    void queryClient.invalidateQueries({ queryKey: ["clients"] });
+                  }}
+                />
+              ) : (
+                <>
+                  <Coordonnees client={choisi} />
+                  {droits.modifierClient && (
+                    <Button onClick={() => setEdition(true)} sx={{ alignSelf: "flex-start" }}>
+                      Modifier la fiche
+                    </Button>
+                  )}
+                </>
+              )}
               {droits.voirOrdonnances && <Ordonnances client={choisi} peutSaisir={droits.saisirOrdonnance} />}
             </>
           )}

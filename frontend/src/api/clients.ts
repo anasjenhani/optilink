@@ -7,16 +7,18 @@ export type Client = {
   prenom: string;
   date_naissance: string | null;
   telephone: string;
+  telephone_2: string;
   email: string;
+  adresse: string;
+  code_postal: string;
   ville: string;
+  societe: string;
+  matricule_fiscal: string;
   magasin_origine: string;
   accepte_relances: boolean;
 };
 
-export type SaisieClient = Pick<
-  Client,
-  "nom" | "prenom" | "telephone" | "email" | "magasin_origine" | "accepte_relances"
->;
+export type SaisieClient = Omit<Client, "id">;
 
 export type MesureOeil = { sphere: string; cylindre?: string; axe?: number | null; addition?: string | null };
 
@@ -42,6 +44,9 @@ export const chercherClients = (recherche: string) =>
 
 export const creerClient = (saisie: SaisieClient) =>
   appeler<Client>("/api/v1/clients/", { methode: "POST", corps: saisie });
+
+export const modifierClient = (id: string, saisie: Partial<SaisieClient>) =>
+  appeler<Client>(`/api/v1/clients/${id}/`, { methode: "PATCH", corps: saisie });
 
 /** Chaque appel est journalisé côté serveur comme une consultation du dossier. */
 export const listerPrescriptions = (client: string) =>

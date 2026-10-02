@@ -123,8 +123,12 @@ def monture(tunis):
 @pytest.fixture
 def societe(tunis):
     return Client.objects.create(
-        nom="Optique Services",
-        prenom="SARL",
+        nom="Trabelsi",
+        prenom="Karim",
+        societe="Optique Services SARL",
+        adresse="12 rue de Marseille",
+        code_postal="1000",
+        ville="Tunis",
         matricule_fiscal="1234567/A/M/000",
         magasin_origine=tunis,
     )
