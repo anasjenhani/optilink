@@ -189,6 +189,10 @@ SPECTACULAR_SETTINGS = {
         "StatutPointageEnum": "apps.rh.models.Pointage.Statut",
         "StatutCongeEnum": "apps.rh.models.DemandeConge.Statut",
         "TypeCongeEnum": "apps.rh.models.DemandeConge.Type",
+        "StatutAcompteEnum": "apps.rh.models.Acompte.Statut",
+        "ModeVersementEnum": "apps.rh.models.Acompte.Mode",
+        "StatutPrimeEnum": "apps.rh.models.Prime.Statut",
+        "TypePrimeEnum": "apps.rh.models.Prime.Type",
     },
 }
 
@@ -203,6 +207,9 @@ PRESCRIPTIONS_CLES = env_list("PRESCRIPTIONS_CLES", "")
 
 # Durée de validité par défaut d'un devis, modifiable devis par devis.
 DEVIS_VALIDITE_JOURS = int(env("DEVIS_VALIDITE_JOURS", "30"))
+
+# Acomptes : part du salaire de base qu'un employé peut recevoir en avance chaque mois.
+ACOMPTE_PLAFOND_POURCENT = int(env("ACOMPTE_PLAFOND_POURCENT", "50"))
 
 # Journal d'audit : le manager de base évite que le filtre de périmètre masque l'état précédent.
 AUDITLOG_USE_BASE_MANAGER = True

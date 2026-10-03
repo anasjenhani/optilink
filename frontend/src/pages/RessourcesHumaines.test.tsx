@@ -18,6 +18,7 @@ const SALMA = {
   date_embauche: "2026-04-01",
   date_sortie: null,
   conges_par_mois: "1.0",
+  salaire_base: "1200.000",
   solde_conges_initial: "0.0",
   solde: SOLDE,
 };
@@ -61,11 +62,11 @@ function afficher(droits: DroitsRh, employe = true) {
     vi.fn((url: string, init?: RequestInit) => {
       if (init?.method === "POST") {
         envois.push({ url, corps: init.body ? JSON.parse(init.body as string) : null });
-        if (url.includes("mon-espace")) return json({ employe: SALMA, conges: [CONGE] }, 201);
+        if (url.includes("mon-espace")) return json({ employe: SALMA, conges: [CONGE], acomptes: [], primes: [] }, 201);
         if (url.includes("presence")) return json([]);
         return json({ ...CONGE, statut: "acceptee" });
       }
-      if (url.includes("mon-espace")) return employe ? json({ employe: SALMA, conges: [] }) : json({ detail: "Aucune fiche" }, 404);
+      if (url.includes("mon-espace")) return employe ? json({ employe: SALMA, conges: [], acomptes: [], primes: [] }) : json({ detail: "Aucune fiche" }, 404);
       if (url === "/api/v1/magasins/") return json({ results: [{ id: "m1", nom: "Tunis" }] });
       if (url.includes("/presence/"))
         return json([{ employe: "e1", matricule: "T01-E001", nom: "Salma Ben Ali", poste: "Vendeuse", pointage: null, conge: null }]);

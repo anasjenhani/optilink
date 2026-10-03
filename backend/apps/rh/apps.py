@@ -9,8 +9,10 @@ class RhConfig(AppConfig):
     def ready(self):
         from auditlog.registry import auditlog
 
-        from .models import DemandeConge, Employe, Pointage
+        from .models import Acompte, DemandeConge, Employe, Pointage, Prime
 
         auditlog.register(Employe)
         auditlog.register(Pointage)
         auditlog.register(DemandeConge)
+        auditlog.register(Acompte)
+        auditlog.register(Prime)
