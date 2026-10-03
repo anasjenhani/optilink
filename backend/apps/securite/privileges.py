@@ -29,6 +29,13 @@ PRIVILEGES = {
         "optique.add_prescription": "Saisir une ordonnance",
         "optique.view_accesprescription": "Voir qui a consulté les ordonnances",
     },
+    "Trésorerie": {
+        "tresorerie.view_cloturecaisse": "Voir les clôtures de caisse",
+        "tresorerie.add_cloturecaisse": "Clôturer la caisse",
+        "tresorerie.valider_cloturecaisse": "Valider ou rejeter une clôture de caisse",
+        "tresorerie.view_depensecaisse": "Voir les dépenses de caisse",
+        "tresorerie.add_depensecaisse": "Saisir une dépense de caisse",
+    },
     "Stock et prix": {
         "stock.view_article": "Voir le catalogue et le stock",
         "stock.add_article": "Créer un article",

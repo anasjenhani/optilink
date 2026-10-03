@@ -216,3 +216,25 @@ def test_commandes_fournisseurs_cloisonnees(tunis, monture, reseau, creer_utilis
     rls.poser({reseau["lille"].id})
     assert codes_visibles("achats_commandefournisseur", "numero") == []
     assert codes_visibles("achats_lignecommandefournisseur", "details") == []
+
+
+def test_tresorerie_cloisonnee(tunis, reseau, creer_utilisateur):
+    from decimal import Decimal
+
+    from django.utils import timezone
+
+    from apps.tresorerie.models import DepenseCaisse
+
+    caissier = creer_utilisateur("c")
+    for magasin in (tunis, reseau["lille"]):
+        DepenseCaisse.tous.create(
+            magasin=magasin,
+            categorie="divers",
+            motif=magasin.code,
+            montant=Decimal("1"),
+            payee_le=timezone.now(),
+            saisie_par=caissier,
+        )
+    rls.poser({tunis.id})
+    assert codes_visibles("tresorerie_depensecaisse", "motif") == ["T01"]
+    assert codes_visibles("tresorerie_cloturecaisse", "numero") == []
