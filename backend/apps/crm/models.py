@@ -1,4 +1,5 @@
-from django.db import models
+from django.db import IntegrityError, models, transaction
+from django.db.models import Max
 
 from core.models import ModeleDeBase
 
@@ -13,6 +14,12 @@ class Client(ModeleDeBase):
         MADAME = "mme", "Mme"
         MONSIEUR = "m", "M."
 
+    numero = models.PositiveIntegerField(
+        "n° de fiche",
+        unique=True,
+        editable=False,
+        help_text="Numéro de fiche client, attribué à la création, commun à tout le réseau.",
+    )
     civilite = models.CharField(max_length=3, choices=Civilite.choices, blank=True)
     nom = models.CharField(max_length=100)
     prenom = models.CharField(max_length=100)
@@ -50,6 +57,20 @@ class Client(ModeleDeBase):
 
     def __str__(self):
         return f"{self.nom.upper()} {self.prenom}"
+
+    def save(self, *args, **kwargs):
+        if self.numero:
+            return super().save(*args, **kwargs)
+        # Numéro suivant ; si deux fiches sont créées au même instant, la seconde réessaie.
+        for essai in range(5):
+            self.numero = (Client.objects.aggregate(dernier=Max("numero"))["dernier"] or 0) + 1
+            try:
+                with transaction.atomic():
+                    return super().save(*args, **kwargs)
+            except IntegrityError:
+                self.numero = None
+                if essai == 4:
+                    raise
 
     @property
     def nom_de_facturation(self):

@@ -18,9 +18,9 @@ import { listerMagasins } from "../api/magasins";
 import { formaterTexte } from "../api/monnaie";
 
 /** Catalogue par famille, avec prix et stock du magasin. Les articles se créent dans l'administration. */
-export function Catalogue() {
+export function Catalogue({ familleInitiale = "monture" }: { familleInitiale?: Famille | "" }) {
   const [magasinChoisi, setMagasin] = useState("");
-  const [famille, setFamille] = useState<Famille | "">("monture");
+  const [famille, setFamille] = useState<Famille | "">(familleInitiale);
   const [recherche, setRecherche] = useState("");
   const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
   const magasin = magasinChoisi || magasins.data?.[0]?.id || "";

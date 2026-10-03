@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "apps.achats",
     "apps.tresorerie",
     "apps.rh",
+    "apps.pilotage",
 ]
 
 MIDDLEWARE = [
@@ -210,6 +211,8 @@ DEVIS_VALIDITE_JOURS = int(env("DEVIS_VALIDITE_JOURS", "30"))
 
 # Acomptes : part du salaire de base qu'un employé peut recevoir en avance chaque mois.
 ACOMPTE_PLAFOND_POURCENT = int(env("ACOMPTE_PLAFOND_POURCENT", "50"))
+# Alerte de stock : un article suivi en magasin est signalé à ce stock ou en dessous.
+STOCK_ALERTE_SEUIL = int(env("STOCK_ALERTE_SEUIL", "1"))
 
 # Journal d'audit : le manager de base évite que le filtre de périmètre masque l'état précédent.
 AUDITLOG_USE_BASE_MANAGER = True

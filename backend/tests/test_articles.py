@@ -182,3 +182,18 @@ def test_fournisseur_et_code_barres(api, tunis, catalogue):
         Article.objects.create(
             reference="MON-2", libelle="Autre", famille="monture", code_barres="8053672000001"
         )
+
+
+def test_articles_par_type_de_vente(api, catalogue):
+    solaire = Article.objects.create(reference="SOL-1", libelle="Solaire", famille="monture")
+    Monture.objects.create(article=solaire, marque="Ray-Ban", solaire=True)
+    Article.objects.create(reference="MON-2", libelle="Sans fiche", famille="monture")
+
+    def references(type_vente):
+        reponse = api.get("/api/v1/articles/", {"type_vente": type_vente})
+        return sorted(a["reference"] for a in reponse.json()["results"])
+
+    assert references("optique") == ["MON-2", "MON-T", "VER-1"]
+    assert references("solaire") == ["SOL-1"]
+    assert references("lentille") == ["LEN-1"]
+    assert references("produit") == ["DIV-1"]

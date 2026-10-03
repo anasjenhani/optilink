@@ -14,7 +14,8 @@ from .serializers import ClientSerializer
             OpenApiParameter(
                 "recherche",
                 OpenApiTypes.STR,
-                description="Nom, prénom, téléphones, e-mail, société ou matricule fiscal",
+                description="N° de fiche, nom, prénom, téléphones, e-mail, société "
+                "ou matricule fiscal",
             )
         ]
     )
@@ -36,8 +37,11 @@ class ClientViewSet(
         clients = Client.objects.select_related("magasin_origine")
         recherche = self.request.query_params.get("recherche", "").strip()
         for mot in recherche.split():
+            # Un nombre peut être un n° de fiche aussi bien qu'un morceau de téléphone.
+            fiche = Q(numero=int(mot)) if mot.isdigit() and len(mot) < 10 else Q()
             clients = clients.filter(
-                Q(nom__icontains=mot)
+                fiche
+                | Q(nom__icontains=mot)
                 | Q(prenom__icontains=mot)
                 | Q(telephone__icontains=mot)
                 | Q(telephone_2__icontains=mot)
