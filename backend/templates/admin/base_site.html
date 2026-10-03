@@ -1,31 +1,31 @@
 {% extends "admin/base.html" %}
-{% comment %}Administration d'OptiLink : vert sauge et onglets horizontaux.{% endcomment %}
+{% comment %}Administration d'OptiLink : bleu lapis-lazuli et onglets horizontaux.{% endcomment %}
 
 {% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
 
 {% block extrastyle %}{{ block.super }}
 <style>
   :root, html[data-theme="light"] {
-    --primary: #5f7f63;
-    --secondary: #4c6a50;
-    --accent: #d9e4c8;
+    --primary: #26619c;
+    --secondary: #1d4e80;
+    --accent: #f5dd5d;
     --header-color: #ffffff;
     --header-branding-color: #ffffff;
-    --header-bg: #5f7f63;
+    --header-bg: #26619c;
     --header-link-color: #ffffff;
-    --breadcrumbs-fg: #e3ece0;
+    --breadcrumbs-fg: #dbe7f3;
     --breadcrumbs-link-fg: #ffffff;
-    --breadcrumbs-bg: #4c6a50;
-    --link-fg: #5f7f63;
-    --link-hover-color: #3d5641;
-    --link-selected-fg: #3d5641;
-    --button-bg: #5f7f63;
-    --button-hover-bg: #4c6a50;
-    --default-button-bg: #4c6a50;
-    --default-button-hover-bg: #3d5641;
-    --selected-row: #eef3ec;
+    --breadcrumbs-bg: #1d4e80;
+    --link-fg: #26619c;
+    --link-hover-color: #163d65;
+    --link-selected-fg: #163d65;
+    --button-bg: #26619c;
+    --button-hover-bg: #1d4e80;
+    --default-button-bg: #1d4e80;
+    --default-button-hover-bg: #163d65;
+    --selected-row: #e8f0f8;
   }
-  #header { background: linear-gradient(180deg, #8fae92 0%, #6f9274 55%, #5a7c5f 100%); }
+  #header { background: linear-gradient(180deg, #4a82bd 0%, #26619c 55%, #1d4e80 100%); }
   #site-name a, #site-name a:link, #site-name a:visited { font-weight: 600; color: #fff; }
   .onglets {
     display: flex; flex-wrap: wrap; gap: 2px; margin: 0; padding: 0 20px;
@@ -45,7 +45,7 @@
   .dashboard #content-main .module { margin-bottom: 0; }
   .dashboard #content-related { display: none; }
   .module h2, .module caption, .inline-group h2 {
-    background: linear-gradient(180deg, #8fae92 0%, #6f9274 55%, #5a7c5f 100%); color: #fff; }
+    background: linear-gradient(180deg, #4a82bd 0%, #26619c 55%, #1d4e80 100%); color: #fff; }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .onglets { background: #1f1f1f; }
     :root:not([data-theme="light"]) .onglets a { color: #ddd; }
