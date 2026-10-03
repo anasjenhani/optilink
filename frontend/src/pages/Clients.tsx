@@ -76,7 +76,7 @@ function versFiche(client: Client): SaisieFiche {
 }
 
 /** Création d'un client, ou modification de sa fiche quand ``client`` est donné. */
-function FicheClient({ client, onEnregistre }: { client?: Client; onEnregistre: (client: Client) => void }) {
+export function FicheClient({ client, onEnregistre }: { client?: Client; onEnregistre: (client: Client) => void }) {
   const [saisie, setSaisie] = useState<SaisieFiche>(client ? versFiche(client) : FICHE_VIDE);
   const [professionnel, setProfessionnel] = useState(Boolean(client?.societe || client?.matricule_fiscal));
   const enregistrement = useMutation({

@@ -1,0 +1,65 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Accueil</a> › Alertes et reporting › Reporting des ventes</div>{% endblock %}
+{% block content %}
+<style>
+  .chiffres { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin: 15px 0; }
+  .chiffre { border: 1px solid var(--hairline-color); border-radius: 4px; padding: 10px; }
+  .chiffre strong { display: block; font-size: 1.4em; margin-top: 4px; }
+  .tableaux { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 15px; }
+  .tableaux table { width: 100%; }
+  td.nombre, th.nombre { text-align: right; }
+</style>
+<div id="content-main">
+  <form method="get" style="margin-bottom: 10px">
+    <label>Du <input type="date" name="du" value="{{ du|date:'Y-m-d' }}"></label>
+    <label>Au <input type="date" name="au" value="{{ au|date:'Y-m-d' }}"></label>
+    <label>Magasin
+      <select name="magasin">
+        <option value="">Tous mes magasins</option>
+        {% for m in magasins %}<option value="{{ m.public_id }}"{% if choisi == m.public_id|stringformat:"s" %} selected{% endif %}>{{ m.nom }}</option>{% endfor %}
+      </select>
+    </label>
+    <input type="submit" value="Afficher">
+    <a class="button" href="?{{ requete }}{% if requete %}&amp;{% endif %}format=csv">Exporter (Excel)</a>
+  </form>
+  {% for s in sections %}
+    {% if sections|length > 1 %}<h2>Magasins en {{ s.devise }}</h2>{% endif %}
+    <div class="chiffres">
+      <div class="chiffre">Chiffre d'affaires TTC<strong>{{ s.ca_ttc }} {{ s.devise }}</strong></div>
+      <div class="chiffre">Avoirs<strong>{{ s.avoirs_ttc }} {{ s.devise }}</strong></div>
+      <div class="chiffre">CA net TTC<strong>{{ s.ca_net_ttc }} {{ s.devise }}</strong></div>
+      <div class="chiffre">Nombre de ventes<strong>{{ s.nombre_ventes }}</strong></div>
+      <div class="chiffre">Panier moyen<strong>{{ s.panier_moyen }} {{ s.devise }}</strong></div>
+    </div>
+    <div class="tableaux">
+      <div class="module"><table>
+        <caption>Par magasin</caption>
+        <thead><tr><th>Magasin</th><th class="nombre">Ventes</th><th class="nombre">CA TTC</th></tr></thead>
+        <tbody>{% for l in s.par_magasin %}<tr><td>{{ l.magasin }}</td><td class="nombre">{{ l.nombre }}</td><td class="nombre">{{ l.ca_ttc }}</td></tr>{% empty %}<tr><td colspan="3">Rien sur la période.</td></tr>{% endfor %}</tbody>
+      </table></div>
+      <div class="module"><table>
+        <caption>Par vendeur</caption>
+        <thead><tr><th>Vendeur</th><th class="nombre">Ventes</th><th class="nombre">CA TTC</th></tr></thead>
+        <tbody>{% for l in s.par_vendeur %}<tr><td>{{ l.vendeur }}</td><td class="nombre">{{ l.nombre }}</td><td class="nombre">{{ l.ca_ttc }}</td></tr>{% empty %}<tr><td colspan="3">Rien sur la période.</td></tr>{% endfor %}</tbody>
+      </table></div>
+      <div class="module"><table>
+        <caption>Par famille d'articles</caption>
+        <thead><tr><th>Famille</th><th class="nombre">Quantité</th><th class="nombre">CA TTC</th></tr></thead>
+        <tbody>{% for l in s.par_famille %}<tr><td>{{ l.famille }}</td><td class="nombre">{{ l.quantite }}</td><td class="nombre">{{ l.ca_ttc }}</td></tr>{% empty %}<tr><td colspan="3">Rien sur la période.</td></tr>{% endfor %}</tbody>
+      </table></div>
+      <div class="module"><table>
+        <caption>Encaissements</caption>
+        <thead><tr><th>Mode</th><th class="nombre">Montant</th></tr></thead>
+        <tbody>{% for l in s.encaissements %}<tr><td>{{ l.mode }}</td><td class="nombre">{{ l.montant }}</td></tr>{% empty %}<tr><td colspan="2">Rien sur la période.</td></tr>{% endfor %}</tbody>
+      </table></div>
+      <div class="module"><table>
+        <caption>Par jour</caption>
+        <thead><tr><th>Jour</th><th class="nombre">Ventes</th><th class="nombre">CA TTC</th></tr></thead>
+        <tbody>{% for l in s.par_jour %}<tr><td>{{ l.jour|date:"d/m/Y" }}</td><td class="nombre">{{ l.nombre }}</td><td class="nombre">{{ l.ca_ttc }}</td></tr>{% empty %}<tr><td colspan="3">Rien sur la période.</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </div>
+  {% empty %}
+    <p>Aucun magasin dans votre périmètre.</p>
+  {% endfor %}
+</div>
+{% endblock %}

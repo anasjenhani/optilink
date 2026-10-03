@@ -3,31 +3,18 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Container from "@mui/material/Container";
-import Stack from "@mui/material/Stack";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { deconnecter, lireSession, peut, type EtatSession } from "./api/auth";
+import { deconnecter, lireSession, type EtatSession } from "./api/auth";
 import { ActivationMfa } from "./auth/ActivationMfa";
 import { CodesSecours } from "./auth/CodesSecours";
 import { Connexion } from "./auth/Connexion";
 import { VerificationMfa } from "./auth/VerificationMfa";
-import { AccesSecurite } from "./pages/AccesSecurite";
+import { Espace } from "./navigation/Espace";
 import { Accueil } from "./pages/Accueil";
-import { Avoirs } from "./pages/Avoirs";
-import { Caisse } from "./pages/Caisse";
-import { Catalogue } from "./pages/Catalogue";
-import { Clients } from "./pages/Clients";
-import { Commandes } from "./pages/Commandes";
-import { Devis } from "./pages/Devis";
-import { Factures } from "./pages/Factures";
-import { Imports } from "./pages/Imports";
-import { Magasins } from "./pages/Magasins";
-import { RessourcesHumaines } from "./pages/RessourcesHumaines";
-import { Tresorerie } from "./pages/Tresorerie";
-import { Verres } from "./pages/Verres";
 
 function Contenu({ session }: { session: EtatSession }) {
   const queryClient = useQueryClient();
@@ -48,94 +35,7 @@ function Contenu({ session }: { session: EtatSession }) {
   if (!session.authentifie) return <Connexion />;
   if (session.mfa === "a_verifier") return <VerificationMfa />;
   if (session.mfa === "a_activer") return <ActivationMfa onConfirmee={setCodesSecours} />;
-  return (
-    <Stack spacing={3}>
-      {peut(session, "ventes.add_vente") && <Caisse />}
-      {peut(session, "ventes.add_vente") && <Commandes />}
-      {peut(session, "achats.add_commandefournisseur") && <Verres />}
-      {peut(session, "ventes.add_devis") && peut(session, "crm.view_client") && (
-        <Devis
-          droits={{
-            remise: peut(session, "ventes.appliquer_remise"),
-            voirOrdonnances: peut(session, "optique.view_prescription"),
-            changerStatut: peut(session, "ventes.change_devis"),
-            encaisser: peut(session, "ventes.add_vente"),
-          }}
-        />
-      )}
-      {peut(session, "ventes.add_facture") && <Factures />}
-      {peut(session, "ventes.add_avoir") && <Avoirs />}
-      {peut(session, "crm.view_client") && (
-        <Clients
-          droits={{
-            creerClient: peut(session, "crm.add_client"),
-            modifierClient: peut(session, "crm.change_client"),
-            voirOrdonnances: peut(session, "optique.view_prescription"),
-            saisirOrdonnance: peut(session, "optique.add_prescription"),
-          }}
-        />
-      )}
-      {peut(session, "stock.view_article") && <Catalogue />}
-      {(peut(session, "stock.add_article") || peut(session, "stock.add_mouvementstock")) && (
-        <Imports
-          droits={{
-            catalogue: peut(session, "stock.add_article") && peut(session, "stock.change_prixarticle"),
-            stock: peut(session, "stock.add_mouvementstock"),
-          }}
-        />
-      )}
-      {(peut(session, "tresorerie.add_cloturecaisse") ||
-        peut(session, "tresorerie.add_depensecaisse") ||
-        peut(session, "tresorerie.view_cloturecaisse") ||
-        peut(session, "tresorerie.view_operationtresorerie")) && (
-        <Tresorerie
-          droits={{
-            cloturer: peut(session, "tresorerie.add_cloturecaisse"),
-            depenses: peut(session, "tresorerie.add_depensecaisse"),
-            verifier: peut(session, "tresorerie.valider_cloturecaisse"),
-            voirClotures: peut(session, "tresorerie.view_cloturecaisse"),
-            versements: peut(session, "tresorerie.add_operationtresorerie"),
-            banque: peut(session, "tresorerie.view_operationtresorerie"),
-            rapprocher: peut(session, "tresorerie.rapprocher_operationtresorerie"),
-            gererComptes: peut(session, "tresorerie.add_comptetresorerie"),
-          }}
-        />
-      )}
-      <RessourcesHumaines
-        droits={{
-          voirEmployes: peut(session, "rh.view_employe"),
-          creerEmploye: peut(session, "rh.add_employe"),
-          voirPresence: peut(session, "rh.view_pointage"),
-          pointer: peut(session, "rh.add_pointage"),
-          voirConges: peut(session, "rh.view_demandeconge"),
-          saisirConge: peut(session, "rh.add_demandeconge") && peut(session, "rh.view_employe"),
-          deciderConge: peut(session, "rh.decider_demandeconge"),
-          voirAcomptes: peut(session, "rh.view_acompte"),
-          demanderAcompte: peut(session, "rh.add_acompte"),
-          deciderAcompte: peut(session, "rh.decider_acompte"),
-          voirPrimes: peut(session, "rh.view_prime"),
-          proposerPrime: peut(session, "rh.add_prime"),
-          validerPrime: peut(session, "rh.valider_prime"),
-        }}
-      />
-      {peut(session, "reseau.view_magasin") && <Magasins />}
-      {(peut(session, "securite.view_utilisateur") || peut(session, "auth.view_group")) && (
-        <AccesSecurite
-          droits={{
-            voirUtilisateurs: peut(session, "securite.view_utilisateur"),
-            creerUtilisateur: peut(session, "securite.add_utilisateur") && peut(session, "securite.add_affectation"),
-            modifierUtilisateur:
-              peut(session, "securite.change_utilisateur") && peut(session, "securite.change_affectation"),
-            voirProfils: peut(session, "auth.view_group"),
-            creerProfil: peut(session, "auth.add_group"),
-            modifierProfil: peut(session, "auth.change_group"),
-            supprimerProfil: peut(session, "auth.delete_group"),
-          }}
-        />
-      )}
-      <Accueil />
-    </Stack>
-  );
+  return <Espace session={session} />;
 }
 
 export function App() {
@@ -163,7 +63,7 @@ export function App() {
           )}
         </Toolbar>
       </AppBar>
-      <Container maxWidth="md" sx={{ py: 4 }}>
+      <Container maxWidth="lg" sx={{ py: 3 }}>
         {session.isPending && <CircularProgress />}
         {session.isError && <Accueil />}
         {session.data && <Contenu session={session.data} />}

@@ -234,6 +234,13 @@ PERMISSIONS_TRESORERIE = {
     ],
 }
 
+# Reporting des ventes : direction, responsables et finance.
+PERMISSIONS_PILOTAGE = {
+    "Administrateur Global": ["ventes.consulter_reporting"],
+    "Responsable de magasin": ["ventes.consulter_reporting"],
+    "Comptabilité & Finance": ["ventes.consulter_reporting"],
+}
+
 for _par_role in (
     PERMISSIONS_CAISSE_STOCK,
     PERMISSIONS_CLIENTS_OPTIQUE,
@@ -246,6 +253,7 @@ for _par_role in (
     PERMISSIONS_BANQUE,
     PERMISSIONS_RH,
     PERMISSIONS_REMUNERATIONS,
+    PERMISSIONS_PILOTAGE,
 ):
     for _nom, _permissions in _par_role.items():
         ROLES_DE_DEPART[_nom] = ROLES_DE_DEPART[_nom] + _permissions

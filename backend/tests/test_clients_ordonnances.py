@@ -221,3 +221,25 @@ def test_qui_voit_les_ordonnances(db):
     }
     saisie = {r.name for r in Group.objects.filter(permissions__codename="add_prescription")}
     assert saisie == {"Administrateur Global", "Opticien", "Responsable de magasin"}
+
+
+def test_numero_de_fiche_attribue_et_recherche(affecter, client_de, reseau, dupont):
+    vendeur = affecter("vendeur", *CLIENTS, portee="magasin", magasin=reseau["lille"])
+    api = client_de(vendeur)
+    reponse = api.post(
+        "/api/v1/clients/",
+        {
+            "nom": "Durand",
+            "prenom": "Paul",
+            "magasin_origine": str(reseau["lille"].public_id),
+            "numero": 999,
+        },
+    )
+    assert reponse.status_code == 201, reponse.json()
+    # Le numéro suit le dernier attribué ; celui envoyé par le poste est ignoré.
+    assert reponse.json()["numero"] == dupont.numero + 1
+
+    trouves = api.get("/api/v1/clients/", {"recherche": str(dupont.numero)}).json()["results"]
+    assert [c["nom"] for c in trouves] == ["Dupont"]
+    trouves = api.get("/api/v1/clients/", {"recherche": "0601020304"}).json()["results"]
+    assert [c["nom"] for c in trouves] == ["Dupont"]

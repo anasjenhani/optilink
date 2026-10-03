@@ -83,7 +83,7 @@ const aujourdhui = () => new Date().toLocaleDateString("en-CA");
 const jours = (valeur: string) => `${Number(valeur).toLocaleString("fr-FR")} j`;
 
 /** Personnel : congés de chacun, présence du jour, décisions et fiches employés. */
-export function RessourcesHumaines({ droits }: { droits: DroitsRh }) {
+export function RessourcesHumaines({ droits, ongletInitial }: { droits: DroitsRh; ongletInitial?: string }) {
   const espace = useQuery({ queryKey: ["mon-espace-rh"], queryFn: lireMonEspace, retry: false });
   const estEmploye = Boolean(espace.data?.employe);
   const onglets = [
@@ -96,7 +96,7 @@ export function RessourcesHumaines({ droits }: { droits: DroitsRh }) {
     droits.voirPrimes && { valeur: "primes", libelle: "Primes" },
     droits.voirAcomptes && droits.voirPrimes && { valeur: "recap", libelle: "Récap paie" },
   ].filter((o): o is { valeur: string; libelle: string } => Boolean(o));
-  const [choisi, setOnglet] = useState("");
+  const [choisi, setOnglet] = useState(ongletInitial ?? "");
   const onglet = onglets.some((o) => o.valeur === choisi) ? choisi : onglets[0]?.valeur;
   if (!onglet) return null;
 

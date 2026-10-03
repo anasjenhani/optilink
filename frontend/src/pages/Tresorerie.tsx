@@ -66,7 +66,7 @@ const dateHeure = (iso: string) =>
   new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
 
 /** Caisse et banque : clôture quotidienne vérifiée par la finance, puis dépôt jusqu'à la banque. */
-export function Tresorerie({ droits }: { droits: DroitsTresorerie }) {
+export function Tresorerie({ droits, ongletInitial }: { droits: DroitsTresorerie; ongletInitial?: string }) {
   const onglets = [
     droits.cloturer && { valeur: "cloture", libelle: "Clôture de caisse" },
     droits.depenses && { valeur: "depenses", libelle: "Dépenses de caisse" },
@@ -75,7 +75,9 @@ export function Tresorerie({ droits }: { droits: DroitsTresorerie }) {
     droits.versements && { valeur: "versements", libelle: "Versements" },
     droits.banque && { valeur: "banque", libelle: "Banque" },
   ].filter((o): o is { valeur: string; libelle: string } => Boolean(o));
-  const [onglet, setOnglet] = useState(onglets[0]?.valeur ?? "historique");
+  const [onglet, setOnglet] = useState(
+    onglets.find((o) => o.valeur === ongletInitial)?.valeur ?? onglets[0]?.valeur ?? "historique",
+  );
   const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
   const [magasinChoisi, setMagasin] = useState("");
   const magasin = magasinChoisi || magasins.data?.[0]?.id || "";
