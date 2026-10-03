@@ -51,6 +51,12 @@ PRIVILEGES = {
         "rh.view_demandeconge": "Voir les congés",
         "rh.add_demandeconge": "Saisir une demande de congé pour un employé",
         "rh.decider_demandeconge": "Accepter ou refuser une demande de congé",
+        "rh.view_acompte": "Voir les acomptes",
+        "rh.add_acompte": "Demander un acompte pour un employé",
+        "rh.decider_acompte": "Accorder, refuser et verser un acompte",
+        "rh.view_prime": "Voir les primes",
+        "rh.add_prime": "Proposer une prime",
+        "rh.valider_prime": "Valider ou refuser une prime",
     },
     "Stock et prix": {
         "stock.view_article": "Voir le catalogue et le stock",

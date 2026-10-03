@@ -256,3 +256,5 @@ def test_rh_cloisonne(tunis, reseau):
     rls.poser({tunis.id})
     assert codes_visibles("rh_employe", "nom") == ["T01"]
     assert codes_visibles("rh_demandeconge", "motif") == []
+    assert codes_visibles("rh_acompte", "motif") == []
+    assert codes_visibles("rh_prime", "motif") == []

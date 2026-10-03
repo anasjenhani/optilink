@@ -110,6 +110,12 @@ function Contenu({ session }: { session: EtatSession }) {
           voirConges: peut(session, "rh.view_demandeconge"),
           saisirConge: peut(session, "rh.add_demandeconge") && peut(session, "rh.view_employe"),
           deciderConge: peut(session, "rh.decider_demandeconge"),
+          voirAcomptes: peut(session, "rh.view_acompte"),
+          demanderAcompte: peut(session, "rh.add_acompte"),
+          deciderAcompte: peut(session, "rh.decider_acompte"),
+          voirPrimes: peut(session, "rh.view_prime"),
+          proposerPrime: peut(session, "rh.add_prime"),
+          validerPrime: peut(session, "rh.valider_prime"),
         }}
       />
       {peut(session, "reseau.view_magasin") && <Magasins />}

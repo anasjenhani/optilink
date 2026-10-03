@@ -38,6 +38,7 @@ import {
   type StatutPointage,
   type TypeConge,
 } from "../api/rh";
+import { Acomptes, MesAcomptes, Primes, RecapPaie } from "./Remunerations";
 
 export type DroitsRh = {
   voirEmployes: boolean;
@@ -47,6 +48,12 @@ export type DroitsRh = {
   voirConges: boolean;
   saisirConge: boolean;
   deciderConge: boolean;
+  voirAcomptes?: boolean;
+  demanderAcompte?: boolean;
+  deciderAcompte?: boolean;
+  voirPrimes?: boolean;
+  proposerPrime?: boolean;
+  validerPrime?: boolean;
 };
 
 const TYPES: { valeur: TypeConge; libelle: string }[] = [
@@ -83,7 +90,11 @@ export function RessourcesHumaines({ droits }: { droits: DroitsRh }) {
     estEmploye && { valeur: "moi", libelle: "Mes congés" },
     droits.voirPresence && { valeur: "presence", libelle: "Présence" },
     droits.voirConges && { valeur: "conges", libelle: "Congés" },
+    estEmploye && { valeur: "mes-acomptes", libelle: "Mes acomptes et primes" },
     droits.voirEmployes && { valeur: "employes", libelle: "Employés" },
+    droits.voirAcomptes && { valeur: "acomptes", libelle: "Acomptes" },
+    droits.voirPrimes && { valeur: "primes", libelle: "Primes" },
+    droits.voirAcomptes && droits.voirPrimes && { valeur: "recap", libelle: "Récap paie" },
   ].filter((o): o is { valeur: string; libelle: string } => Boolean(o));
   const [choisi, setOnglet] = useState("");
   const onglet = onglets.some((o) => o.valeur === choisi) ? choisi : onglets[0]?.valeur;
@@ -105,6 +116,20 @@ export function RessourcesHumaines({ droits }: { droits: DroitsRh }) {
           {onglet === "presence" && <Presence pointer={droits.pointer} />}
           {onglet === "conges" && <Conges droits={droits} />}
           {onglet === "employes" && <Employes creer={droits.creerEmploye} />}
+          {onglet === "mes-acomptes" && espace.data && (
+            <MesAcomptes
+              acomptes={espace.data.acomptes}
+              primes={espace.data.primes}
+              salaire={espace.data.employe.salaire_base}
+            />
+          )}
+          {onglet === "acomptes" && (
+            <Acomptes demander={Boolean(droits.demanderAcompte && droits.voirEmployes)} decider={Boolean(droits.deciderAcompte)} />
+          )}
+          {onglet === "primes" && (
+            <Primes proposer={Boolean(droits.proposerPrime && droits.voirEmployes)} valider={Boolean(droits.validerPrime)} />
+          )}
+          {onglet === "recap" && <RecapPaie />}
         </Stack>
       </CardContent>
     </Card>
@@ -521,6 +546,7 @@ const FICHE_VIDE = {
   poste: "",
   date_embauche: "",
   solde_conges_initial: "",
+  salaire_base: "",
   utilisateur: "",
 };
 
@@ -538,6 +564,7 @@ function Employes({ creer }: { creer: boolean }) {
         ...fiche,
         magasin,
         solde_conges_initial: fiche.solde_conges_initial || "0",
+        salaire_base: fiche.salaire_base || null,
         utilisateur: fiche.utilisateur || null,
       }),
     onSuccess: () => {
@@ -580,6 +607,13 @@ function Employes({ creer }: { creer: boolean }) {
               />
             </Stack>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <TextField
+                label="Salaire de base"
+                value={fiche.salaire_base}
+                onChange={changer("salaire_base")}
+                helperText="Brut mensuel."
+                slotProps={{ htmlInput: { inputMode: "decimal" } }}
+              />
               <TextField label="CIN" value={fiche.cin} onChange={changer("cin")} />
               <TextField label="Téléphone" value={fiche.telephone} onChange={changer("telephone")} />
               <TextField

@@ -202,6 +202,27 @@ PERMISSIONS_RH = {
     ],
 }
 
+# Acomptes et primes : le responsable demande et propose, les RH décident.
+REMUNERATIONS_RH = [
+    "rh.view_acompte",
+    "rh.add_acompte",
+    "rh.decider_acompte",
+    "rh.view_prime",
+    "rh.add_prime",
+    "rh.valider_prime",
+]
+PERMISSIONS_REMUNERATIONS = {
+    "Administrateur Global": REMUNERATIONS_RH,
+    "Ressources Humaines": REMUNERATIONS_RH,
+    "Responsable de magasin": [
+        "rh.view_acompte",
+        "rh.add_acompte",
+        "rh.view_prime",
+        "rh.add_prime",
+    ],
+    "Comptabilité & Finance": ["rh.view_acompte", "rh.view_prime"],
+}
+
 PERMISSIONS_TRESORERIE = {
     "Administrateur Global": CLOTURE + DEPENSES + ["tresorerie.valider_cloturecaisse"],
     "Responsable de magasin": CLOTURE + DEPENSES,
@@ -224,6 +245,7 @@ for _par_role in (
     PERMISSIONS_TRESORERIE,
     PERMISSIONS_BANQUE,
     PERMISSIONS_RH,
+    PERMISSIONS_REMUNERATIONS,
 ):
     for _nom, _permissions in _par_role.items():
         ROLES_DE_DEPART[_nom] = ROLES_DE_DEPART[_nom] + _permissions
