@@ -152,9 +152,7 @@ def test_administrateur_regle_la_tva_sans_voir_les_ventes(db):
     from django.contrib.auth.models import Group
 
     admin = set(
-        Group.objects.get(name="Administrateur système").permissions.values_list(
-            "codename", flat=True
-        )
+        Group.objects.get(name="Administrateur").permissions.values_list("codename", flat=True)
     )
     assert {"change_tauxtva", "add_tauxtva", "change_pays"} <= admin
     assert "view_vente" not in admin

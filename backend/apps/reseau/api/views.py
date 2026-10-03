@@ -1,7 +1,7 @@
 from rest_framework import viewsets
 
-from ..models import Magasin
-from .serializers import MagasinSerializer
+from ..models import Magasin, Societe
+from .serializers import MagasinSerializer, SocieteSerializer
 
 
 class MagasinViewSet(viewsets.ReadOnlyModelViewSet):
@@ -15,3 +15,9 @@ class MagasinViewSet(viewsets.ReadOnlyModelViewSet):
         # Appelé à chaque requête : le filtre de périmètre doit être évalué maintenant,
         # jamais à l'import du module.
         return Magasin.objects.select_related("societe", "pays")
+
+
+class SocieteViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = SocieteSerializer
+    lookup_field = "public_id"
+    queryset = Societe.objects.all()

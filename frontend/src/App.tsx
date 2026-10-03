@@ -14,6 +14,7 @@ import { ActivationMfa } from "./auth/ActivationMfa";
 import { CodesSecours } from "./auth/CodesSecours";
 import { Connexion } from "./auth/Connexion";
 import { VerificationMfa } from "./auth/VerificationMfa";
+import { AccesSecurite } from "./pages/AccesSecurite";
 import { Accueil } from "./pages/Accueil";
 import { Avoirs } from "./pages/Avoirs";
 import { Caisse } from "./pages/Caisse";
@@ -82,6 +83,20 @@ function Contenu({ session }: { session: EtatSession }) {
         />
       )}
       {peut(session, "reseau.view_magasin") && <Magasins />}
+      {(peut(session, "securite.view_utilisateur") || peut(session, "auth.view_group")) && (
+        <AccesSecurite
+          droits={{
+            voirUtilisateurs: peut(session, "securite.view_utilisateur"),
+            creerUtilisateur: peut(session, "securite.add_utilisateur") && peut(session, "securite.add_affectation"),
+            modifierUtilisateur:
+              peut(session, "securite.change_utilisateur") && peut(session, "securite.change_affectation"),
+            voirProfils: peut(session, "auth.view_group"),
+            creerProfil: peut(session, "auth.add_group"),
+            modifierProfil: peut(session, "auth.change_group"),
+            supprimerProfil: peut(session, "auth.delete_group"),
+          }}
+        />
+      )}
       <Accueil />
     </Stack>
   );

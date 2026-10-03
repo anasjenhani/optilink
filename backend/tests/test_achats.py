@@ -114,7 +114,7 @@ def test_droits_des_roles_sur_les_commandes_fournisseurs(db):
 
     assert {"add_commandefournisseur", "change_commandefournisseur"} <= permissions("Opticien")
     assert "add_fournisseur" not in permissions("Opticien")
-    assert "add_fournisseur" in permissions("Logisticien")
+    assert "add_fournisseur" in permissions("Achats & Gestionnaire de Stock")
     assert "add_commandefournisseur" not in permissions("Vendeur")
 
 

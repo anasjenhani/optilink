@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from ..models import Magasin, Pays
+from ..models import Magasin, Pays, Societe
 
 
 class PaysSerializer(serializers.ModelSerializer):
@@ -38,3 +38,11 @@ class MagasinSerializer(serializers.ModelSerializer):
             "nombre_peniches",
             "est_actif",
         ]
+
+
+class SocieteSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source="public_id", read_only=True)
+
+    class Meta:
+        model = Societe
+        fields = ["id", "code", "raison_sociale"]

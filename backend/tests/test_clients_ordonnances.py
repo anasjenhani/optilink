@@ -209,6 +209,15 @@ def test_rotation_de_cle():
         assert chiffrement.dechiffrer(jeton) == {"od": 1}
 
 
-def test_seuls_opticiens_et_responsables_voient_les_ordonnances(db):
+def test_qui_voit_les_ordonnances(db):
     roles = {role.name for role in Group.objects.filter(permissions__codename="view_prescription")}
-    assert roles == {"Opticien", "Responsable magasin"}
+    # L'atelier monte les verres et le service commandes les commande : ils lisent l'ordonnance.
+    assert roles == {
+        "Administrateur Global",
+        "Opticien",
+        "Responsable de magasin",
+        "Atelier",
+        "Commande",
+    }
+    saisie = {r.name for r in Group.objects.filter(permissions__codename="add_prescription")}
+    assert saisie == {"Administrateur Global", "Opticien", "Responsable de magasin"}
