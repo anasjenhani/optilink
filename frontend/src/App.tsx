@@ -25,6 +25,7 @@ import { Devis } from "./pages/Devis";
 import { Factures } from "./pages/Factures";
 import { Imports } from "./pages/Imports";
 import { Magasins } from "./pages/Magasins";
+import { Tresorerie } from "./pages/Tresorerie";
 import { Verres } from "./pages/Verres";
 
 function Contenu({ session }: { session: EtatSession }) {
@@ -79,6 +80,18 @@ function Contenu({ session }: { session: EtatSession }) {
           droits={{
             catalogue: peut(session, "stock.add_article") && peut(session, "stock.change_prixarticle"),
             stock: peut(session, "stock.add_mouvementstock"),
+          }}
+        />
+      )}
+      {(peut(session, "tresorerie.add_cloturecaisse") ||
+        peut(session, "tresorerie.add_depensecaisse") ||
+        peut(session, "tresorerie.view_cloturecaisse")) && (
+        <Tresorerie
+          droits={{
+            cloturer: peut(session, "tresorerie.add_cloturecaisse"),
+            depenses: peut(session, "tresorerie.add_depensecaisse"),
+            verifier: peut(session, "tresorerie.valider_cloturecaisse"),
+            voirClotures: peut(session, "tresorerie.view_cloturecaisse"),
           }}
         />
       )}

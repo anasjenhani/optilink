@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "apps.crm",
     "apps.optique",
     "apps.achats",
+    "apps.tresorerie",
 ]
 
 MIDDLEWARE = [
