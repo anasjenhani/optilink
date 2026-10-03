@@ -19,6 +19,12 @@ class ClotureImpossible(Exception):
     pass
 
 
+def alimentations(magasin, debut, fin):
+    from .banque import alimentations as calculer
+
+    return calculer(magasin, debut, fin)
+
+
 def derniere_cloture(magasin):
     return ClotureCaisse.tous.filter(magasin=magasin).order_by("-fin").first()
 
@@ -60,6 +66,7 @@ def situation(magasin, fin=None):
         "rembourse_cheques": rembourse.get(CHEQUE) or ZERO,
         "rembourse_cartes": rembourse.get(CARTE) or ZERO,
         "depenses": depenses.aggregate(total=Sum("montant"))["total"] or ZERO,
+        "alimentations": alimentations(magasin, debut, fin),
     }
 
 

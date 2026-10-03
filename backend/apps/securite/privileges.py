@@ -35,6 +35,12 @@ PRIVILEGES = {
         "tresorerie.valider_cloturecaisse": "Valider ou rejeter une clôture de caisse",
         "tresorerie.view_depensecaisse": "Voir les dépenses de caisse",
         "tresorerie.add_depensecaisse": "Saisir une dépense de caisse",
+        "tresorerie.view_comptetresorerie": "Voir les comptes bancaires et coffres",
+        "tresorerie.add_comptetresorerie": "Créer un compte bancaire ou un coffre",
+        "tresorerie.change_comptetresorerie": "Modifier un compte bancaire ou un coffre",
+        "tresorerie.view_operationtresorerie": "Voir les versements et opérations bancaires",
+        "tresorerie.add_operationtresorerie": "Déposer l'argent des clôtures, prévoir un versement",
+        "tresorerie.rapprocher_operationtresorerie": "Rapprocher les opérations avec la banque",
     },
     "Stock et prix": {
         "stock.view_article": "Voir le catalogue et le stock",

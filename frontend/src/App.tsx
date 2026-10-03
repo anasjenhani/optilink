@@ -85,13 +85,18 @@ function Contenu({ session }: { session: EtatSession }) {
       )}
       {(peut(session, "tresorerie.add_cloturecaisse") ||
         peut(session, "tresorerie.add_depensecaisse") ||
-        peut(session, "tresorerie.view_cloturecaisse")) && (
+        peut(session, "tresorerie.view_cloturecaisse") ||
+        peut(session, "tresorerie.view_operationtresorerie")) && (
         <Tresorerie
           droits={{
             cloturer: peut(session, "tresorerie.add_cloturecaisse"),
             depenses: peut(session, "tresorerie.add_depensecaisse"),
             verifier: peut(session, "tresorerie.valider_cloturecaisse"),
             voirClotures: peut(session, "tresorerie.view_cloturecaisse"),
+            versements: peut(session, "tresorerie.add_operationtresorerie"),
+            banque: peut(session, "tresorerie.view_operationtresorerie"),
+            rapprocher: peut(session, "tresorerie.rapprocher_operationtresorerie"),
+            gererComptes: peut(session, "tresorerie.add_comptetresorerie"),
           }}
         />
       )}

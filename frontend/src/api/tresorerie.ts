@@ -13,6 +13,7 @@ export type Situation = {
   rembourse_cheques: string;
   rembourse_cartes: string;
   depenses: string;
+  alimentations: string;
   especes_attendues: string;
   cheques_attendus: string;
   cartes_attendues: string;
@@ -45,6 +46,9 @@ export type Cloture = Omit<Situation, "cloture_rejetee"> &
     verifiee_par: string | null;
     verifiee_le: string | null;
     commentaire_finance: string;
+    depot_especes: string | null;
+    depot_cheques: string | null;
+    encaissement_cartes: string | null;
   };
 
 export type CategorieDepense = "fournitures" | "entretien" | "transport" | "restauration" | "divers";
@@ -94,3 +98,109 @@ export const saisirDepense = (depense: {
   beneficiaire: string;
   montant: string;
 }) => appeler<Depense>("/api/v1/tresorerie/depenses/", { methode: "POST", corps: depense });
+
+export type TypeCompte = "banque" | "coffre" | "caisse_centrale";
+
+export type Compte = {
+  id: string;
+  societe: string;
+  societe_nom: string;
+  type: TypeCompte;
+  nom: string;
+  banque: string;
+  rib: string;
+  magasin: string | null;
+  magasin_nom: string | null;
+  devise: string;
+  solde_initial: string;
+  est_actif: boolean;
+  solde_comptable: string | null;
+  solde_banque: string | null;
+};
+
+export type TypeDepot = "depot_especes" | "depot_cheques" | "encaissement_cartes";
+export type TypeOperation = TypeDepot | "transfert" | "alimentation_fond" | "operation_bancaire";
+export type StatutOperation = "prevue" | "effectuee" | "rapprochee";
+
+export type Operation = {
+  id: string;
+  numero: string;
+  societe: string;
+  type: TypeOperation;
+  type_libelle: string;
+  statut: StatutOperation;
+  source: string | null;
+  destination: string | null;
+  magasin: string | null;
+  montant: string;
+  montant_credite: string | null;
+  commission: string | null;
+  date_prevue: string | null;
+  date_operation: string | null;
+  date_valeur: string | null;
+  reference: string;
+  libelle: string;
+  cree_par: string;
+  rapprochee_par: string | null;
+};
+
+export type ARemettre = {
+  id: string;
+  numero: string;
+  magasin: string;
+  societe: string;
+  fin: string;
+  devise: string;
+  especes: string | null;
+  cheques: string | null;
+  nombre_cheques: number | null;
+  cartes: string | null;
+};
+
+type Execution = { prevue: boolean; reference: string; date: string | null };
+
+export const listerComptes = () => appeler<Compte[]>("/api/v1/tresorerie/comptes/");
+
+export const creerCompte = (compte: {
+  societe: string;
+  type: TypeCompte;
+  nom: string;
+  banque: string;
+  rib: string;
+  magasin: string | null;
+  solde_initial: string;
+}) => appeler<Compte>("/api/v1/tresorerie/comptes/", { methode: "POST", corps: compte });
+
+export const listerOperations = (statut?: StatutOperation) =>
+  appeler<Page<Operation>>(`/api/v1/tresorerie/operations/${statut ? `?statut=${statut}` : ""}`).then(
+    (p) => p.results,
+  );
+
+export const listerARemettre = () => appeler<ARemettre[]>("/api/v1/tresorerie/operations/a-remettre/");
+
+export const deposer = (depot: Execution & { type: TypeDepot; clotures: string[]; destination: string }) =>
+  appeler<Operation>("/api/v1/tresorerie/operations/deposer/", { methode: "POST", corps: depot });
+
+export const creerOperation = (
+  operation: Execution & {
+    type: "transfert" | "alimentation_fond" | "operation_bancaire";
+    societe: string;
+    montant: string;
+    source: string | null;
+    destination: string | null;
+    magasin: string | null;
+    libelle: string;
+  },
+) => appeler<Operation>("/api/v1/tresorerie/operations/", { methode: "POST", corps: operation });
+
+export const effectuerOperation = (id: string, reference: string) =>
+  appeler<Operation>(`/api/v1/tresorerie/operations/${id}/effectuer/`, { methode: "POST", corps: { reference } });
+
+export const annulerOperation = (id: string) =>
+  appeler<void>(`/api/v1/tresorerie/operations/${id}/annuler/`, { methode: "POST" });
+
+export const rapprocherOperation = (id: string, date_valeur: string, montant_credite: string | null) =>
+  appeler<Operation>(`/api/v1/tresorerie/operations/${id}/rapprocher/`, {
+    methode: "POST",
+    corps: { date_valeur, montant_credite },
+  });

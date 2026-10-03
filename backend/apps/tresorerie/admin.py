@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ClotureCaisse, DepenseCaisse
+from .models import ClotureCaisse, CompteTresorerie, DepenseCaisse, OperationTresorerie
 
 
 @admin.register(ClotureCaisse)
@@ -24,6 +24,30 @@ class ClotureCaisseAdmin(admin.ModelAdmin):
 class DepenseCaisseAdmin(admin.ModelAdmin):
     list_display = ("payee_le", "magasin", "categorie", "motif", "montant", "cloture")
     list_filter = ("categorie", "magasin")
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(CompteTresorerie)
+class CompteTresorerieAdmin(admin.ModelAdmin):
+    list_display = ("nom", "type", "societe", "banque", "magasin", "est_actif")
+    list_filter = ("type", "societe", "est_actif")
+    search_fields = ("nom", "rib")
+
+
+@admin.register(OperationTresorerie)
+class OperationTresorerieAdmin(admin.ModelAdmin):
+    list_display = ("numero", "type", "statut", "source", "destination", "montant", "reference")
+    list_filter = ("type", "statut", "societe")
+    search_fields = ("numero", "reference")
+
+    # Les opérations suivent des règles (soldes, clôtures) : elles passent par l'application.
+    def has_add_permission(self, request):
+        return False
 
     def has_change_permission(self, request, obj=None):
         return False
