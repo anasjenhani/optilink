@@ -7,7 +7,7 @@ const TUNIS = {
   id: "m1",
   code: "T01",
   nom: "Tunis",
-  region: "Grand Tunis",
+  societe: "Optique de Tunis",
   ville: "Tunis",
   pays: { code: "TN", nom: "Tunisie", devise: "TND", decimales: 3, indicatif_telephonique: "+216", timbre_fiscal: "1.000", libelle_identifiant_prescripteur: "" },
 };

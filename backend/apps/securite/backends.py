@@ -42,13 +42,13 @@ class PermissionsParAffectationBackend(ModelBackend):
 
         cache = user_obj.__dict__.setdefault("_perm_cache_par_magasin", {})
         if magasin_id not in cache:
-            region_id = (
-                Magasin.tous.filter(pk=magasin_id).values_list("region_id", flat=True).first()
+            societe_id = (
+                Magasin.tous.filter(pk=magasin_id).values_list("societe_id", flat=True).first()
             )
             couvrantes = user_obj.affectations_actives().filter(
                 Q(portee="reseau")
                 | Q(portee="magasin", magasin_id=magasin_id)
-                | Q(portee="region", region_id=region_id)
+                | Q(portee="societe", societe_id=societe_id)
             )
             perms = Permission.objects.filter(group__affectations__in=couvrantes).values_list(
                 "content_type__app_label", "codename"

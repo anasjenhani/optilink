@@ -7,7 +7,7 @@ const TUNIS = {
   id: "m1",
   code: "T01",
   nom: "Tunis",
-  region: "Grand Tunis",
+  societe: "Optique de Tunis",
   ville: "Tunis",
   pays: {
     code: "TN",

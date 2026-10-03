@@ -22,7 +22,7 @@ export function Magasins() {
         <List dense>
           {magasins.data?.map((magasin) => (
             <ListItem key={magasin.id} disableGutters>
-              <ListItemText primary={magasin.nom} secondary={`${magasin.code} · ${magasin.region}`} />
+              <ListItemText primary={magasin.nom} secondary={`${magasin.code} · ${magasin.societe}`} />
             </ListItem>
           ))}
         </List>

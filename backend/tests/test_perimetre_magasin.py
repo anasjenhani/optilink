@@ -25,8 +25,8 @@ def test_affectation_magasin_ne_voit_que_son_magasin(reseau, creer_utilisateur, 
     assert client.get(f"/api/v1/magasins/{nice}/").status_code == 404
 
 
-def test_affectation_region_voit_les_magasins_de_la_region(reseau, creer_utilisateur, client_de):
-    responsable = creer_utilisateur("resp", portee="region", region=reseau["nord"])
+def test_affectation_societe_voit_les_magasins_de_la_societe(reseau, creer_utilisateur, client_de):
+    responsable = creer_utilisateur("resp", portee="societe", societe=reseau["nord"])
     assert codes(client_de(responsable).get("/api/v1/magasins/")) == ["M01", "M02"]
 
 
@@ -61,7 +61,7 @@ def test_perimetre_filtre_aussi_hors_api(reseau):
 
 def test_portee_incoherente_refusee_par_la_validation(reseau, role, creer_utilisateur):
     affectation = Affectation(
-        utilisateur=creer_utilisateur("x"), role=role, portee="magasin", region=reseau["nord"]
+        utilisateur=creer_utilisateur("x"), role=role, portee="magasin", societe=reseau["nord"]
     )
     with pytest.raises(ValidationError):
         affectation.full_clean()

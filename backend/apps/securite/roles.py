@@ -7,7 +7,7 @@ dans l'administration. Chaque lot ajoutera les permissions de ses modules à ces
 from django.contrib.auth.management import create_permissions
 from django.contrib.auth.models import Group, Permission
 
-LECTURE_RESEAU = ["reseau.view_magasin", "reseau.view_region"]
+LECTURE_RESEAU = ["reseau.view_magasin", "reseau.view_societe"]
 
 LECTURE_ADMINISTRATION = LECTURE_RESEAU + [
     "securite.view_utilisateur",
@@ -23,8 +23,8 @@ ROLES_DE_DEPART = {
     + [
         "reseau.add_magasin",
         "reseau.change_magasin",
-        "reseau.add_region",
-        "reseau.change_region",
+        "reseau.add_societe",
+        "reseau.change_societe",
         "securite.add_utilisateur",
         "securite.change_utilisateur",
         "securite.add_affectation",
@@ -34,7 +34,7 @@ ROLES_DE_DEPART = {
         "auth.change_group",
     ],
     "Direction": LECTURE_ADMINISTRATION,
-    "Responsable régional": LECTURE_RESEAU,
+    "Responsable société": LECTURE_RESEAU,
     "Responsable magasin": LECTURE_RESEAU,
     "Opticien": LECTURE_RESEAU,
     "Vendeur": LECTURE_RESEAU,
@@ -59,7 +59,7 @@ STOCK_LECTURE = ["stock.view_article", "stock.view_mouvementstock"]
 
 PERMISSIONS_CAISSE_STOCK = {
     "Direction": VENTES_LECTURE + STOCK_LECTURE,
-    "Responsable régional": VENTES_COMPLET + STOCK_COMPLET,
+    "Responsable société": VENTES_COMPLET + STOCK_COMPLET,
     "Responsable magasin": VENTES_COMPLET + STOCK_COMPLET,
     "Opticien": VENTES_COMPLET + STOCK_LIMITE,
     "Vendeur": VENTES_LIMITE + STOCK_LECTURE,
@@ -75,7 +75,7 @@ ORDONNANCES = ["optique.view_prescription", "optique.add_prescription"]
 
 PERMISSIONS_CLIENTS_OPTIQUE = {
     "Direction": CLIENTS_LECTURE + ["optique.view_accesprescription"],
-    "Responsable régional": CLIENTS_LECTURE,
+    "Responsable société": CLIENTS_LECTURE,
     "Responsable magasin": CLIENTS_COMPLET + ORDONNANCES,
     "Opticien": CLIENTS_COMPLET + ORDONNANCES,
     "Vendeur": CLIENTS_COMPLET,
@@ -95,7 +95,7 @@ PERMISSIONS_PARAMETRAGE = {
         "reseau.delete_tauxtva",
     ],
     "Direction": ["reseau.view_pays", "reseau.view_tauxtva", "stock.view_prixarticle"],
-    "Responsable régional": PRIX_COMPLET,
+    "Responsable société": PRIX_COMPLET,
     "Responsable magasin": PRIX_COMPLET,
     "Logisticien": PRIX_COMPLET,
     "Comptable": ["reseau.view_pays", "reseau.view_tauxtva", "stock.view_prixarticle"],
@@ -105,7 +105,7 @@ PERMISSIONS_PARAMETRAGE = {
 FACTURES_COMPLET = ["ventes.view_facture", "ventes.add_facture"]
 PERMISSIONS_FACTURES = {
     "Direction": ["ventes.view_facture"],
-    "Responsable régional": FACTURES_COMPLET,
+    "Responsable société": FACTURES_COMPLET,
     "Responsable magasin": FACTURES_COMPLET,
     "Opticien": FACTURES_COMPLET,
     "Comptable": ["ventes.view_facture"],
@@ -116,7 +116,7 @@ PERMISSIONS_FACTURES = {
 DEVIS_COMPLET = ["ventes.view_devis", "ventes.add_devis", "ventes.change_devis"]
 PERMISSIONS_DEVIS = {
     "Direction": ["ventes.view_devis"],
-    "Responsable régional": DEVIS_COMPLET,
+    "Responsable société": DEVIS_COMPLET,
     "Responsable magasin": DEVIS_COMPLET,
     "Opticien": DEVIS_COMPLET,
     "Vendeur": DEVIS_COMPLET,
@@ -127,7 +127,7 @@ PERMISSIONS_DEVIS = {
 AVOIRS_COMPLET = ["ventes.view_avoir", "ventes.add_avoir"]
 PERMISSIONS_AVOIRS = {
     "Direction": ["ventes.view_avoir"],
-    "Responsable régional": AVOIRS_COMPLET,
+    "Responsable société": AVOIRS_COMPLET,
     "Responsable magasin": AVOIRS_COMPLET,
     "Comptable": ["ventes.view_avoir"],
 }
@@ -143,7 +143,7 @@ COMMANDES_FOURNISSEURS = [
 FOURNISSEURS_COMPLET = ["achats.add_fournisseur", "achats.change_fournisseur"]
 PERMISSIONS_ACHATS = {
     "Direction": ["achats.view_fournisseur", "achats.view_commandefournisseur"],
-    "Responsable régional": COMMANDES_FOURNISSEURS + FOURNISSEURS_COMPLET,
+    "Responsable société": COMMANDES_FOURNISSEURS + FOURNISSEURS_COMPLET,
     "Responsable magasin": COMMANDES_FOURNISSEURS + FOURNISSEURS_COMPLET,
     "Opticien": COMMANDES_FOURNISSEURS,
     "Logisticien": COMMANDES_FOURNISSEURS + FOURNISSEURS_COMPLET,

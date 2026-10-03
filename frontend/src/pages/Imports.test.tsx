@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 
 import { Imports } from "./Imports";
 
-const MAGASIN = { id: "m1", code: "T01", nom: "Tunis Centre", region: "", ville: "Tunis", pays: { devise: "TND", decimales: 3 } };
+const MAGASIN = { id: "m1", code: "T01", nom: "Tunis Centre", societe: "", ville: "Tunis", pays: { devise: "TND", decimales: 3 } };
 
 afterEach(() => vi.unstubAllGlobals());
 
