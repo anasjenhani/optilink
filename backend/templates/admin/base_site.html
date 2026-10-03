@@ -1,0 +1,71 @@
+{% extends "admin/base.html" %}
+{% comment %}Administration d'OptiLink : couleurs de l'application et onglets horizontaux.{% endcomment %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrastyle %}{{ block.super }}
+<style>
+  :root, html[data-theme="light"] {
+    --primary: #8e1b1b;
+    --secondary: #7a1010;
+    --accent: #f5dd5d;
+    --header-color: #ffffff;
+    --header-branding-color: #ffffff;
+    --header-bg: #8e1b1b;
+    --header-link-color: #ffffff;
+    --breadcrumbs-fg: #f3d6d6;
+    --breadcrumbs-link-fg: #ffffff;
+    --breadcrumbs-bg: #6d1414;
+    --link-fg: #8e1b1b;
+    --link-hover-color: #5c0f0f;
+    --link-selected-fg: #5c0f0f;
+    --button-bg: #8e1b1b;
+    --button-hover-bg: #6d1414;
+    --default-button-bg: #6d1414;
+    --default-button-hover-bg: #4f0d0d;
+    --selected-row: #fbeaea;
+  }
+  #header { background: linear-gradient(180deg, #a83232 0%, #8e1b1b 55%, #7a1010 100%); }
+  #site-name a, #site-name a:link, #site-name a:visited { font-weight: 600; color: #fff; }
+  .onglets {
+    display: flex; flex-wrap: wrap; gap: 2px; margin: 0; padding: 0 20px;
+    background: #f4f4f4; border-bottom: 2px solid var(--primary); list-style: none;
+  }
+  .onglets li { margin: 0; padding: 0; list-style: none; }
+  .onglets a {
+    display: block; padding: 11px 12px; font-size: 0.82rem; font-weight: 600;
+    color: #555; text-transform: uppercase; letter-spacing: 0.02em; border-radius: 4px 4px 0 0;
+  }
+  .onglets a:hover { color: var(--primary); background: #fff; text-decoration: none; }
+  .onglets a.actif { color: #fff; background: var(--primary); }
+  /* Accueil et onglets : les applications en grille plutôt qu'en colonne. */
+  .dashboard #content { width: auto; max-width: none; }
+  .dashboard #content-main { float: none; width: auto; display: grid; gap: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); align-items: start; }
+  .dashboard #content-main .module { margin-bottom: 0; }
+  .dashboard #content-related { display: none; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .onglets { background: #1f1f1f; }
+    :root:not([data-theme="light"]) .onglets a { color: #ddd; }
+  }
+  html[data-theme="dark"] .onglets { background: #1f1f1f; }
+  html[data-theme="dark"] .onglets a { color: #ddd; }
+</style>
+{% endblock %}
+
+{% block branding %}
+<div id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('Django administration') }}</a></div>
+{% if user.is_anonymous %}{% include "admin/color_theme_toggle.html" %}{% endif %}
+{% endblock %}
+
+{% block header %}{{ block.super }}
+{% if onglets %}
+<nav aria-label="Onglets de l'administration">
+  <ul class="onglets">
+    {% for onglet in onglets %}
+    <li><a href="{{ onglet.url }}"{% if onglet.actif %} class="actif" aria-current="page"{% endif %}>{{ onglet.libelle }}</a></li>
+    {% endfor %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

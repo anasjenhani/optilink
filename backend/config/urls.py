@@ -1,12 +1,12 @@
 from django.contrib import admin
 from django.urls import include, path
-from django_otp.admin import OTPAdminSite
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
+from core.admin_site import OptiLinkAdminSite
 from core.views import sante
 
-# L'administration exige aussi le second facteur.
-admin.site.__class__ = OTPAdminSite
+# L'administration exige aussi le second facteur, et présente ses pages en onglets.
+admin.site.__class__ = OptiLinkAdminSite
 
 api_v1 = [
     path("sante/", sante, name="sante"),
