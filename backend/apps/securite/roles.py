@@ -177,6 +177,31 @@ PERMISSIONS_BANQUE = {
     "Comptabilité & Finance": BANQUE_FINANCE,
 }
 
+# Ressources humaines : le responsable pointe et décide des congés de son magasin ;
+# chaque employé relié à un compte demande ses propres congés sans privilège.
+RH_COMPLET = [
+    "rh.view_employe",
+    "rh.add_employe",
+    "rh.change_employe",
+    "rh.view_pointage",
+    "rh.add_pointage",
+    "rh.view_demandeconge",
+    "rh.add_demandeconge",
+    "rh.decider_demandeconge",
+]
+PERMISSIONS_RH = {
+    "Administrateur Global": RH_COMPLET,
+    "Ressources Humaines": RH_COMPLET,
+    "Responsable de magasin": [
+        "rh.view_employe",
+        "rh.view_pointage",
+        "rh.add_pointage",
+        "rh.view_demandeconge",
+        "rh.add_demandeconge",
+        "rh.decider_demandeconge",
+    ],
+}
+
 PERMISSIONS_TRESORERIE = {
     "Administrateur Global": CLOTURE + DEPENSES + ["tresorerie.valider_cloturecaisse"],
     "Responsable de magasin": CLOTURE + DEPENSES,
@@ -198,6 +223,7 @@ for _par_role in (
     PERMISSIONS_ACHATS,
     PERMISSIONS_TRESORERIE,
     PERMISSIONS_BANQUE,
+    PERMISSIONS_RH,
 ):
     for _nom, _permissions in _par_role.items():
         ROLES_DE_DEPART[_nom] = ROLES_DE_DEPART[_nom] + _permissions

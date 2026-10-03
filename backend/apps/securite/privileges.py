@@ -42,6 +42,16 @@ PRIVILEGES = {
         "tresorerie.add_operationtresorerie": "Déposer l'argent des clôtures, prévoir un versement",
         "tresorerie.rapprocher_operationtresorerie": "Rapprocher les opérations avec la banque",
     },
+    "Ressources humaines": {
+        "rh.view_employe": "Voir les fiches du personnel",
+        "rh.add_employe": "Créer une fiche employé",
+        "rh.change_employe": "Modifier une fiche employé",
+        "rh.view_pointage": "Voir la présence",
+        "rh.add_pointage": "Saisir la présence du jour",
+        "rh.view_demandeconge": "Voir les congés",
+        "rh.add_demandeconge": "Saisir une demande de congé pour un employé",
+        "rh.decider_demandeconge": "Accepter ou refuser une demande de congé",
+    },
     "Stock et prix": {
         "stock.view_article": "Voir le catalogue et le stock",
         "stock.add_article": "Créer un article",
