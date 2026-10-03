@@ -24,6 +24,7 @@ const SITUATION = {
   rembourse_cheques: "0.000",
   rembourse_cartes: "0.000",
   depenses: "12.500",
+  alimentations: "0.000",
   especes_attendues: "212.500",
   cheques_attendus: "180.000",
   cartes_attendues: "320.500",

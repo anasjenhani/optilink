@@ -158,6 +158,25 @@ PERMISSIONS_ACHATS = {
 # Trésorerie : le caissier clôture sa caisse chaque jour, la finance vérifie et valide.
 CLOTURE = ["tresorerie.view_cloturecaisse", "tresorerie.add_cloturecaisse"]
 DEPENSES = ["tresorerie.view_depensecaisse", "tresorerie.add_depensecaisse"]
+# Banque et versements : le responsable dépose l'argent des clôtures, la finance suit la banque.
+BANQUE_FINANCE = [
+    "tresorerie.view_comptetresorerie",
+    "tresorerie.add_comptetresorerie",
+    "tresorerie.change_comptetresorerie",
+    "tresorerie.view_operationtresorerie",
+    "tresorerie.add_operationtresorerie",
+    "tresorerie.rapprocher_operationtresorerie",
+]
+PERMISSIONS_BANQUE = {
+    "Administrateur Global": BANQUE_FINANCE,
+    "Responsable de magasin": [
+        "tresorerie.view_comptetresorerie",
+        "tresorerie.view_operationtresorerie",
+        "tresorerie.add_operationtresorerie",
+    ],
+    "Comptabilité & Finance": BANQUE_FINANCE,
+}
+
 PERMISSIONS_TRESORERIE = {
     "Administrateur Global": CLOTURE + DEPENSES + ["tresorerie.valider_cloturecaisse"],
     "Responsable de magasin": CLOTURE + DEPENSES,
@@ -178,6 +197,7 @@ for _par_role in (
     PERMISSIONS_AVOIRS,
     PERMISSIONS_ACHATS,
     PERMISSIONS_TRESORERIE,
+    PERMISSIONS_BANQUE,
 ):
     for _nom, _permissions in _par_role.items():
         ROLES_DE_DEPART[_nom] = ROLES_DE_DEPART[_nom] + _permissions

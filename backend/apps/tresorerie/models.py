@@ -81,6 +81,9 @@ class ClotureCaisse(ModeleDeBase):
     rembourse_cheques = models.DecimalField(**MONTANT)
     rembourse_cartes = models.DecimalField(**MONTANT)
     depenses = models.DecimalField(**MONTANT)
+    alimentations = models.DecimalField(
+        **MONTANT, default=0, help_text="Espèces ajoutées au fond de caisse pendant la période."
+    )
 
     # Compté par le caissier.
     especes_comptees = models.DecimalField(**MONTANT)
@@ -103,6 +106,29 @@ class ClotureCaisse(ModeleDeBase):
     verifiee_le = models.DateTimeField(null=True, blank=True)
     commentaire_finance = models.TextField(blank=True)
 
+    # Où est parti l'argent une fois la clôture validée.
+    depot_especes = models.ForeignKey(
+        "OperationTresorerie",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="clotures_especes",
+    )
+    depot_cheques = models.ForeignKey(
+        "OperationTresorerie",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="clotures_cheques",
+    )
+    encaissement_cartes = models.ForeignKey(
+        "OperationTresorerie",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="clotures_cartes",
+    )
+
     objects = ParMagasinManager()
     tous = models.Manager()
 
@@ -117,7 +143,13 @@ class ClotureCaisse(ModeleDeBase):
 
     @property
     def especes_attendues(self) -> Decimal:
-        return self.fond_initial + self.encaisse_especes - self.rembourse_especes - self.depenses
+        return (
+            self.fond_initial
+            + self.alimentations
+            + self.encaisse_especes
+            - self.rembourse_especes
+            - self.depenses
+        )
 
     @property
     def cheques_attendus(self) -> Decimal:
@@ -142,3 +174,120 @@ class ClotureCaisse(ModeleDeBase):
     @property
     def especes_a_remettre(self) -> Decimal:
         return self.especes_comptees - self.fond_conserve
+
+
+class CompteTresorerie(ModeleDeBase):
+    """Où se trouve l'argent d'une société : banque, coffre d'un magasin, caisse centrale."""
+
+    class Type(models.TextChoices):
+        BANQUE = "banque", "Compte bancaire"
+        COFFRE = "coffre", "Coffre"
+        CAISSE_CENTRALE = "caisse_centrale", "Caisse centrale"
+
+    societe = models.ForeignKey(
+        "reseau.Societe", on_delete=models.PROTECT, related_name="comptes", verbose_name="société"
+    )
+    type = models.CharField(max_length=20, choices=Type.choices)
+    nom = models.CharField(max_length=100, help_text="Ex. « BIAT agence Aouina », « Coffre T01 ».")
+    banque = models.CharField(max_length=100, blank=True)
+    rib = models.CharField("RIB", max_length=34, blank=True)
+    magasin = models.ForeignKey(
+        "reseau.Magasin",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="Pour un coffre : le magasin où il se trouve.",
+    )
+    devise = models.CharField(max_length=3, default="TND")
+    solde_initial = models.DecimalField(**MONTANT, default=0)
+    est_actif = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["societe", "type", "nom"]
+        verbose_name = "compte de trésorerie"
+        verbose_name_plural = "comptes de trésorerie"
+
+    def __str__(self):
+        return self.nom
+
+
+class OperationTresorerie(ModeleDeBase):
+    """Mouvement d'argent : dépôt des clôtures, versement en banque, alimentation, frais…
+
+    Une opération peut d'abord être prévue (prévision de versement), puis effectuée (bordereau
+    remis à la banque), puis rapprochée quand la finance la retrouve sur le relevé bancaire.
+    Seules les opérations effectuées ou rapprochées comptent dans les soldes.
+    """
+
+    class Type(models.TextChoices):
+        DEPOT_ESPECES = "depot_especes", "Dépôt des espèces des clôtures"
+        DEPOT_CHEQUES = "depot_cheques", "Remise des chèques à la banque"
+        ENCAISSEMENT_CARTES = "encaissement_cartes", "Encaissement des cartes bancaires"
+        TRANSFERT = "transfert", "Transfert entre comptes"
+        ALIMENTATION_FOND = "alimentation_fond", "Alimentation du fond de caisse"
+        OPERATION_BANCAIRE = "operation_bancaire", "Opération bancaire (frais, agios, autre)"
+
+    class Statut(models.TextChoices):
+        PREVUE = "prevue", "Prévue"
+        EFFECTUEE = "effectuee", "Effectuée"
+        RAPPROCHEE = "rapprochee", "Rapprochée avec la banque"
+
+    societe = models.ForeignKey(
+        "reseau.Societe", on_delete=models.PROTECT, related_name="+", verbose_name="société"
+    )
+    numero = models.CharField(max_length=40, unique=True)
+    type = models.CharField(max_length=20, choices=Type.choices)
+    statut = models.CharField(max_length=12, choices=Statut.choices)
+    source = models.ForeignKey(
+        CompteTresorerie, on_delete=models.PROTECT, null=True, blank=True, related_name="sorties"
+    )
+    destination = models.ForeignKey(
+        CompteTresorerie, on_delete=models.PROTECT, null=True, blank=True, related_name="entrees"
+    )
+    magasin = models.ForeignKey(
+        "reseau.Magasin",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="Caisse alimentée, pour une alimentation du fond.",
+    )
+    montant = models.DecimalField(**MONTANT)
+    montant_credite = models.DecimalField(
+        **MONTANT,
+        null=True,
+        blank=True,
+        help_text="Cartes : montant réellement crédité par la banque (commission déduite).",
+    )
+    date_prevue = models.DateField(null=True, blank=True)
+    date_operation = models.DateField(null=True, blank=True)
+    date_valeur = models.DateField(null=True, blank=True, help_text="Date sur le relevé.")
+    effectuee_le = models.DateTimeField(null=True, blank=True)
+    reference = models.CharField(
+        max_length=60, blank=True, help_text="N° de bordereau ou de pièce bancaire."
+    )
+    libelle = models.CharField(max_length=200, blank=True)
+    cree_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+    rapprochee_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+
+    class Meta:
+        ordering = ["-cree_le"]
+        verbose_name = "opération de trésorerie"
+        verbose_name_plural = "opérations de trésorerie"
+        permissions = [
+            ("rapprocher_operationtresorerie", "Peut rapprocher une opération avec la banque")
+        ]
+
+    def __str__(self):
+        return self.numero
+
+    @property
+    def commission(self) -> Decimal | None:
+        if self.montant_credite is None:
+            return None
+        return self.montant - self.montant_credite

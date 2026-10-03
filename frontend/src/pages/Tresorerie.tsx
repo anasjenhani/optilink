@@ -19,7 +19,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { listerMagasins } from "../api/magasins";
-import { enUnites, formater, type Monnaie } from "../api/monnaie";
+import { enUnites, formater } from "../api/monnaie";
 import {
   cloturer,
   corriger,
@@ -33,12 +33,19 @@ import {
   type Comptage,
   type StatutCloture,
 } from "../api/tresorerie";
+import { Banque, monnaieDe, Versements } from "./Banque";
 
 export type DroitsTresorerie = {
   cloturer: boolean;
   depenses: boolean;
   verifier: boolean;
   voirClotures: boolean;
+  /** Déposer l'argent des clôtures validées, prévoir les versements. */
+  versements?: boolean;
+  /** Voir les comptes et les opérations. */
+  banque?: boolean;
+  rapprocher?: boolean;
+  gererComptes?: boolean;
 };
 
 const STATUTS: Record<StatutCloture, { libelle: string; couleur: "info" | "success" | "error" }> = {
@@ -55,23 +62,18 @@ const CATEGORIES: { valeur: CategorieDepense; libelle: string }[] = [
   { valeur: "divers", libelle: "Divers" },
 ];
 
-/** Nombre de décimales d'une devise (3 pour le dinar, 2 pour l'euro). */
-const monnaieDe = (devise: string): Monnaie => ({
-  devise,
-  decimales: new Intl.NumberFormat("fr-FR", { style: "currency", currency: devise }).resolvedOptions()
-    .maximumFractionDigits ?? 2,
-});
-
 const dateHeure = (iso: string) =>
   new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
 
-/** Caisse du magasin : dépenses, clôture quotidienne et vérification par la finance. */
+/** Caisse et banque : clôture quotidienne vérifiée par la finance, puis dépôt jusqu'à la banque. */
 export function Tresorerie({ droits }: { droits: DroitsTresorerie }) {
   const onglets = [
     droits.cloturer && { valeur: "cloture", libelle: "Clôture de caisse" },
     droits.depenses && { valeur: "depenses", libelle: "Dépenses de caisse" },
     droits.verifier && { valeur: "verifier", libelle: "À vérifier" },
     droits.voirClotures && { valeur: "historique", libelle: "Clôtures" },
+    droits.versements && { valeur: "versements", libelle: "Versements" },
+    droits.banque && { valeur: "banque", libelle: "Banque" },
   ].filter((o): o is { valeur: string; libelle: string } => Boolean(o));
   const [onglet, setOnglet] = useState(onglets[0]?.valeur ?? "historique");
   const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
@@ -110,6 +112,16 @@ export function Tresorerie({ droits }: { droits: DroitsTresorerie }) {
           {onglet === "depenses" && magasin && <Depenses key={magasin} magasin={magasin} />}
           {onglet === "verifier" && <AVerifier />}
           {onglet === "historique" && <Historique />}
+          {onglet === "versements" && <Versements />}
+          {onglet === "banque" && (
+            <Banque
+              droits={{
+                gererComptes: Boolean(droits.gererComptes),
+                rapprocher: Boolean(droits.rapprocher),
+                operations: Boolean(droits.gererComptes && droits.versements),
+              }}
+            />
+          )}
         </Stack>
       </CardContent>
     </Card>
@@ -196,7 +208,9 @@ function ClotureDeCaisse({ magasin }: { magasin: string }) {
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Typography variant="subtitle2">Dans la caisse, OptiLink attend</Typography>
         <Typography variant="body2" color="text.secondary">
-          Fond de caisse {formater(u(base.fond_initial), monnaie)} + espèces encaissées{" "}
+          Fond de caisse {formater(u(base.fond_initial), monnaie)}
+          {u(base.alimentations) > 0 && ` + alimentation ${formater(u(base.alimentations), monnaie)}`} + espèces
+          encaissées{" "}
           {formater(u(base.encaisse_especes), monnaie)} − remboursements {formater(u(base.rembourse_especes), monnaie)}{" "}
           − dépenses {formater(u(base.depenses), monnaie)}
         </Typography>
