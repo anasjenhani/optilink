@@ -219,5 +219,5 @@ def test_roles_de_depart_ont_les_droits_caisse(db):
     assert {"ventes.add_vente", "stock.view_article"} <= perms("Vendeur")
     assert "ventes.appliquer_remise" not in perms("Vendeur")
     assert "ventes.appliquer_remise" in perms("Opticien")
-    assert "ventes.add_vente" not in perms("Comptable")
-    assert not any(p.startswith(("ventes.", "stock.")) for p in perms("Administrateur système"))
+    assert "ventes.add_vente" not in perms("Comptabilité & Finance")
+    assert not any(p.startswith(("ventes.", "stock.")) for p in perms("Administrateur"))

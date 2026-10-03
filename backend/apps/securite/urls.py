@@ -1,6 +1,11 @@
 from django.urls import path
+from rest_framework.routers import DefaultRouter
 
-from .api import views
+from .api import acces, views
+
+router = DefaultRouter()
+router.register("securite/utilisateurs", acces.UtilisateurViewSet, basename="utilisateur")
+router.register("securite/profils", acces.ProfilViewSet, basename="profil")
 
 urlpatterns = [
     path("auth/session/", views.SessionView.as_view(), name="auth-session"),
@@ -13,4 +18,6 @@ urlpatterns = [
         views.ConfirmationMfaView.as_view(),
         name="mfa-confirmation",
     ),
+    path("securite/privileges/", acces.PrivilegesView.as_view(), name="privileges"),
+    *router.urls,
 ]

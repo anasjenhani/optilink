@@ -141,8 +141,8 @@ def test_droits_des_roles_sur_les_devis(db):
 
     assert {"add_devis", "change_devis"} <= permissions("Vendeur")
     assert {"add_devis", "change_devis"} <= permissions("Opticien")
-    assert "view_devis" in permissions("Comptable")
-    assert "add_devis" not in permissions("Comptable")
+    assert "view_devis" in permissions("Comptabilité & Finance")
+    assert "add_devis" not in permissions("Comptabilité & Finance")
 
 
 def test_parcours_devis_par_l_api(tunis, monture, societe, ordonnance, affecter, client_de, reseau):

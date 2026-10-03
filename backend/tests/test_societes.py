@@ -1,7 +1,6 @@
 """Sociétés : code généré, fiche complète, logo, et reprise des anciennes régions."""
 
 import pytest
-from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
@@ -84,12 +83,6 @@ def test_rib_refuse_la_ponctuation():
     assert not f.is_valid() and "rib" in f.errors
 
 
-@pytest.mark.django_db
-def test_role_responsable_societe():
-    assert Group.objects.filter(name="Responsable société").exists()
-    assert not Group.objects.filter(name="Responsable régional").exists()
-
-
 @pytest.mark.django_db(transaction=True)
 def test_les_regions_deviennent_des_societes():
     avant = [("reseau", "0004_code_numerique"), ("securite", "0003_journaux_en_ajout_seul")]
@@ -105,8 +98,7 @@ def test_les_regions_deviennent_des_societes():
     magasin = anciens.get_model("reseau", "Magasin").objects.create(
         code="T01", nom="Tunis", region=nord, pays=tunisie
     )
-    Group.objects.filter(name="Responsable société").update(name="Responsable régional")
-    role = Group.objects.get(name="Responsable régional")
+    role = Group.objects.create(name="Responsable régional")
     utilisateur = anciens.get_model("securite", "Utilisateur").objects.create(username="resp")
     anciens.get_model("securite", "Affectation").objects.create(
         utilisateur=utilisateur, role=role, portee="region", region=nord

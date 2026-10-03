@@ -10,7 +10,7 @@ from core.permissions import PermissionsParAction
 
 def test_roles_de_depart_crees(db):
     assert set(ROLES_DE_DEPART) <= set(Group.objects.values_list("name", flat=True))
-    admin = Group.objects.get(name="Administrateur système")
+    admin = Group.objects.get(name="Administrateur")
     vendeur = Group.objects.get(name="Vendeur")
     assert admin.permissions.filter(codename="add_affectation").exists()
     assert {"view_magasin", "view_societe"} <= set(
