@@ -105,7 +105,7 @@ test("les magasins ne s'affichent qu'avec la permission", async () => {
   afficher();
 
   expect(await screen.findByText("Claire Martin")).toBeInTheDocument();
-  expect(await screen.findByText("M01 · Nord")).toBeInTheDocument();
+  expect(await screen.findByText("M01 · Optique du Nord")).toBeInTheDocument();
 });
 
 test("sans permission, pas de liste de magasins", async () => {
