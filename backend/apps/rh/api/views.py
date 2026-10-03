@@ -12,9 +12,12 @@ from rest_framework.response import Response
 
 from apps.reseau.models import Magasin
 
-from .. import services
-from ..models import DemandeConge, Employe, Pointage
+from .. import remunerations, services
+from ..models import Acompte, DemandeConge, Employe, Pointage, Prime
 from .serializers import (
+    AcomptePourSerializer,
+    AcompteSaisieSerializer,
+    AcompteSerializer,
     CongeSerializer,
     DecisionSerializer,
     DemandePourSerializer,
@@ -23,13 +26,17 @@ from .serializers import (
     FeuillePresenceSerializer,
     MonEspaceSerializer,
     PresenceSaisieSerializer,
+    PrimeSaisieSerializer,
+    PrimeSerializer,
+    RecapSerializer,
+    VersementSerializer,
 )
 
 
 def _executer(fonction, *args, **kwargs):
     try:
         return fonction(*args, **kwargs)
-    except services.CongeImpossible as erreur:
+    except (services.CongeImpossible, remunerations.OperationImpossible) as erreur:
         raise ValidationError({"detail": str(erreur)}) from erreur
 
 
@@ -234,7 +241,7 @@ class MonEspaceViewSet(viewsets.GenericViewSet):
     serializer_class = MonEspaceSerializer
     pagination_class = None
     # Chacun voit ses propres congés : aucun privilège n'est exigé.
-    permissions_requises = {"list": [], "demander": [], "annuler": []}
+    permissions_requises = {"list": [], "demander": [], "annuler": [], "demander_acompte": []}
 
     def get_queryset(self):
         return Employe.objects.none()
@@ -250,7 +257,15 @@ class MonEspaceViewSet(viewsets.GenericViewSet):
         conges = DemandeConge.tous.filter(employe=employe).select_related(
             "employe", "magasin", "demandee_par", "decidee_par"
         )
-        return MonEspaceSerializer({"employe": employe, "conges": conges}).data
+        acomptes = Acompte.tous.filter(employe=employe).select_related(
+            "employe", "magasin", "demande_par", "decide_par"
+        )
+        primes = Prime.tous.filter(employe=employe, statut=Prime.Statut.VALIDEE).select_related(
+            "employe", "magasin", "proposee_par", "validee_par"
+        )
+        return MonEspaceSerializer(
+            {"employe": employe, "conges": conges, "acomptes": acomptes, "primes": primes}
+        ).data
 
     @extend_schema(responses=MonEspaceSerializer)
     def list(self, request):
@@ -278,3 +293,198 @@ class MonEspaceViewSet(viewsets.GenericViewSet):
             raise NotFound("Demande introuvable.") from erreur
         _executer(services.annuler, demande)
         return Response(self._espace(employe))
+
+    @extend_schema(request=AcompteSaisieSerializer, responses={201: MonEspaceSerializer})
+    @action(detail=False, methods=["post"], url_path="demander-acompte")
+    def demander_acompte(self, request):
+        employe = self._employe()
+        saisie = AcompteSaisieSerializer(data=request.data)
+        saisie.is_valid(raise_exception=True)
+        d = saisie.validated_data
+        _executer(
+            remunerations.demander_acompte,
+            employe,
+            request.user,
+            d["montant"],
+            d["mois"],
+            d["motif"],
+        )
+        return Response(self._espace(employe), status=status.HTTP_201_CREATED)
+
+
+def _employe_autorise(request, public_id, permission):
+    employe = Employe.objects.select_related("magasin").filter(public_id=public_id).first()
+    if employe is None:
+        raise ValidationError({"employe": "Employé introuvable."})
+    exiger(request, permission, employe.magasin)
+    return employe
+
+
+class AcompteViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """Avances sur salaire : demande, accord des RH, versement, retenue sur la paie."""
+
+    serializer_class = AcompteSerializer
+    lookup_field = "public_id"
+    filterset_fields = ["statut", "mois", "employe__public_id", "magasin__public_id"]
+    permissions_requises = {
+        "list": "rh.view_acompte",
+        "retrieve": "rh.view_acompte",
+        "create": "rh.add_acompte",
+        "annuler": "rh.add_acompte",
+        "accorder": "rh.decider_acompte",
+        "refuser": "rh.decider_acompte",
+        "verser": "rh.decider_acompte",
+    }
+
+    def get_queryset(self):
+        return Acompte.objects.select_related("employe", "magasin", "demande_par", "decide_par")
+
+    @extend_schema(request=AcomptePourSerializer, responses={201: AcompteSerializer})
+    def create(self, request):
+        saisie = AcomptePourSerializer(data=request.data)
+        saisie.is_valid(raise_exception=True)
+        d = saisie.validated_data
+        employe = _employe_autorise(request, d["employe"], "rh.add_acompte")
+        acompte = _executer(
+            remunerations.demander_acompte,
+            employe,
+            request.user,
+            d["montant"],
+            d["mois"],
+            d["motif"],
+        )
+        return Response(AcompteSerializer(acompte).data, status=status.HTTP_201_CREATED)
+
+    def _decider(self, request, accorder):
+        saisie = DecisionSerializer(data=request.data)
+        saisie.is_valid(raise_exception=True)
+        acompte = _executer(
+            remunerations.decider_acompte,
+            self.get_object(),
+            request.user,
+            accorder,
+            saisie.validated_data["commentaire"],
+        )
+        return Response(AcompteSerializer(acompte).data)
+
+    @extend_schema(request=DecisionSerializer, responses=AcompteSerializer)
+    @action(detail=True, methods=["post"])
+    def accorder(self, request, public_id=None):
+        return self._decider(request, accorder=True)
+
+    @extend_schema(request=DecisionSerializer, responses=AcompteSerializer)
+    @action(detail=True, methods=["post"])
+    def refuser(self, request, public_id=None):
+        return self._decider(request, accorder=False)
+
+    @extend_schema(request=VersementSerializer, responses=AcompteSerializer)
+    @action(detail=True, methods=["post"])
+    def verser(self, request, public_id=None):
+        saisie = VersementSerializer(data=request.data)
+        saisie.is_valid(raise_exception=True)
+        d = saisie.validated_data
+        acompte = _executer(
+            remunerations.verser_acompte, self.get_object(), d["mode"], d["reference"], d["date"]
+        )
+        return Response(AcompteSerializer(acompte).data)
+
+    @extend_schema(request=None, responses=AcompteSerializer)
+    @action(detail=True, methods=["post"])
+    def annuler(self, request, public_id=None):
+        acompte = _executer(remunerations.annuler_acompte, self.get_object())
+        return Response(AcompteSerializer(acompte).data)
+
+
+class PrimeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """Primes : proposées par le responsable, validées par les RH."""
+
+    serializer_class = PrimeSerializer
+    lookup_field = "public_id"
+    filterset_fields = ["statut", "mois", "type", "employe__public_id", "magasin__public_id"]
+    permissions_requises = {
+        "list": "rh.view_prime",
+        "retrieve": "rh.view_prime",
+        "create": "rh.add_prime",
+        "annuler": "rh.add_prime",
+        "valider": "rh.valider_prime",
+        "refuser": "rh.valider_prime",
+    }
+
+    def get_queryset(self):
+        return Prime.objects.select_related("employe", "magasin", "proposee_par", "validee_par")
+
+    @extend_schema(request=PrimeSaisieSerializer, responses={201: PrimeSerializer})
+    def create(self, request):
+        saisie = PrimeSaisieSerializer(data=request.data)
+        saisie.is_valid(raise_exception=True)
+        d = saisie.validated_data
+        employe = _employe_autorise(request, d["employe"], "rh.add_prime")
+        prime = _executer(
+            remunerations.proposer_prime,
+            employe,
+            request.user,
+            d["type"],
+            d["montant"],
+            d["mois"],
+            d["motif"],
+        )
+        return Response(PrimeSerializer(prime).data, status=status.HTTP_201_CREATED)
+
+    def _decider(self, request, valider):
+        saisie = DecisionSerializer(data=request.data)
+        saisie.is_valid(raise_exception=True)
+        prime = _executer(
+            remunerations.decider_prime,
+            self.get_object(),
+            request.user,
+            valider,
+            saisie.validated_data["commentaire"],
+        )
+        return Response(PrimeSerializer(prime).data)
+
+    @extend_schema(request=DecisionSerializer, responses=PrimeSerializer)
+    @action(detail=True, methods=["post"])
+    def valider(self, request, public_id=None):
+        return self._decider(request, valider=True)
+
+    @extend_schema(request=DecisionSerializer, responses=PrimeSerializer)
+    @action(detail=True, methods=["post"])
+    def refuser(self, request, public_id=None):
+        return self._decider(request, valider=False)
+
+    @extend_schema(request=None, responses=PrimeSerializer)
+    @action(detail=True, methods=["post"])
+    def annuler(self, request, public_id=None):
+        return Response(
+            PrimeSerializer(_executer(remunerations.annuler_prime, self.get_object())).data
+        )
+
+
+class RecapViewSet(viewsets.GenericViewSet):
+    """Récapitulatif du mois pour la paie : acomptes à retenir et primes à verser."""
+
+    serializer_class = RecapSerializer
+    pagination_class = None
+    permissions_requises = {"list": ["rh.view_acompte", "rh.view_prime"]}
+
+    def get_queryset(self):
+        return Employe.objects.none()
+
+    @extend_schema(
+        parameters=[OpenApiParameter("mois", OpenApiTypes.DATE, description="Un jour du mois.")],
+        responses=RecapSerializer(many=True),
+    )
+    def list(self, request):
+        texte = request.query_params.get("mois") or timezone.localdate().isoformat()
+        try:
+            mois = remunerations.premier_du_mois(timezone.datetime.fromisoformat(texte).date())
+        except ValueError as erreur:
+            raise ValidationError({"mois": "Date invalide."}) from erreur
+        employes = (
+            Employe.objects.select_related("magasin")
+            .filter(date_embauche__lt=(mois + timezone.timedelta(days=32)).replace(day=1))
+            .exclude(date_sortie__lt=mois)
+        )
+        return Response(
+            RecapSerializer(remunerations.recapitulatif(employes, mois), many=True).data
+        )
