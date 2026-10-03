@@ -99,7 +99,10 @@ class Vente(ModeleDeBase):
     class Meta:
         ordering = ["-cree_le"]
         verbose_name = "vente"
-        permissions = [("appliquer_remise", "Peut appliquer une remise")]
+        permissions = [
+            ("appliquer_remise", "Peut appliquer une remise"),
+            ("consulter_reporting", "Peut consulter le reporting des ventes"),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["magasin", "annee", "sequence"], name="facture_sans_doublon"

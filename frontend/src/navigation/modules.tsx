@@ -4,6 +4,7 @@ import AdminPanelSettings from "@mui/icons-material/AdminPanelSettings";
 import ArrowDownward from "@mui/icons-material/ArrowDownward";
 import ArrowUpward from "@mui/icons-material/ArrowUpward";
 import Badge from "@mui/icons-material/Badge";
+import BarChart from "@mui/icons-material/BarChart";
 import BeachAccess from "@mui/icons-material/BeachAccess";
 import Build from "@mui/icons-material/Build";
 import CalendarMonth from "@mui/icons-material/CalendarMonth";
@@ -26,6 +27,7 @@ import Lock from "@mui/icons-material/Lock";
 import LockOpen from "@mui/icons-material/LockOpen";
 import MonitorHeart from "@mui/icons-material/MonitorHeart";
 import MoveDown from "@mui/icons-material/MoveDown";
+import NotificationsActive from "@mui/icons-material/NotificationsActive";
 import Payments from "@mui/icons-material/Payments";
 import People from "@mui/icons-material/People";
 import PersonAddAlt from "@mui/icons-material/PersonAddAlt";
@@ -53,6 +55,7 @@ import type { ReactNode } from "react";
 
 import { peut, type EtatSession } from "../api/auth";
 import { AccesSecurite } from "../pages/AccesSecurite";
+import { Alertes } from "../pages/Alertes";
 import { Accueil } from "../pages/Accueil";
 import { Avoirs } from "../pages/Avoirs";
 import { Caisse } from "../pages/Caisse";
@@ -63,6 +66,7 @@ import { Devis } from "../pages/Devis";
 import { Factures } from "../pages/Factures";
 import { Imports } from "../pages/Imports";
 import { Magasins } from "../pages/Magasins";
+import { Reporting } from "../pages/Reporting";
 import { RessourcesHumaines } from "../pages/RessourcesHumaines";
 import { Tresorerie } from "../pages/Tresorerie";
 import { VenteComptoir } from "../pages/VenteComptoir";
@@ -349,6 +353,14 @@ export function modulesPour(session: EtatSession): Module[] {
       id: "administration",
       libelle: "Administration",
       tuiles: [
+        { id: "alertes", libelle: "Alertes", icone: NotificationsActive, couleur: COULEURS.rouge, ecran: () => <Alertes /> },
+        {
+          id: "reporting",
+          libelle: "Reporting",
+          icone: BarChart,
+          couleur: COULEURS.bleu,
+          ecran: si(a("ventes.consulter_reporting"), () => <Reporting />),
+        },
         {
           id: "demande-conge",
           libelle: "Demande de Congé",

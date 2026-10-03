@@ -10,6 +10,9 @@ PRIVILEGES = {
         "ventes.add_vente": "Encaisser (caisse, acomptes, livraisons)",
         "ventes.appliquer_remise": "Accorder une remise",
     },
+    "Pilotage": {
+        "ventes.consulter_reporting": "Consulter le reporting (chiffre d'affaires, ventes)",
+    },
     "Devis": {
         "ventes.view_devis": "Voir les devis",
         "ventes.add_devis": "Établir un devis",
