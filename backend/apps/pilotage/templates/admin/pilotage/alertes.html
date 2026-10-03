@@ -1,0 +1,33 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Accueil</a> › Alertes et reporting › Alertes</div>{% endblock %}
+{% block content %}
+<style>
+  .gravite { display: inline-block; padding: 2px 10px; border-radius: 10px; color: #fff; font-weight: 600; }
+  .gravite-haute { background: #ba2121; }
+  .gravite-moyenne { background: #c77c02; }
+  .gravite-info { background: #417690; }
+</style>
+<div id="content-main">
+  {% if alertes %}
+  <div class="module">
+    <table style="width: 100%">
+      <thead><tr><th>Priorité</th><th>Alerte</th><th>Magasin</th><th>Détail</th><th></th></tr></thead>
+      <tbody>
+      {% for a in alertes %}
+        <tr>
+          <td><span class="gravite gravite-{{ a.gravite }}">{% if a.gravite == "haute" %}Urgent{% elif a.gravite == "moyenne" %}À surveiller{% else %}À traiter{% endif %}</span></td>
+          <td><strong>{{ a.titre }}</strong></td>
+          <td>{{ a.magasin|default:"Société" }}</td>
+          <td>{{ a.detail }}</td>
+          <td>{% if a.lien %}<a href="{{ a.lien }}">Voir</a>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="success">Aucune alerte : tout est à jour.</p>
+  {% endif %}
+  <p class="help">Calculées à l'ouverture de la page, selon vos droits et vos magasins. Seuil de stock faible : réglage STOCK_ALERTE_SEUIL du serveur.</p>
+</div>
+{% endblock %}

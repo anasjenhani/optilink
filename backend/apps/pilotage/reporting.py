@@ -13,7 +13,7 @@ from django.db.models.functions import TruncDate
 from apps.stock.models import Article
 from apps.ventes.models import Avoir, LigneVente, Paiement, Vente
 
-ZERO = Decimal("0")
+ZERO = Decimal("0.000")
 FAMILLES = dict(Article.Famille.choices)
 MODES = dict(Paiement.Mode.choices)
 
