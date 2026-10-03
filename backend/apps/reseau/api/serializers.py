@@ -7,6 +7,7 @@ class PaysSerializer(serializers.ModelSerializer):
     class Meta:
         model = Pays
         fields = [
+            "code_numerique",
             "code",
             "nom",
             "devise",
