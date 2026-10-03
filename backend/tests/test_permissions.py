@@ -10,10 +10,10 @@ from core.permissions import PermissionsParAction
 
 def test_roles_de_depart_crees(db):
     assert set(ROLES_DE_DEPART) <= set(Group.objects.values_list("name", flat=True))
-    admin = Group.objects.get(name="Administrateur système")
+    admin = Group.objects.get(name="Administrateur")
     vendeur = Group.objects.get(name="Vendeur")
     assert admin.permissions.filter(codename="add_affectation").exists()
-    assert {"view_magasin", "view_region"} <= set(
+    assert {"view_magasin", "view_societe"} <= set(
         vendeur.permissions.values_list("codename", flat=True)
     )
     assert not vendeur.permissions.filter(codename="add_affectation").exists()
@@ -38,7 +38,7 @@ def test_les_droits_dependent_du_magasin(reseau, creer_role, creer_utilisateur):
         utilisateur=utilisateur, role=responsable, portee="magasin", magasin=reseau["lille"]
     )
     Affectation.objects.create(
-        utilisateur=utilisateur, role=lecteur, portee="region", region=reseau["sud"]
+        utilisateur=utilisateur, role=lecteur, portee="societe", societe=reseau["sud"]
     )
 
     assert utilisateur.has_perm("reseau.change_magasin")
@@ -56,7 +56,7 @@ def test_affectation_reseau_couvre_tous_les_magasins(reseau, creer_role, creer_u
     assert all(
         utilisateur.has_perm("reseau.view_magasin", m)
         for m in reseau.values()
-        if hasattr(m, "region_id")
+        if hasattr(m, "societe_id")
     )
 
 
@@ -75,7 +75,7 @@ class VueSansDeclaration(APIView):
 
 class VueDeclaree(APIView):
     permission_classes = [PermissionsParAction]
-    permissions_requises = {"get": "reseau.view_region"}
+    permissions_requises = {"get": "reseau.view_societe"}
 
     def get(self, request):
         from rest_framework.response import Response
@@ -87,10 +87,10 @@ class VueDeclaree(APIView):
 
 
 @pytest.fixture
-def lecteur_regions(creer_role, creer_utilisateur):
+def lecteur_societes(creer_role, creer_utilisateur):
     utilisateur = creer_utilisateur("lecteur")
     Affectation.objects.create(
-        utilisateur=utilisateur, role=creer_role("Régions", "reseau.view_region"), portee="reseau"
+        utilisateur=utilisateur, role=creer_role("Sociétés", "reseau.view_societe"), portee="reseau"
     )
     return utilisateur
 
@@ -101,10 +101,10 @@ def appeler(vue, methode, utilisateur):
     return vue.as_view()(requete).status_code
 
 
-def test_refus_par_defaut_sans_permission_declaree(lecteur_regions):
-    assert appeler(VueSansDeclaration, "get", lecteur_regions) == 403
+def test_refus_par_defaut_sans_permission_declaree(lecteur_societes):
+    assert appeler(VueSansDeclaration, "get", lecteur_societes) == 403
 
 
-def test_permission_declaree_par_methode(lecteur_regions):
-    assert appeler(VueDeclaree, "get", lecteur_regions) == 200
-    assert appeler(VueDeclaree, "post", lecteur_regions) == 403
+def test_permission_declaree_par_methode(lecteur_societes):
+    assert appeler(VueDeclaree, "get", lecteur_societes) == 200
+    assert appeler(VueDeclaree, "post", lecteur_societes) == 403

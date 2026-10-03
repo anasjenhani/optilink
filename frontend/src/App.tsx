@@ -14,6 +14,7 @@ import { ActivationMfa } from "./auth/ActivationMfa";
 import { CodesSecours } from "./auth/CodesSecours";
 import { Connexion } from "./auth/Connexion";
 import { VerificationMfa } from "./auth/VerificationMfa";
+import { AccesSecurite } from "./pages/AccesSecurite";
 import { Accueil } from "./pages/Accueil";
 import { Avoirs } from "./pages/Avoirs";
 import { Caisse } from "./pages/Caisse";
@@ -24,6 +25,8 @@ import { Devis } from "./pages/Devis";
 import { Factures } from "./pages/Factures";
 import { Imports } from "./pages/Imports";
 import { Magasins } from "./pages/Magasins";
+import { RessourcesHumaines } from "./pages/RessourcesHumaines";
+import { Tresorerie } from "./pages/Tresorerie";
 import { Verres } from "./pages/Verres";
 
 function Contenu({ session }: { session: EtatSession }) {
@@ -81,7 +84,49 @@ function Contenu({ session }: { session: EtatSession }) {
           }}
         />
       )}
+      {(peut(session, "tresorerie.add_cloturecaisse") ||
+        peut(session, "tresorerie.add_depensecaisse") ||
+        peut(session, "tresorerie.view_cloturecaisse") ||
+        peut(session, "tresorerie.view_operationtresorerie")) && (
+        <Tresorerie
+          droits={{
+            cloturer: peut(session, "tresorerie.add_cloturecaisse"),
+            depenses: peut(session, "tresorerie.add_depensecaisse"),
+            verifier: peut(session, "tresorerie.valider_cloturecaisse"),
+            voirClotures: peut(session, "tresorerie.view_cloturecaisse"),
+            versements: peut(session, "tresorerie.add_operationtresorerie"),
+            banque: peut(session, "tresorerie.view_operationtresorerie"),
+            rapprocher: peut(session, "tresorerie.rapprocher_operationtresorerie"),
+            gererComptes: peut(session, "tresorerie.add_comptetresorerie"),
+          }}
+        />
+      )}
+      <RessourcesHumaines
+        droits={{
+          voirEmployes: peut(session, "rh.view_employe"),
+          creerEmploye: peut(session, "rh.add_employe"),
+          voirPresence: peut(session, "rh.view_pointage"),
+          pointer: peut(session, "rh.add_pointage"),
+          voirConges: peut(session, "rh.view_demandeconge"),
+          saisirConge: peut(session, "rh.add_demandeconge") && peut(session, "rh.view_employe"),
+          deciderConge: peut(session, "rh.decider_demandeconge"),
+        }}
+      />
       {peut(session, "reseau.view_magasin") && <Magasins />}
+      {(peut(session, "securite.view_utilisateur") || peut(session, "auth.view_group")) && (
+        <AccesSecurite
+          droits={{
+            voirUtilisateurs: peut(session, "securite.view_utilisateur"),
+            creerUtilisateur: peut(session, "securite.add_utilisateur") && peut(session, "securite.add_affectation"),
+            modifierUtilisateur:
+              peut(session, "securite.change_utilisateur") && peut(session, "securite.change_affectation"),
+            voirProfils: peut(session, "auth.view_group"),
+            creerProfil: peut(session, "auth.add_group"),
+            modifierProfil: peut(session, "auth.change_group"),
+            supprimerProfil: peut(session, "auth.delete_group"),
+          }}
+        />
+      )}
       <Accueil />
     </Stack>
   );

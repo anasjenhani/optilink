@@ -7,7 +7,9 @@ dans l'administration. Chaque lot ajoutera les permissions de ses modules à ces
 from django.contrib.auth.management import create_permissions
 from django.contrib.auth.models import Group, Permission
 
-LECTURE_RESEAU = ["reseau.view_magasin", "reseau.view_region"]
+from .privileges import CODES
+
+LECTURE_RESEAU = ["reseau.view_magasin", "reseau.view_societe"]
 
 LECTURE_ADMINISTRATION = LECTURE_RESEAU + [
     "securite.view_utilisateur",
@@ -19,12 +21,12 @@ LECTURE_ADMINISTRATION = LECTURE_RESEAU + [
 
 ROLES_DE_DEPART = {
     # Gère comptes, rôles et magasins, sans accès aux données métier.
-    "Administrateur système": LECTURE_ADMINISTRATION
+    "Administrateur": LECTURE_ADMINISTRATION
     + [
         "reseau.add_magasin",
         "reseau.change_magasin",
-        "reseau.add_region",
-        "reseau.change_region",
+        "reseau.add_societe",
+        "reseau.change_societe",
         "securite.add_utilisateur",
         "securite.change_utilisateur",
         "securite.add_affectation",
@@ -33,14 +35,16 @@ ROLES_DE_DEPART = {
         "auth.add_group",
         "auth.change_group",
     ],
-    "Direction": LECTURE_ADMINISTRATION,
-    "Responsable régional": LECTURE_RESEAU,
-    "Responsable magasin": LECTURE_RESEAU,
+    "Administrateur Global": [],  # Tous les privilèges : complété plus bas.
+    "Responsable de magasin": LECTURE_RESEAU,
     "Opticien": LECTURE_RESEAU,
     "Vendeur": LECTURE_RESEAU,
-    "Logisticien": LECTURE_RESEAU,
-    "Comptable": LECTURE_RESEAU,
-    "Gestionnaire RH": LECTURE_RESEAU,
+    "Achats & Gestionnaire de Stock": LECTURE_RESEAU,
+    "Comptabilité & Finance": LECTURE_RESEAU,
+    "Ressources Humaines": LECTURE_RESEAU + ["securite.view_utilisateur"],
+    "Caissier": LECTURE_RESEAU,
+    "Atelier": LECTURE_RESEAU,
+    "Commande": LECTURE_RESEAU,
 }
 
 # Prototype caisse et stock : colonnes Ventes et Stock de la matrice.
@@ -58,13 +62,15 @@ STOCK_LIMITE = ["stock.view_article", "stock.view_mouvementstock", "stock.add_mo
 STOCK_LECTURE = ["stock.view_article", "stock.view_mouvementstock"]
 
 PERMISSIONS_CAISSE_STOCK = {
-    "Direction": VENTES_LECTURE + STOCK_LECTURE,
-    "Responsable régional": VENTES_COMPLET + STOCK_COMPLET,
-    "Responsable magasin": VENTES_COMPLET + STOCK_COMPLET,
+    "Responsable de magasin": VENTES_COMPLET + STOCK_COMPLET,
     "Opticien": VENTES_COMPLET + STOCK_LIMITE,
     "Vendeur": VENTES_LIMITE + STOCK_LECTURE,
-    "Logisticien": STOCK_COMPLET,
-    "Comptable": VENTES_LECTURE + STOCK_LECTURE,
+    "Achats & Gestionnaire de Stock": STOCK_COMPLET,
+    "Comptabilité & Finance": VENTES_LECTURE + STOCK_LECTURE,
+    # Le caissier encaisse sans accorder de remise ; atelier et commandes consultent.
+    "Caissier": VENTES_LIMITE + STOCK_LECTURE,
+    "Atelier": VENTES_LECTURE + STOCK_LECTURE,
+    "Commande": VENTES_LECTURE + STOCK_LECTURE,
 }
 
 # Lot Vendre : colonne « Clients & optique ». Seuls opticiens et responsables de magasin
@@ -74,18 +80,20 @@ CLIENTS_LECTURE = ["crm.view_client"]
 ORDONNANCES = ["optique.view_prescription", "optique.add_prescription"]
 
 PERMISSIONS_CLIENTS_OPTIQUE = {
-    "Direction": CLIENTS_LECTURE + ["optique.view_accesprescription"],
-    "Responsable régional": CLIENTS_LECTURE,
-    "Responsable magasin": CLIENTS_COMPLET + ORDONNANCES,
+    "Responsable de magasin": CLIENTS_COMPLET + ORDONNANCES,
     "Opticien": CLIENTS_COMPLET + ORDONNANCES,
     "Vendeur": CLIENTS_COMPLET,
+    # L'atelier monte les verres et le service commandes les commande : ils lisent l'ordonnance.
+    "Caissier": CLIENTS_LECTURE,
+    "Atelier": CLIENTS_LECTURE + ["optique.view_prescription"],
+    "Commande": CLIENTS_LECTURE + ["optique.view_prescription"],
 }
 
 # Paramétrage par pays (taux de TVA, timbre, monnaie) : réglé par l'administrateur, consulté
 # par la direction. Les prix de vente suivent la colonne Stock « Complet ».
 PRIX_COMPLET = ["stock.view_prixarticle", "stock.add_prixarticle", "stock.change_prixarticle"]
 PERMISSIONS_PARAMETRAGE = {
-    "Administrateur système": [
+    "Administrateur": [
         "reseau.view_pays",
         "reseau.add_pays",
         "reseau.change_pays",
@@ -94,42 +102,35 @@ PERMISSIONS_PARAMETRAGE = {
         "reseau.change_tauxtva",
         "reseau.delete_tauxtva",
     ],
-    "Direction": ["reseau.view_pays", "reseau.view_tauxtva", "stock.view_prixarticle"],
-    "Responsable régional": PRIX_COMPLET,
-    "Responsable magasin": PRIX_COMPLET,
-    "Logisticien": PRIX_COMPLET,
-    "Comptable": ["reseau.view_pays", "reseau.view_tauxtva", "stock.view_prixarticle"],
+    "Responsable de magasin": PRIX_COMPLET,
+    "Achats & Gestionnaire de Stock": PRIX_COMPLET,
+    "Comptabilité & Finance": ["reseau.view_pays", "reseau.view_tauxtva", "stock.view_prixarticle"],
 }
 
 # Factures : générées à part, une fois la vente entièrement payée.
 FACTURES_COMPLET = ["ventes.view_facture", "ventes.add_facture"]
 PERMISSIONS_FACTURES = {
-    "Direction": ["ventes.view_facture"],
-    "Responsable régional": FACTURES_COMPLET,
-    "Responsable magasin": FACTURES_COMPLET,
+    "Responsable de magasin": FACTURES_COMPLET,
     "Opticien": FACTURES_COMPLET,
-    "Comptable": ["ventes.view_facture"],
+    "Comptabilité & Finance": ["ventes.view_facture"],
 }
 
 # Devis d'équipement : établis par toute l'équipe de vente ; l'encaissement suit le droit de
 # vente, une remise le droit de remise.
 DEVIS_COMPLET = ["ventes.view_devis", "ventes.add_devis", "ventes.change_devis"]
 PERMISSIONS_DEVIS = {
-    "Direction": ["ventes.view_devis"],
-    "Responsable régional": DEVIS_COMPLET,
-    "Responsable magasin": DEVIS_COMPLET,
+    "Responsable de magasin": DEVIS_COMPLET,
     "Opticien": DEVIS_COMPLET,
     "Vendeur": DEVIS_COMPLET,
-    "Comptable": ["ventes.view_devis"],
+    "Comptabilité & Finance": ["ventes.view_devis"],
+    "Caissier": ["ventes.view_devis"],
 }
 
 # Avoirs et annulations : remboursent le client, donc réservés aux responsables.
 AVOIRS_COMPLET = ["ventes.view_avoir", "ventes.add_avoir"]
 PERMISSIONS_AVOIRS = {
-    "Direction": ["ventes.view_avoir"],
-    "Responsable régional": AVOIRS_COMPLET,
-    "Responsable magasin": AVOIRS_COMPLET,
-    "Comptable": ["ventes.view_avoir"],
+    "Responsable de magasin": AVOIRS_COMPLET,
+    "Comptabilité & Finance": ["ventes.view_avoir"],
 }
 
 # Commandes de verres aux fournisseurs : passées et réceptionnées par l'opticien, les
@@ -142,12 +143,74 @@ COMMANDES_FOURNISSEURS = [
 ]
 FOURNISSEURS_COMPLET = ["achats.add_fournisseur", "achats.change_fournisseur"]
 PERMISSIONS_ACHATS = {
-    "Direction": ["achats.view_fournisseur", "achats.view_commandefournisseur"],
-    "Responsable régional": COMMANDES_FOURNISSEURS + FOURNISSEURS_COMPLET,
-    "Responsable magasin": COMMANDES_FOURNISSEURS + FOURNISSEURS_COMPLET,
+    "Responsable de magasin": COMMANDES_FOURNISSEURS + FOURNISSEURS_COMPLET,
     "Opticien": COMMANDES_FOURNISSEURS,
-    "Logisticien": COMMANDES_FOURNISSEURS + FOURNISSEURS_COMPLET,
-    "Comptable": ["achats.view_fournisseur", "achats.view_commandefournisseur"],
+    "Achats & Gestionnaire de Stock": COMMANDES_FOURNISSEURS + FOURNISSEURS_COMPLET,
+    "Comptabilité & Finance": ["achats.view_fournisseur", "achats.view_commandefournisseur"],
+    "Atelier": [
+        "achats.view_fournisseur",
+        "achats.view_commandefournisseur",
+        "achats.change_commandefournisseur",
+    ],
+    "Commande": COMMANDES_FOURNISSEURS,
+}
+
+# Trésorerie : le caissier clôture sa caisse chaque jour, la finance vérifie et valide.
+CLOTURE = ["tresorerie.view_cloturecaisse", "tresorerie.add_cloturecaisse"]
+DEPENSES = ["tresorerie.view_depensecaisse", "tresorerie.add_depensecaisse"]
+# Banque et versements : le responsable dépose l'argent des clôtures, la finance suit la banque.
+BANQUE_FINANCE = [
+    "tresorerie.view_comptetresorerie",
+    "tresorerie.add_comptetresorerie",
+    "tresorerie.change_comptetresorerie",
+    "tresorerie.view_operationtresorerie",
+    "tresorerie.add_operationtresorerie",
+    "tresorerie.rapprocher_operationtresorerie",
+]
+PERMISSIONS_BANQUE = {
+    "Administrateur Global": BANQUE_FINANCE,
+    "Responsable de magasin": [
+        "tresorerie.view_comptetresorerie",
+        "tresorerie.view_operationtresorerie",
+        "tresorerie.add_operationtresorerie",
+    ],
+    "Comptabilité & Finance": BANQUE_FINANCE,
+}
+
+# Ressources humaines : le responsable pointe et décide des congés de son magasin ;
+# chaque employé relié à un compte demande ses propres congés sans privilège.
+RH_COMPLET = [
+    "rh.view_employe",
+    "rh.add_employe",
+    "rh.change_employe",
+    "rh.view_pointage",
+    "rh.add_pointage",
+    "rh.view_demandeconge",
+    "rh.add_demandeconge",
+    "rh.decider_demandeconge",
+]
+PERMISSIONS_RH = {
+    "Administrateur Global": RH_COMPLET,
+    "Ressources Humaines": RH_COMPLET,
+    "Responsable de magasin": [
+        "rh.view_employe",
+        "rh.view_pointage",
+        "rh.add_pointage",
+        "rh.view_demandeconge",
+        "rh.add_demandeconge",
+        "rh.decider_demandeconge",
+    ],
+}
+
+PERMISSIONS_TRESORERIE = {
+    "Administrateur Global": CLOTURE + DEPENSES + ["tresorerie.valider_cloturecaisse"],
+    "Responsable de magasin": CLOTURE + DEPENSES,
+    "Caissier": CLOTURE + DEPENSES,
+    "Comptabilité & Finance": [
+        "tresorerie.view_cloturecaisse",
+        "tresorerie.valider_cloturecaisse",
+        "tresorerie.view_depensecaisse",
+    ],
 }
 
 for _par_role in (
@@ -158,9 +221,14 @@ for _par_role in (
     PERMISSIONS_DEVIS,
     PERMISSIONS_AVOIRS,
     PERMISSIONS_ACHATS,
+    PERMISSIONS_TRESORERIE,
+    PERMISSIONS_BANQUE,
+    PERMISSIONS_RH,
 ):
     for _nom, _permissions in _par_role.items():
         ROLES_DE_DEPART[_nom] = ROLES_DE_DEPART[_nom] + _permissions
+
+ROLES_DE_DEPART["Administrateur Global"] = sorted(CODES)
 
 
 def _permission(nom):

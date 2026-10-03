@@ -7,7 +7,7 @@ from django_otp.plugins.otp_totp.models import TOTPDevice
 from rest_framework.test import APIClient
 
 from apps.crm.models import Client
-from apps.reseau.models import Magasin, Pays, Region, TauxTva
+from apps.reseau.models import Magasin, Pays, Societe, TauxTva
 from apps.securite.models import Affectation, Utilisateur
 from apps.stock.models import Article, MouvementStock, PrixArticle
 
@@ -16,14 +16,14 @@ from apps.stock.models import Article, MouvementStock, PrixArticle
 def reseau(db):
     # Réseau de test en France (euro, 2 décimales, sans timbre) ; la Tunisie a ses propres tests.
     france = Pays.objects.get(code="FR")
-    nord = Region.objects.create(code="NORD", nom="Nord")
-    sud = Region.objects.create(code="SUD", nom="Sud")
+    nord = Societe.objects.create(raison_sociale="Optique du Nord")
+    sud = Societe.objects.create(raison_sociale="Optique du Sud")
     return {
         "nord": nord,
         "sud": sud,
-        "lille": Magasin.tous.create(code="M01", nom="Lille", region=nord, pays=france),
-        "arras": Magasin.tous.create(code="M02", nom="Arras", region=nord, pays=france),
-        "nice": Magasin.tous.create(code="M03", nom="Nice", region=sud, pays=france),
+        "lille": Magasin.tous.create(code="M01", nom="Lille", societe=nord, pays=france),
+        "arras": Magasin.tous.create(code="M02", nom="Arras", societe=nord, pays=france),
+        "nice": Magasin.tous.create(code="M03", nom="Nice", societe=sud, pays=france),
     }
 
 
@@ -106,8 +106,8 @@ def tva(pays, taux):
 @pytest.fixture
 def tunis(db):
     tunisie = Pays.objects.get(code="TN")
-    region = Region.objects.create(code="GT", nom="Grand Tunis")
-    return Magasin.tous.create(code="T01", nom="Tunis Centre", region=region, pays=tunisie)
+    societe = Societe.objects.create(raison_sociale="Optique de Tunis")
+    return Magasin.tous.create(code="T01", nom="Tunis Centre", societe=societe, pays=tunisie)
 
 
 @pytest.fixture

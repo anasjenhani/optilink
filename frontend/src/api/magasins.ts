@@ -14,7 +14,8 @@ export type Magasin = {
   id: string;
   code: string;
   nom: string;
-  region: string;
+  societe: string;
+  societe_id: string;
   ville: string;
   pays: Pays;
   nombre_peniches: number;

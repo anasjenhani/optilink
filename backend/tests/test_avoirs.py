@@ -180,10 +180,10 @@ def test_avoirs_reserves_aux_responsables(db):
     def permissions(role):
         return set(Group.objects.get(name=role).permissions.values_list("codename", flat=True))
 
-    assert "add_avoir" in permissions("Responsable magasin")
+    assert "add_avoir" in permissions("Responsable de magasin")
     assert "add_avoir" not in permissions("Vendeur")
     assert "add_avoir" not in permissions("Opticien")
-    assert "view_avoir" in permissions("Comptable")
+    assert "view_avoir" in permissions("Comptabilité & Finance")
 
 
 def test_parcours_avoir_par_l_api(tunis, monture, affecter, client_de, reseau):

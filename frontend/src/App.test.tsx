@@ -100,12 +100,12 @@ test("les magasins ne s'affichent qu'avec la permission", async () => {
   simulerApi({
     "/api/v1/auth/session/": () => json(session("verifiee", ["reseau.view_magasin"])),
     "/api/v1/magasins/": () =>
-      json({ results: [{ id: "1", code: "M01", nom: "Lille", region: "Nord", ville: "Lille" }] }),
+      json({ results: [{ id: "1", code: "M01", nom: "Lille", societe: "Optique du Nord", ville: "Lille" }] }),
   });
   afficher();
 
   expect(await screen.findByText("Claire Martin")).toBeInTheDocument();
-  expect(await screen.findByText("M01 · Nord")).toBeInTheDocument();
+  expect(await screen.findByText("M01 · Optique du Nord")).toBeInTheDocument();
 });
 
 test("sans permission, pas de liste de magasins", async () => {

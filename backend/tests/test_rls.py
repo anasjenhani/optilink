@@ -73,7 +73,7 @@ def test_magasins_lisibles_mais_modifiables_dans_le_perimetre_seulement(reseau):
         assert cursor.rowcount == 1
     with pytest.raises(DatabaseError, match="row-level security"), transaction.atomic():
         Magasin.tous.create(
-            code="M09", nom="Hors", region=reseau["nord"], pays=reseau["lille"].pays
+            code="M09", nom="Hors", societe=reseau["nord"], pays=reseau["lille"].pays
         )
 
 
@@ -216,3 +216,43 @@ def test_commandes_fournisseurs_cloisonnees(tunis, monture, reseau, creer_utilis
     rls.poser({reseau["lille"].id})
     assert codes_visibles("achats_commandefournisseur", "numero") == []
     assert codes_visibles("achats_lignecommandefournisseur", "details") == []
+
+
+def test_tresorerie_cloisonnee(tunis, reseau, creer_utilisateur):
+    from decimal import Decimal
+
+    from django.utils import timezone
+
+    from apps.tresorerie.models import DepenseCaisse
+
+    caissier = creer_utilisateur("c")
+    for magasin in (tunis, reseau["lille"]):
+        DepenseCaisse.tous.create(
+            magasin=magasin,
+            categorie="divers",
+            motif=magasin.code,
+            montant=Decimal("1"),
+            payee_le=timezone.now(),
+            saisie_par=caissier,
+        )
+    rls.poser({tunis.id})
+    assert codes_visibles("tresorerie_depensecaisse", "motif") == ["T01"]
+    assert codes_visibles("tresorerie_cloturecaisse", "numero") == []
+
+
+def test_rh_cloisonne(tunis, reseau):
+    from datetime import date
+
+    from apps.rh.models import Employe
+
+    for magasin in (tunis, reseau["lille"]):
+        Employe.tous.create(
+            magasin=magasin,
+            nom=magasin.code,
+            prenom="X",
+            poste="Vendeur",
+            date_embauche=date(2026, 1, 1),
+        )
+    rls.poser({tunis.id})
+    assert codes_visibles("rh_employe", "nom") == ["T01"]
+    assert codes_visibles("rh_demandeconge", "motif") == []

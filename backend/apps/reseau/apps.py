@@ -9,9 +9,10 @@ class ReseauConfig(AppConfig):
     def ready(self):
         from auditlog.registry import auditlog
 
-        from .models import Magasin, Pays, Region, TauxTva
+        from .models import Magasin, Pays, Societe, TauxTva
 
-        auditlog.register(Region)
+        # Le logo, trop lourd pour le journal, n'y figure pas.
+        auditlog.register(Societe, exclude_fields=["logo"])
         auditlog.register(Magasin)
         # Fiscalité : tout changement de taux ou de timbre est tracé.
         auditlog.register(Pays)
