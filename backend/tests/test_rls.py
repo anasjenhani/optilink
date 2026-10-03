@@ -238,3 +238,21 @@ def test_tresorerie_cloisonnee(tunis, reseau, creer_utilisateur):
     rls.poser({tunis.id})
     assert codes_visibles("tresorerie_depensecaisse", "motif") == ["T01"]
     assert codes_visibles("tresorerie_cloturecaisse", "numero") == []
+
+
+def test_rh_cloisonne(tunis, reseau):
+    from datetime import date
+
+    from apps.rh.models import Employe
+
+    for magasin in (tunis, reseau["lille"]):
+        Employe.tous.create(
+            magasin=magasin,
+            nom=magasin.code,
+            prenom="X",
+            poste="Vendeur",
+            date_embauche=date(2026, 1, 1),
+        )
+    rls.poser({tunis.id})
+    assert codes_visibles("rh_employe", "nom") == ["T01"]
+    assert codes_visibles("rh_demandeconge", "motif") == []

@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "apps.optique",
     "apps.achats",
     "apps.tresorerie",
+    "apps.rh",
 ]
 
 MIDDLEWARE = [
@@ -183,7 +184,12 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "API OptiLink",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
-    "ENUM_NAME_OVERRIDES": {"ModePaiementEnum": "apps.ventes.models.Paiement.Mode"},
+    "ENUM_NAME_OVERRIDES": {
+        "ModePaiementEnum": "apps.ventes.models.Paiement.Mode",
+        "StatutPointageEnum": "apps.rh.models.Pointage.Statut",
+        "StatutCongeEnum": "apps.rh.models.DemandeConge.Statut",
+        "TypeCongeEnum": "apps.rh.models.DemandeConge.Type",
+    },
 }
 
 # Sécurité : MFA, sessions et comptes.

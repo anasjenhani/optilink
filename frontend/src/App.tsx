@@ -25,6 +25,7 @@ import { Devis } from "./pages/Devis";
 import { Factures } from "./pages/Factures";
 import { Imports } from "./pages/Imports";
 import { Magasins } from "./pages/Magasins";
+import { RessourcesHumaines } from "./pages/RessourcesHumaines";
 import { Tresorerie } from "./pages/Tresorerie";
 import { Verres } from "./pages/Verres";
 
@@ -100,6 +101,17 @@ function Contenu({ session }: { session: EtatSession }) {
           }}
         />
       )}
+      <RessourcesHumaines
+        droits={{
+          voirEmployes: peut(session, "rh.view_employe"),
+          creerEmploye: peut(session, "rh.add_employe"),
+          voirPresence: peut(session, "rh.view_pointage"),
+          pointer: peut(session, "rh.add_pointage"),
+          voirConges: peut(session, "rh.view_demandeconge"),
+          saisirConge: peut(session, "rh.add_demandeconge") && peut(session, "rh.view_employe"),
+          deciderConge: peut(session, "rh.decider_demandeconge"),
+        }}
+      />
       {peut(session, "reseau.view_magasin") && <Magasins />}
       {(peut(session, "securite.view_utilisateur") || peut(session, "auth.view_group")) && (
         <AccesSecurite
