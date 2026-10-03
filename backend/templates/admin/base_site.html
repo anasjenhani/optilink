@@ -1,31 +1,31 @@
 {% extends "admin/base.html" %}
-{% comment %}Administration d'OptiLink : vert sauge, onglets horizontaux et boutons gris.{% endcomment %}
+{% comment %}Administration d'OptiLink : bleu lapis-lazuli et onglets horizontaux.{% endcomment %}
 
 {% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
 
 {% block extrastyle %}{{ block.super }}
 <style>
   :root, html[data-theme="light"] {
-    --primary: #5f7f63;
-    --secondary: #4c6a50;
-    --accent: #d9e4c8;
+    --primary: #26619c;
+    --secondary: #1d4e80;
+    --accent: #f5dd5d;
     --header-color: #ffffff;
     --header-branding-color: #ffffff;
-    --header-bg: #5f7f63;
+    --header-bg: #26619c;
     --header-link-color: #ffffff;
-    --breadcrumbs-fg: #e3ece0;
+    --breadcrumbs-fg: #dbe7f3;
     --breadcrumbs-link-fg: #ffffff;
-    --breadcrumbs-bg: #4c6a50;
-    --link-fg: #5f7f63;
-    --link-hover-color: #3d5641;
-    --link-selected-fg: #3d5641;
-    --button-bg: #5f7f63;
-    --button-hover-bg: #4c6a50;
-    --default-button-bg: #4c6a50;
-    --default-button-hover-bg: #3d5641;
-    --selected-row: #eef3ec;
+    --breadcrumbs-bg: #1d4e80;
+    --link-fg: #26619c;
+    --link-hover-color: #163d65;
+    --link-selected-fg: #163d65;
+    --button-bg: #26619c;
+    --button-hover-bg: #1d4e80;
+    --default-button-bg: #1d4e80;
+    --default-button-hover-bg: #163d65;
+    --selected-row: #e8f0f8;
   }
-  #header { background: linear-gradient(180deg, #8fae92 0%, #6f9274 55%, #5a7c5f 100%); }
+  #header { background: linear-gradient(180deg, #4a82bd 0%, #26619c 55%, #1d4e80 100%); }
   #site-name a, #site-name a:link, #site-name a:visited { font-weight: 600; color: #fff; }
   .onglets {
     display: flex; flex-wrap: wrap; gap: 2px; margin: 0; padding: 0 20px;
@@ -38,40 +38,20 @@
   }
   .onglets a:hover { color: var(--primary); background: #fff; text-decoration: none; }
   .onglets a.actif { color: #fff; background: var(--primary); }
-  /* Accueil et onglets : bandeau vert sauge par application, puis une grille de boutons gris. */
+  /* Accueil et onglets : les applications en tableaux côte à côte plutôt qu'en colonne. */
   .dashboard #content { width: auto; max-width: none; }
-  .dashboard #content-main { float: none; width: auto; }
-  .rechercher { display: flex; align-items: center; gap: 12px; margin: 0 0 20px; }
-  .rechercher label { font-weight: 700; color: var(--body-fg); }
-  .rechercher input { flex-grow: 1; max-width: 520px; padding: 7px 10px; }
-  .groupe { margin-bottom: 26px; }
-  .bandeau { margin: 0 0 12px; padding: 10px 20px; border-radius: 4px; color: #fff;
-    font-size: 1.15rem; font-weight: 500; text-transform: none; letter-spacing: 0;
-    background: linear-gradient(180deg, #8fae92 0%, #6f9274 45%, #5a7c5f 100%); }
-  .boutons { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
-  .bouton { display: flex; align-items: stretch; min-height: 58px; border: 1px solid #b5b5b5;
-    border-radius: 4px; background: linear-gradient(180deg, #fbfbfb 0%, #e6e6e6 100%);
-    box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
-  .bouton:hover { border-color: var(--primary); background: linear-gradient(180deg, #ffffff 0%, #e3ece0 100%); }
-  .bouton .ouvrir { flex-grow: 1; display: flex; align-items: center; justify-content: center;
-    padding: 8px 12px; text-align: center; color: #222; font-family: Georgia, "Times New Roman", serif;
-    font-size: 15px; line-height: 1.25; }
-  .bouton a.ouvrir:hover { text-decoration: none; color: var(--primary); }
-  .bouton .ajouter { display: flex; align-items: center; padding: 0 12px; border-left: 1px solid #c8c8c8;
-    font-size: 20px; font-weight: 700; color: var(--primary); }
-  .bouton .ajouter:hover { text-decoration: none; background: var(--primary); color: #fff; }
+  .dashboard #content-main { float: none; width: auto; display: grid; gap: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); align-items: start; }
+  .dashboard #content-main .module { margin-bottom: 0; }
+  .dashboard #content-related { display: none; }
+  .module h2, .module caption, .inline-group h2 {
+    background: linear-gradient(180deg, #4a82bd 0%, #26619c 55%, #1d4e80 100%); color: #fff; }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .onglets { background: #1f1f1f; }
     :root:not([data-theme="light"]) .onglets a { color: #ddd; }
   }
   html[data-theme="dark"] .onglets { background: #1f1f1f; }
   html[data-theme="dark"] .onglets a { color: #ddd; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .bouton { background: linear-gradient(180deg, #3a3a3a 0%, #2b2b2b 100%); border-color: #555; }
-    :root:not([data-theme="light"]) .bouton .ouvrir { color: #eee; }
-  }
-  html[data-theme="dark"] .bouton { background: linear-gradient(180deg, #3a3a3a 0%, #2b2b2b 100%); border-color: #555; }
-  html[data-theme="dark"] .bouton .ouvrir { color: #eee; }
 </style>
 {% endblock %}
 
