@@ -60,9 +60,29 @@ export type SaisieVente = {
 
 export type Reglement = { mode: ModePaiement; montant: string };
 
-export const chercherArticles = (magasin: string, recherche: string, famille: Famille | "" = "") =>
+/** Ce que le vendeur vend au comptoir ; chaque type regroupe des familles d'articles. */
+export type TypeVente = "optique" | "solaire" | "lentille" | "produit";
+
+export const TYPES_VENTE: { valeur: TypeVente; libelle: string; aide: string }[] = [
+  { valeur: "optique", libelle: "Lunettes optiques", aide: "Monture et verres correcteurs" },
+  { valeur: "solaire", libelle: "Lunettes solaires", aide: "Montures solaires" },
+  { valeur: "lentille", libelle: "Lentilles", aide: "Lentilles de contact" },
+  { valeur: "produit", libelle: "Produits et accessoires", aide: "Produits lentilles, étuis, sprays…" },
+];
+
+export const chercherArticles = (
+  magasin: string,
+  recherche: string,
+  famille: Famille | "" = "",
+  typeVente: TypeVente | "" = "",
+) =>
   appeler<{ results: Article[] }>(
-    `/api/v1/articles/?${new URLSearchParams({ magasin, recherche, ...(famille && { famille }) })}`,
+    `/api/v1/articles/?${new URLSearchParams({
+      magasin,
+      recherche,
+      ...(famille && { famille }),
+      ...(typeVente && { type_vente: typeVente }),
+    })}`,
   ).then((page) => page.results);
 
 export const encaisser = (saisie: SaisieVente) =>

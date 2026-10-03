@@ -2,6 +2,8 @@ import { appeler } from "./client";
 
 export type Client = {
   id: string;
+  /** N° de fiche, attribué par le serveur à la création. */
+  numero: number;
   civilite: "" | "mme" | "m";
   nom: string;
   prenom: string;
@@ -18,7 +20,7 @@ export type Client = {
   accepte_relances: boolean;
 };
 
-export type SaisieClient = Omit<Client, "id">;
+export type SaisieClient = Omit<Client, "id" | "numero">;
 
 export type MesureOeil = { sphere: string; cylindre?: string; axe?: number | null; addition?: string | null };
 
@@ -56,6 +58,10 @@ export const listerPrescriptions = (client: string) =>
 
 export const saisirPrescription = (saisie: SaisiePrescription) =>
   appeler<Prescription>("/api/v1/prescriptions/", { methode: "POST", corps: saisie });
+
+/** « DUPONT Marie · fiche n° 12 » */
+export const nomClient = (client: Pick<Client, "nom" | "prenom" | "numero">) =>
+  `${client.nom.toUpperCase()} ${client.prenom} · fiche n° ${client.numero}`;
 
 /** « -2.25 (-0.50 à 90°) add +2.00 » : notation habituelle d'une ordonnance. */
 export function formaterOeil(oeil: MesureOeil) {

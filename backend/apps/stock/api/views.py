@@ -23,6 +23,16 @@ from apps.reseau.models import Magasin
 from ..models import Article, MouvementStock, PrixArticle
 from .serializers import ArticleSerializer, MouvementStockSerializer
 
+# Le vendeur choisit d'abord ce qu'il vend ; chaque type correspond à des familles d'articles.
+TYPES_DE_VENTE = {
+    "optique": Q(famille=Article.Famille.VERRE)
+    | Q(famille=Article.Famille.MONTURE, monture__solaire=False)
+    | Q(famille=Article.Famille.MONTURE, monture__isnull=True),
+    "solaire": Q(famille=Article.Famille.MONTURE, monture__solaire=True),
+    "lentille": Q(famille=Article.Famille.LENTILLE),
+    "produit": Q(famille=Article.Famille.DIVERS),
+}
+
 
 @extend_schema_view(
     list=extend_schema(
@@ -33,6 +43,13 @@ from .serializers import ArticleSerializer, MouvementStockSerializer
                 description="Référence, libellé, code-barres, marque, modèle ou gamme",
             ),
             OpenApiParameter("marque", OpenApiTypes.STR, description="Marque (toutes familles)"),
+            OpenApiParameter(
+                "type_vente",
+                OpenApiTypes.STR,
+                enum=list(TYPES_DE_VENTE),
+                description="Ce qu'on vend au comptoir : lunettes optiques (montures et verres), "
+                "lunettes solaires, lentilles, ou produits et accessoires",
+            ),
             OpenApiParameter(
                 "fournisseur", OpenApiTypes.UUID, description="Articles de ce fournisseur"
             ),
@@ -75,6 +92,9 @@ class ArticleViewSet(viewsets.ReadOnlyModelViewSet):
                 | Q(lentille__marque__icontains=recherche)
                 | Q(lentille__modele__icontains=recherche)
             )
+        type_vente = self.request.query_params.get("type_vente")
+        if type_vente in TYPES_DE_VENTE:
+            articles = articles.filter(TYPES_DE_VENTE[type_vente])
         marque = self.request.query_params.get("marque", "").strip()
         if marque:
             articles = articles.filter(

@@ -22,7 +22,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { chercherClients, type Client } from "../api/clients";
-import { chercherArticles, encaisser, type Article, type ModePaiement, type Vente } from "../api/caisse";
+import Chip from "@mui/material/Chip";
+import {
+  chercherArticles,
+  encaisser,
+  TYPES_VENTE,
+  type Article,
+  type ModePaiement,
+  type TypeVente,
+  type Vente,
+} from "../api/caisse";
 import { listerMagasins } from "../api/magasins";
 import { enUnites, formater, formaterTexte, versTexte, type Monnaie } from "../api/monnaie";
 
@@ -34,11 +43,24 @@ const MODES: { valeur: ModePaiement; libelle: string }[] = [
   { valeur: "cheque", libelle: "Chèque" },
 ];
 
-export function Caisse() {
+/**
+ * Vente au comptoir guidée : le client (ou ``null`` pour un client de passage) et le magasin
+ * sont choisis à l'étape d'avant, et le type de vente filtre les articles proposés.
+ */
+type Parcours = {
+  client: Client | null;
+  magasin: string;
+  typeVente: TypeVente;
+  onTypeVente: (type: TypeVente) => void;
+  onNouvelleVente: () => void;
+};
+
+export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
   const queryClient = useQueryClient();
   const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
   const [magasinChoisi, setMagasin] = useState("");
-  const magasin = magasinChoisi || magasins.data?.[0]?.id || "";
+  const magasin = parcours?.magasin || magasinChoisi || magasins.data?.[0]?.id || "";
+  const typeVente = parcours?.typeVente ?? "";
   const pays = magasins.data?.find((m) => m.id === magasin)?.pays;
   const monnaie: Monnaie = { devise: pays?.devise ?? "TND", decimales: pays?.decimales ?? 3 };
   const unites = (montant: string) => enUnites(montant, monnaie.decimales);
@@ -56,7 +78,8 @@ export function Caisse() {
   // Client facultatif sur le ticket ; il sera repris pour la facture, générée à part.
   const [avecClient, setAvecClient] = useState(false);
   const [rechercheClient, setRechercheClient] = useState("");
-  const [client, setClient] = useState<Client | null>(null);
+  const [clientChoisi, setClient] = useState<Client | null>(null);
+  const client = parcours ? parcours.client : clientChoisi;
   const clients = useQuery({
     queryKey: ["clients", rechercheClient],
     queryFn: () => chercherClients(rechercheClient),
@@ -64,9 +87,9 @@ export function Caisse() {
   });
 
   const articles = useQuery({
-    queryKey: ["articles", magasin, recherche],
-    queryFn: () => chercherArticles(magasin, recherche),
-    enabled: Boolean(magasin) && recherche.trim().length >= 2,
+    queryKey: ["articles", magasin, recherche, typeVente],
+    queryFn: () => chercherArticles(magasin, recherche, "", typeVente),
+    enabled: Boolean(magasin) && (recherche.trim().length >= 2 || Boolean(typeVente)),
   });
 
   const total = panier.reduce((somme, l) => somme + unites(l.article.prix_vente_ttc) * l.quantite, 0);
@@ -78,7 +101,7 @@ export function Caisse() {
     mutationFn: () =>
       encaisser({
         magasin,
-        client: avecClient ? client?.id : undefined,
+        client: parcours || avecClient ? client?.id : undefined,
         lignes: panier.map((l) => ({ article: l.article.id, quantite: l.quantite })),
         paiements:
           commande && montantAcompte === 0
@@ -147,20 +170,34 @@ export function Caisse() {
           <Typography variant="h6" component="h2">
             Caisse
           </Typography>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-            <TextField
-              select
-              label="Magasin"
-              value={magasin}
-              onChange={(e) => changerMagasin(e.target.value)}
-              sx={{ minWidth: 200 }}
-            >
-              {magasins.data?.map((m) => (
-                <MenuItem key={m.id} value={m.id}>
-                  {m.nom}
-                </MenuItem>
+          {parcours && (
+            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }} aria-label="Type de vente">
+              {TYPES_VENTE.map((t) => (
+                <Chip
+                  key={t.valeur}
+                  label={t.libelle}
+                  color={typeVente === t.valeur ? "primary" : "default"}
+                  onClick={() => parcours.onTypeVente(t.valeur)}
+                />
               ))}
-            </TextField>
+            </Stack>
+          )}
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            {!parcours && (
+              <TextField
+                select
+                label="Magasin"
+                value={magasin}
+                onChange={(e) => changerMagasin(e.target.value)}
+                sx={{ minWidth: 200 }}
+              >
+                {magasins.data?.map((m) => (
+                  <MenuItem key={m.id} value={m.id}>
+                    {m.nom}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
             <TextField
               label="Rechercher un article"
               helperText="Référence, libellé, marque ou code-barres (douchette)"
@@ -241,11 +278,13 @@ export function Caisse() {
             </Table>
           )}
 
-          <FormControlLabel
-            control={<Checkbox checked={avecClient} onChange={(e) => setAvecClient(e.target.checked)} />}
-            label="Rattacher un client au ticket"
-          />
-          {avecClient && client && (
+          {!parcours && (
+            <FormControlLabel
+              control={<Checkbox checked={avecClient} onChange={(e) => setAvecClient(e.target.checked)} />}
+              label="Rattacher un client au ticket"
+            />
+          )}
+          {!parcours && avecClient && client && (
             <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
               <Typography>
                 Client : {client.nom.toUpperCase()} {client.prenom}
@@ -255,7 +294,7 @@ export function Caisse() {
               </Button>
             </Stack>
           )}
-          {avecClient && !client && (
+          {!parcours && avecClient && !client && (
             <>
               <TextField
                 label="Client"
@@ -354,6 +393,11 @@ export function Caisse() {
               {derniereVente.statut === "en_commande" &&
                 `, reste ${formaterTexte(derniereVente.reste_a_payer, { devise: derniereVente.devise, decimales: monnaie.decimales })} à la livraison`}
               .
+              {parcours && (
+                <Button size="small" sx={{ ml: 2 }} onClick={parcours.onNouvelleVente}>
+                  Nouvelle vente
+                </Button>
+              )}
             </Alert>
           )}
         </Stack>

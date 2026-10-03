@@ -4,6 +4,7 @@ import AdminPanelSettings from "@mui/icons-material/AdminPanelSettings";
 import ArrowDownward from "@mui/icons-material/ArrowDownward";
 import ArrowUpward from "@mui/icons-material/ArrowUpward";
 import Badge from "@mui/icons-material/Badge";
+import BeachAccess from "@mui/icons-material/BeachAccess";
 import Build from "@mui/icons-material/Build";
 import CalendarMonth from "@mui/icons-material/CalendarMonth";
 import CheckCircle from "@mui/icons-material/CheckCircle";
@@ -64,6 +65,7 @@ import { Imports } from "../pages/Imports";
 import { Magasins } from "../pages/Magasins";
 import { RessourcesHumaines } from "../pages/RessourcesHumaines";
 import { Tresorerie } from "../pages/Tresorerie";
+import { VenteComptoir } from "../pages/VenteComptoir";
 import { Verres } from "../pages/Verres";
 
 /** Un bouton de la grille d'un module : il ouvre son écran, ou il est grisé « à venir ». */
@@ -167,7 +169,15 @@ export function modulesPour(session: EtatSession): Module[] {
           couleur: COULEURS.bleu,
           ecran: stock("lentille"),
         },
-        { id: "comptoir", libelle: "Vente au Comptoir", icone: PointOfSale, couleur: COULEURS.turquoise, ecran: si(vendre, () => <Caisse />) },
+        {
+          id: "comptoir",
+          libelle: "Vente au Comptoir",
+          icone: PointOfSale,
+          couleur: COULEURS.turquoise,
+          ecran: si(vendre, () =>
+            voirClients ? <VenteComptoir creerClient={a("crm.add_client")} /> : <Caisse />,
+          ),
+        },
         {
           id: "devis",
           libelle: "Devis Vente",
@@ -339,6 +349,23 @@ export function modulesPour(session: EtatSession): Module[] {
       id: "administration",
       libelle: "Administration",
       tuiles: [
+        {
+          id: "demande-conge",
+          libelle: "Demande de Congé",
+          icone: BeachAccess,
+          couleur: COULEURS.turquoise,
+          ecran: () => <RessourcesHumaines droits={droitsRh} ongletInitial="moi" />,
+        },
+        {
+          id: "demande-acompte",
+          libelle: "Demande d'Acompte",
+          icone: Savings,
+          couleur: COULEURS.vert,
+          ecran: () => <RessourcesHumaines droits={droitsRh} ongletInitial="mes-acomptes" />,
+        },
+        aVenir("demande-attestation", "Demande d'Attestation", Description, COULEURS.violet),
+        aVenir("demande-pret", "Demande de Prêt", AccountBalance, COULEURS.brun),
+        aVenir("fiche-paie", "Fiche de Paie", ReceiptLong, COULEURS.bleu),
         {
           id: "rh",
           libelle: "Ressources Humaines",
