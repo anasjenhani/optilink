@@ -73,7 +73,7 @@ def test_magasins_lisibles_mais_modifiables_dans_le_perimetre_seulement(reseau):
         assert cursor.rowcount == 1
     with pytest.raises(DatabaseError, match="row-level security"), transaction.atomic():
         Magasin.tous.create(
-            code="M09", nom="Hors", region=reseau["nord"], pays=reseau["lille"].pays
+            code="M09", nom="Hors", societe=reseau["nord"], pays=reseau["lille"].pays
         )
 
 

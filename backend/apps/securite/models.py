@@ -26,9 +26,9 @@ class Utilisateur(AbstractUser):
         if any(a.portee == Affectation.Portee.RESEAU for a in affectations):
             return None
         ids = {a.magasin_id for a in affectations if a.portee == Affectation.Portee.MAGASIN}
-        regions = [a.region_id for a in affectations if a.portee == Affectation.Portee.REGION]
-        if regions:
-            ids.update(Magasin.tous.filter(region_id__in=regions).values_list("id", flat=True))
+        societes = [a.societe_id for a in affectations if a.portee == Affectation.Portee.SOCIETE]
+        if societes:
+            ids.update(Magasin.tous.filter(societe_id__in=societes).values_list("id", flat=True))
         return frozenset(ids)
 
 
@@ -37,7 +37,7 @@ class Affectation(models.Model):
 
     class Portee(models.TextChoices):
         MAGASIN = "magasin", "Magasin"
-        REGION = "region", "Région"
+        SOCIETE = "societe", "Société"
         RESEAU = "reseau", "Tout le réseau"
 
     utilisateur = models.ForeignKey(
@@ -48,8 +48,13 @@ class Affectation(models.Model):
     magasin = models.ForeignKey(
         "reseau.Magasin", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
     )
-    region = models.ForeignKey(
-        "reseau.Region", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    societe = models.ForeignKey(
+        "reseau.Societe",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="société",
     )
     debut = models.DateField(default=timezone.localdate)
     fin = models.DateField(null=True, blank=True)
@@ -60,25 +65,25 @@ class Affectation(models.Model):
             models.CheckConstraint(
                 name="affectation_perimetre_coherent",
                 condition=(
-                    Q(portee="magasin", magasin__isnull=False, region__isnull=True)
-                    | Q(portee="region", region__isnull=False, magasin__isnull=True)
-                    | Q(portee="reseau", magasin__isnull=True, region__isnull=True)
+                    Q(portee="magasin", magasin__isnull=False, societe__isnull=True)
+                    | Q(portee="societe", societe__isnull=False, magasin__isnull=True)
+                    | Q(portee="reseau", magasin__isnull=True, societe__isnull=True)
                 ),
             ),
         ]
 
     def __str__(self):
-        cible = self.magasin or self.region or "réseau"
+        cible = self.magasin or self.societe or "réseau"
         return f"{self.utilisateur} · {self.role} · {cible}"
 
     def clean(self):
         attendu = {
             self.Portee.MAGASIN: (True, False),
-            self.Portee.REGION: (False, True),
+            self.Portee.SOCIETE: (False, True),
             self.Portee.RESEAU: (False, False),
         }.get(self.portee)
-        if attendu and (self.magasin_id is not None, self.region_id is not None) != attendu:
-            raise ValidationError("Le magasin ou la région ne correspond pas à la portée choisie.")
+        if attendu and (self.magasin_id is not None, self.societe_id is not None) != attendu:
+            raise ValidationError("Le magasin ou la société ne correspond pas à la portée choisie.")
         if self.fin and self.fin < self.debut:
             raise ValidationError("La date de fin précède la date de début.")
 

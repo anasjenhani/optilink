@@ -20,7 +20,7 @@ class PaysSerializer(serializers.ModelSerializer):
 
 class MagasinSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source="public_id", read_only=True)
-    region = serializers.CharField(source="region.nom", read_only=True)
+    societe = serializers.CharField(source="societe.raison_sociale", read_only=True)
     pays = PaysSerializer(read_only=True)
 
     class Meta:
@@ -29,7 +29,7 @@ class MagasinSerializer(serializers.ModelSerializer):
             "id",
             "code",
             "nom",
-            "region",
+            "societe",
             "pays",
             "adresse",
             "code_postal",

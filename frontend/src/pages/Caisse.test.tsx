@@ -12,7 +12,7 @@ const TUNISIE = {
   timbre_fiscal: "1.000",
   libelle_identifiant_prescripteur: "N° d'inscription à l'Ordre des médecins",
 };
-const MAGASIN = { id: "m1", code: "T01", nom: "Tunis", region: "Grand Tunis", ville: "Tunis", pays: TUNISIE };
+const MAGASIN = { id: "m1", code: "T01", nom: "Tunis", societe: "Optique de Tunis", ville: "Tunis", pays: TUNISIE };
 const MONTURE = {
   id: "a1",
   reference: "MON-1",

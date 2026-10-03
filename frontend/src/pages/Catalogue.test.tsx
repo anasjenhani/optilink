@@ -3,7 +3,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import { Catalogue } from "./Catalogue";
 
-const MAGASIN = { id: "m1", code: "T01", nom: "Tunis Centre", region: "", ville: "Tunis", pays: { devise: "TND", decimales: 3 } };
+const MAGASIN = { id: "m1", code: "T01", nom: "Tunis Centre", societe: "", ville: "Tunis", pays: { devise: "TND", decimales: 3 } };
 const MONTURE = {
   id: "a1",
   reference: "MON-RB-001",
