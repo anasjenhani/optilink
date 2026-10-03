@@ -41,7 +41,10 @@ function afficher() {
   );
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  window.location.hash = "";
+});
 
 test("un visiteur voit l'écran de connexion puis la demande de code", async () => {
   document.cookie = "csrftoken=jeton-csrf";
@@ -93,10 +96,11 @@ test("l'activation affiche les codes de secours avant d'ouvrir l'application", a
 
   expect(await screen.findByText(/11111111/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "J'ai conservé mes codes" }));
-  expect(await screen.findByText("État de la plateforme")).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Vente" })).toBeInTheDocument();
 });
 
 test("les magasins ne s'affichent qu'avec la permission", async () => {
+  window.location.hash = "#/administration/magasins";
   simulerApi({
     "/api/v1/auth/session/": () => json(session("verifiee", ["reseau.view_magasin"])),
     "/api/v1/magasins/": () =>
@@ -109,9 +113,11 @@ test("les magasins ne s'affichent qu'avec la permission", async () => {
 });
 
 test("sans permission, pas de liste de magasins", async () => {
+  window.location.hash = "#/administration/magasins";
   simulerApi({ "/api/v1/auth/session/": () => json(session("verifiee")) });
   afficher();
 
-  expect(await screen.findByText("État de la plateforme")).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Administration" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Magasins/ })).not.toBeInTheDocument();
   expect(screen.queryByText("Mes magasins")).not.toBeInTheDocument();
 });
