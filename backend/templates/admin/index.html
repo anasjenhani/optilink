@@ -1,0 +1,56 @@
+{% extends "admin/index.html" %}
+{% load i18n %}
+{% comment %}Accueil et onglets : une grille de boutons gris par application, comme dans l'application.{% endcomment %}
+
+{% block content %}
+<div id="content-main">
+  {% if app_list %}
+  <p class="rechercher">
+    <label for="rechercher-admin">Rechercher</label>
+    <input type="search" id="rechercher-admin" autocomplete="off">
+  </p>
+  {% for app in app_list %}
+  <section class="groupe" aria-labelledby="groupe-{{ app.app_label }}">
+    <h2 class="bandeau" id="groupe-{{ app.app_label }}">{{ app.name }}</h2>
+    <div class="boutons">
+      {% for model in app.models %}
+      <div class="bouton" data-libelle="{{ model.name|lower }}">
+        {% if model.admin_url %}
+        <a class="ouvrir" href="{{ model.admin_url }}">{{ model.name }}</a>
+        {% else %}
+        <span class="ouvrir">{{ model.name }}</span>
+        {% endif %}
+        {% if model.add_url %}<a class="ajouter" href="{{ model.add_url }}" title="{% translate 'Add' %} : {{ model.name }}" aria-label="{% translate 'Add' %} : {{ model.name }}">+</a>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+  <p class="aucun" hidden>Aucune fonction ne correspond.</p>
+  <script>
+    (function () {
+      var champ = document.getElementById("rechercher-admin");
+      champ.addEventListener("input", function () {
+        var filtre = champ.value.trim().toLocaleLowerCase("fr");
+        var visibles = 0;
+        document.querySelectorAll(".groupe").forEach(function (groupe) {
+          var n = 0;
+          groupe.querySelectorAll(".bouton").forEach(function (b) {
+            var ok = b.dataset.libelle.indexOf(filtre) !== -1;
+            b.hidden = !ok;
+            if (ok) n++;
+          });
+          groupe.hidden = n === 0;
+          visibles += n;
+        });
+        document.querySelector(".aucun").hidden = visibles !== 0;
+      });
+    })();
+  </script>
+  {% else %}
+  <p>{% translate "You don’t have permission to view or edit anything." %}</p>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block sidebar %}{% endblock %}

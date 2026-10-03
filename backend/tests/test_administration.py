@@ -23,6 +23,10 @@ def test_onglets_de_l_administration(creer_utilisateur, client_de):
     caisse = navigateur.get("/admin/", {"onglet": "caisse"})
     assert [app["app_label"] for app in caisse.context["app_list"]] == ["tresorerie"]
     assert caisse.context["title"] == "Caisse et banque"
+    page = caisse.content.decode()
+    assert 'class="bandeau"' in page
+    assert 'href="/admin/tresorerie/cloturecaisse/"' in page
+    assert 'href="/admin/tresorerie/comptetresorerie/add/"' in page
 
     liste = navigateur.get("/admin/tresorerie/cloturecaisse/")
     actifs = [o["libelle"] for o in liste.context["onglets"] if o["actif"]]
