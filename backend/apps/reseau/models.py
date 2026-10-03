@@ -1,3 +1,4 @@
+from django.core.validators import RegexValidator
 from django.db import models
 
 from core.managers import ParMagasinManager
@@ -11,7 +12,16 @@ class Pays(models.Model):
     dur dans le code. Chaque magasin est rattaché à un pays.
     """
 
-    code = models.CharField("code ISO", max_length=2, unique=True, help_text="ISO 3166, ex. TN")
+    code_numerique = models.CharField(
+        "code ISO",
+        max_length=3,
+        unique=True,
+        validators=[RegexValidator(r"^\d{3}$", "Trois chiffres, ex. 788.")],
+        help_text="Code numérique ISO 3166-1, ex. 788 pour la Tunisie.",
+    )
+    code = models.CharField(
+        "code alpha-2", max_length=2, unique=True, help_text="ISO 3166-1 alpha-2, ex. TN"
+    )
     nom = models.CharField(max_length=100)
     devise = models.CharField(max_length=3, help_text="Code ISO 4217, ex. TND")
     decimales = models.PositiveSmallIntegerField(
