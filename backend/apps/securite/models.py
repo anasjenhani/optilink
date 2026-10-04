@@ -1,3 +1,4 @@
+from auditlog.models import LogEntry
 from django.contrib.auth.models import AbstractUser, Group
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -99,6 +100,7 @@ class EvenementSecurite(models.Model):
         MFA_ECHOUEE = "mfa_echouee", "Code MFA refusé"
         MFA_ACTIVEE = "mfa_activee", "MFA activée"
         COMPTE_DESACTIVE = "compte_desactive", "Compte désactivé pour inactivité"
+        MFA_REINITIALISEE = "mfa_reinitialisee", "MFA réinitialisée par un administrateur"
 
     horodatage = models.DateTimeField(auto_now_add=True, db_index=True)
     type = models.CharField(max_length=30, choices=Type.choices, db_index=True)
@@ -127,3 +129,12 @@ class EvenementSecurite(models.Model):
 
     def delete(self, *args, **kwargs):
         raise ValueError("Un événement de sécurité ne se supprime pas.")
+
+
+class ModificationDroits(LogEntry):
+    """Vue du journal d'audit réduite aux droits : profils, affectations et comptes."""
+
+    class Meta:
+        proxy = True
+        verbose_name = "modification des droits"
+        verbose_name_plural = "modifications des droits"

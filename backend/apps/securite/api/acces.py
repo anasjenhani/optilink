@@ -22,7 +22,8 @@ from rest_framework.views import APIView
 
 from apps.reseau.models import Magasin, Societe
 
-from ..models import Affectation, Utilisateur
+from ..journal import journaliser
+from ..models import Affectation, EvenementSecurite, Utilisateur
 from ..privileges import ADMINISTRATION, CODES, PRIVILEGES
 
 
@@ -340,6 +341,8 @@ class UtilisateurSerializer(serializers.ModelSerializer):
                     continue
                 # Changer une affectation, c'est retirer l'ancienne et donner la nouvelle.
                 verifier_affectation(demandeur, ancienne)
+                # Ligne déjà en base : le journal d'audit enregistre la modification (avant, après).
+                nouvelle._state.adding = False
             verifier_affectation(demandeur, nouvelle)
             nouvelle.save()
 
@@ -392,4 +395,10 @@ class UtilisateurViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Ce compte technique ne se modifie que par lui-même.")
         TOTPDevice.objects.filter(user=utilisateur).delete()
         StaticDevice.objects.filter(user=utilisateur).delete()
+        journaliser(
+            EvenementSecurite.Type.MFA_REINITIALISEE,
+            request,
+            utilisateur,
+            details=f"par {request.user.get_username()}",
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
