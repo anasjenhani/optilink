@@ -82,6 +82,10 @@ class LigneJourneeSerializer(serializers.Serializer):
     vendeur = serializers.SerializerMethodField()
     total_ttc = serializers.DecimalField(max_digits=14, decimal_places=3)
     regle = serializers.DecimalField(max_digits=14, decimal_places=3)
+    pec_client = serializers.SerializerMethodField(
+        help_text="Organisme de prise en charge du client (CNAM, assurance, mutuelle)."
+    )
+    pec_visite = serializers.SerializerMethodField(help_text="Part prise en charge sur la visite.")
     reste = serializers.SerializerMethodField()
     soldee = serializers.SerializerMethodField()
     livree = serializers.SerializerMethodField()
@@ -94,11 +98,18 @@ class LigneJourneeSerializer(serializers.Serializer):
     def get_vendeur(self, vente) -> str:
         return vente.vendeur.get_full_name() or vente.vendeur.get_username()
 
+    def get_pec_client(self, vente) -> str | None:
+        organisme = vente.client.organisme if vente.client else None
+        return organisme.nom if organisme else None
+
+    def get_pec_visite(self, vente) -> str:
+        return str(vente.pris_en_charge)
+
     def get_reste(self, vente) -> str:
-        return str(vente.total_ttc - vente.regle)
+        return str(vente.total_ttc - vente.regle - vente.pris_en_charge)
 
     def get_soldee(self, vente) -> bool:
-        return vente.regle >= vente.total_ttc
+        return vente.regle + vente.pris_en_charge >= vente.total_ttc
 
     def get_livree(self, vente) -> bool:
         return vente.statut == vente.Statut.LIVREE
@@ -123,6 +134,9 @@ class JourneeSerializer(serializers.Serializer):
     nombre_ventes = serializers.IntegerField()
     total_ventes = serializers.DecimalField(max_digits=14, decimal_places=3)
     regle_sur_ventes = serializers.DecimalField(max_digits=14, decimal_places=3)
+    pris_en_charge = serializers.DecimalField(
+        max_digits=14, decimal_places=3, help_text="Part des organismes sur les ventes du jour."
+    )
     reste_sur_ventes = serializers.DecimalField(max_digits=14, decimal_places=3)
     encaisse = serializers.DecimalField(
         max_digits=14, decimal_places=3, help_text="Tous les règlements reçus ce jour-là."

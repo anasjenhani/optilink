@@ -80,8 +80,8 @@ class VenteViewSet(
 
     def get_queryset(self):
         return Vente.objects.select_related(
-            "magasin", "vendeur", "client", "facture"
-        ).prefetch_related("lignes__article", "lignes__retours", "paiements")
+            "magasin", "vendeur", "client__organisme", "facture"
+        ).prefetch_related("lignes__article", "lignes__retours", "paiements", "prises_en_charge")
 
     def _apres(self, operation, **parametres):
         try:

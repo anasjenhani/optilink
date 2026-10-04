@@ -4,8 +4,8 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema
 from rest_framework import mixins, viewsets
 from rest_framework.exceptions import PermissionDenied
 
-from ..models import Client
-from .serializers import ClientSerializer
+from ..models import Client, Organisme
+from .serializers import ClientSerializer, OrganismeSerializer
 
 
 @extend_schema_view(
@@ -56,3 +56,15 @@ class ClientViewSet(
         if not self.request.user.has_perm("crm.add_client", magasin):
             raise PermissionDenied("Pas de droit de création de client sur ce magasin.")
         serializer.save()
+
+
+class OrganismeViewSet(viewsets.ReadOnlyModelViewSet):
+    """CNAM, assurances et mutuelles actives ; on les crée dans l'administration du serveur."""
+
+    serializer_class = OrganismeSerializer
+    lookup_field = "public_id"
+    pagination_class = None
+    permissions_requises = {"list": "crm.view_client", "retrieve": "crm.view_client"}
+
+    def get_queryset(self):
+        return Organisme.objects.filter(est_actif=True).select_related("pays")

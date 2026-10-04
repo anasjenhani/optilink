@@ -241,6 +241,19 @@ PERMISSIONS_PILOTAGE = {
     "Comptabilité & Finance": ["ventes.consulter_reporting"],
 }
 
+# Prises en charge (CNAM, assurances, mutuelles) : saisies à la vente, suivies par les
+# responsables et la finance ; les organismes se créent dans l'administration du serveur.
+PEC_SAISIE = ["ventes.view_priseencharge", "ventes.add_priseencharge"]
+PEC_SUIVI = PEC_SAISIE + ["ventes.change_priseencharge"]
+ORGANISMES = ["crm.view_organisme", "crm.add_organisme", "crm.change_organisme"]
+PERMISSIONS_PRISES_EN_CHARGE = {
+    "Responsable de magasin": PEC_SUIVI + ORGANISMES,
+    "Opticien": PEC_SAISIE,
+    "Vendeur": PEC_SAISIE,
+    "Caissier": PEC_SAISIE,
+    "Comptabilité & Finance": PEC_SUIVI + ["crm.view_organisme"],
+}
+
 for _par_role in (
     PERMISSIONS_CAISSE_STOCK,
     PERMISSIONS_CLIENTS_OPTIQUE,
@@ -254,6 +267,7 @@ for _par_role in (
     PERMISSIONS_RH,
     PERMISSIONS_REMUNERATIONS,
     PERMISSIONS_PILOTAGE,
+    PERMISSIONS_PRISES_EN_CHARGE,
 ):
     for _nom, _permissions in _par_role.items():
         ROLES_DE_DEPART[_nom] = ROLES_DE_DEPART[_nom] + _permissions

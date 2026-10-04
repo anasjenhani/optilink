@@ -79,6 +79,7 @@ def journee(ventes, paiements):
     zero = Decimal("0")
     total = sum((v.total_ttc for v in ventes), zero)
     regle = sum((v.regle for v in ventes), zero)
+    pris_en_charge = sum((v.pris_en_charge for v in ventes), zero)
     modes = dict(Paiement.Mode.choices)
     par_mode = {}
     for paiement in paiements:
@@ -88,7 +89,8 @@ def journee(ventes, paiements):
         "nombre_ventes": len(ventes),
         "total_ventes": total,
         "regle_sur_ventes": regle,
-        "reste_sur_ventes": total - regle,
+        "pris_en_charge": pris_en_charge,
+        "reste_sur_ventes": total - regle - pris_en_charge,
         "encaisse": sum(par_mode.values(), zero),
         "encaisse_par_mode": [{"mode": m, "montant": v} for m, v in sorted(par_mode.items())],
     }
