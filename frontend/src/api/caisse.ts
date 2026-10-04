@@ -54,14 +54,56 @@ export type Vente = {
     total_ttc: string;
     prix_unitaire_ttc: string;
     remise_pct: string;
-    /** N° de la lunette qui contient l'article, et sa place. */
+    /** N° de la lunette ou des lentilles qui contiennent l'article, et sa place. */
     lunette?: number | null;
-    role?: RoleLunette | "";
+    lentilles?: number | null;
+    role?: RoleLigne | "";
+    numero_lot?: string;
+    date_peremption?: string | null;
   }[];
   lunettes?: Lunette[];
+  lentilles?: Lentilles[];
 };
 
-export type RoleLunette = "monture" | "verre_d" | "verre_g" | "supplement_d" | "supplement_g";
+/** Lentilles droite et gauche d'une visite, liées à une ordonnance de lentilles. */
+export type SaisieLentilles = { prescription: string | null; observation: string };
+
+type LentilleOeil = {
+  libelle: string;
+  quantite: number;
+  numero_lot: string;
+  date_peremption: string | null;
+  total_ttc: string;
+};
+
+export type Lentilles = SaisieLentilles & {
+  numero: number;
+  droite: LentilleOeil | null;
+  gauche: LentilleOeil | null;
+  total_ttc: string;
+};
+
+export type LentillesClient = Lentilles & {
+  id: string;
+  vente: string;
+  vente_numero: string;
+  date: string;
+  peniche: number | null;
+};
+
+export const listerLentillesClient = (client: string) =>
+  appeler<{ results: LentillesClient[] }>(`/api/v1/lentilles/?${new URLSearchParams({ client })}`).then(
+    (page) => page.results,
+  );
+
+export type RoleLigne =
+  | "monture"
+  | "verre_d"
+  | "verre_g"
+  | "supplement_d"
+  | "supplement_g"
+  | "lentille_d"
+  | "lentille_g";
 export type Vision = "loin" | "pres" | "double_foyer" | "degressif" | "progressif";
 
 export const VISIONS: { valeur: Vision; libelle: string }[] = [
@@ -117,7 +159,16 @@ export const listerLunettesClient = (client: string) =>
 export type SaisieVente = {
   magasin: string;
   client?: string;
-  lignes: { article: string; quantite: number; remise_pct?: string; lunette?: number; role?: RoleLunette }[];
+  lignes: {
+    article: string;
+    quantite: number;
+    remise_pct?: string;
+    lunette?: number;
+    lentilles?: number;
+    role?: RoleLigne;
+    numero_lot?: string;
+    date_peremption?: string;
+  }[];
   paiements: { mode: ModePaiement; montant: string }[];
   /** Paires de lunettes ; leurs articles sont dans ``lignes`` (``lunette`` = rang dans cette liste). */
   lunettes?: SaisieLunette[];
@@ -136,7 +187,7 @@ export type TypeVente = "optique" | "solaire" | "lentille" | "produit";
 export const TYPES_VENTE: { valeur: TypeVente; libelle: string; aide: string }[] = [
   { valeur: "optique", libelle: "Lunettes optiques", aide: "Monture et verres correcteurs" },
   { valeur: "solaire", libelle: "Lunettes solaires", aide: "Montures solaires" },
-  { valeur: "lentille", libelle: "Lentilles", aide: "Lentilles de contact" },
+  { valeur: "lentille", libelle: "Lentilles", aide: "Lentilles de contact et leurs produits" },
   { valeur: "produit", libelle: "Produits et accessoires", aide: "Produits lentilles, étuis, sprays…" },
 ];
 
@@ -155,8 +206,7 @@ export const chercherArticles = (
     })}`,
   ).then((page) => page.results);
 
-export const encaisser = (saisie: SaisieVente) =>
-  appeler<Vente>("/api/v1/ventes/", { methode: "POST", corps: saisie });
+export const encaisser = (saisie: SaisieVente) => appeler<Vente>("/api/v1/ventes/", { methode: "POST", corps: saisie });
 
 export type Facture = {
   id: string;

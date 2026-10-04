@@ -28,7 +28,7 @@ import {
   VISIONS,
   type Article,
   type Famille,
-  type RoleLunette,
+  type RoleLigne,
   type SaisieLunette,
   type Vision,
 } from "../api/caisse";
@@ -44,12 +44,12 @@ import { enUnites, formater, type Monnaie } from "../api/monnaie";
 /** Article placé dans une lunette (monture, verre d'un œil ou supplément). */
 export type ArticleLunette = {
   article: Article;
-  role: RoleLunette;
+  role: RoleLigne;
   remise_pct: string;
 };
 
 const BORDEAUX = "#8b1414";
-const NOUVELLE = "nouvelle";
+export const NOUVELLE = "nouvelle";
 
 type Correction = {
   sphere: string;
@@ -80,11 +80,11 @@ function pres(c: Correction) {
   return { ...c, sphere: (sphere > 0 ? "+" : "") + sphere.toFixed(2) };
 }
 
-const signe = (valeur: string) => (valeur && Number(valeur) > 0 && !valeur.startsWith("+") ? `+${valeur}` : valeur);
+export const signe = (valeur: string) => (valeur && Number(valeur) > 0 && !valeur.startsWith("+") ? `+${valeur}` : valeur);
 const ou = (valeur: string) => (valeur.trim() === "" ? null : valeur.trim());
 
 /** Code-barres tapé ou lu à la douchette (qui finit par Entrée) : l'article est choisi aussitôt. */
-function CodeBarres({
+export function CodeBarres({
   magasin,
   famille,
   onTrouve,
@@ -131,7 +131,7 @@ function CodeBarres({
 }
 
 /** Choix d'un article d'une famille par sa référence, son libellé ou sa marque. */
-function ChoixArticle({
+export function ChoixArticle({
   magasin,
   famille,
   label,
@@ -186,7 +186,7 @@ function ChoixArticle({
   );
 }
 
-function Champ({
+export function Champ({
   label,
   valeur,
   onChange,
@@ -213,7 +213,7 @@ function Champ({
   );
 }
 
-function Cadre({ titre, children }: { titre: ReactNode; children: ReactNode }) {
+export function Cadre({ titre, children }: { titre: ReactNode; children: ReactNode }) {
   return (
     <Paper variant="outlined" sx={{ p: 1.5, flex: 1, minWidth: 0 }}>
       <Typography
@@ -516,7 +516,7 @@ export function FicheLunette({
     try {
       const prescription = saisieLibre ? (await enregistrerOrdonnance()).id : ordonnance || null;
       const articles: ArticleLunette[] = [];
-      const ajouter = (article: Article | null, role: RoleLunette, remise: string) => {
+      const ajouter = (article: Article | null, role: RoleLigne, remise: string) => {
         if (article) articles.push({ article, role, remise_pct: remise || "0" });
       };
       ajouter(monture, "monture", remiseMonture);

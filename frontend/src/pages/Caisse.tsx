@@ -29,13 +29,15 @@ import {
   TYPES_VENTE,
   type Article,
   type ModePaiement,
-  type RoleLunette,
+  type RoleLigne,
+  type SaisieLentilles,
   type SaisieLunette,
   type TypeVente,
   type Vente,
 } from "../api/caisse";
 import { listerMagasins } from "../api/magasins";
 import { enUnites, formater, formaterTexte, versTexte, type Monnaie } from "../api/monnaie";
+import { FicheLentilles, type LentilleChoisie } from "./FicheLentilles";
 import { FicheLunette, type ArticleLunette } from "./FicheLunette";
 
 /** Ligne du panier ; celles d'une lunette portent son rang (``lunette``) et leur place. */
@@ -43,16 +45,21 @@ type Ligne = {
   article: Article;
   quantite: number;
   lunette?: number;
-  role?: RoleLunette;
+  lentilles?: number;
+  numero_lot?: string;
+  date_peremption?: string;
+  role?: RoleLigne;
   remise_pct?: string;
 };
 
-const PLACES: Record<RoleLunette, string> = {
+const PLACES: Record<RoleLigne, string> = {
   monture: "Monture",
   verre_d: "Verre droit",
   verre_g: "Verre gauche",
   supplement_d: "Supplément droit",
   supplement_g: "Supplément gauche",
+  lentille_d: "Lentille droite",
+  lentille_g: "Lentille gauche",
 };
 
 /** Ce que l'utilisateur peut faire dans la fiche lunettes. */
@@ -100,6 +107,12 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
   const [panier, setPanier] = useState<Ligne[]>([]);
   const [lunettes, setLunettes] = useState<SaisieLunette[]>([]);
   const ficheLunette = parcours?.typeVente === "optique";
+  const [jeuxLentilles, setJeuxLentilles] = useState<SaisieLentilles[]>([]);
+  const ficheLentilles = parcours?.typeVente === "lentille";
+  // Lot et péremption : saisis pour les lentilles et leurs produits.
+  const avecLots = ficheLentilles || panier.some((l) => l.numero_lot || l.date_peremption);
+  const equipement = (l: Ligne) =>
+    l.lunette !== undefined ? `L${l.lunette}` : l.lentilles !== undefined ? `C${l.lentilles}` : null;
   const [mode, setMode] = useState<ModePaiement>("carte");
   const [derniereVente, setDerniereVente] = useState<Vente | null>(null);
   // Commande : acompte maintenant, solde à la livraison. Obligatoire dès qu'un article est
@@ -143,8 +156,12 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
           quantite: l.quantite,
           ...(Number(l.remise_pct || 0) > 0 ? { remise_pct: l.remise_pct } : {}),
           ...(l.lunette !== undefined ? { lunette: l.lunette, role: l.role } : {}),
+          ...(l.lentilles !== undefined ? { lentilles: l.lentilles, role: l.role } : {}),
+          ...(l.numero_lot ? { numero_lot: l.numero_lot } : {}),
+          ...(l.date_peremption ? { date_peremption: l.date_peremption } : {}),
         })),
         ...(lunettes.length ? { lunettes } : {}),
+        ...(jeuxLentilles.length ? { lentilles: jeuxLentilles } : {}),
         paiements:
           commande && montantAcompte === 0
             ? []
@@ -166,6 +183,7 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
       setDerniereVente(enregistree);
       setPanier([]);
       setLunettes([]);
+      setJeuxLentilles([]);
       setEnCommande(false);
       setAcompte("");
       setLivraisonPrevue("");
@@ -191,7 +209,7 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
   function ajouter(article: Article) {
     setDerniereVente(null);
     setPanier((lignes) => {
-      const existante = lignes.find((l) => l.article.id === article.id);
+      const existante = lignes.find((l) => l.article.id === article.id && equipement(l) === null);
       if (!existante) return [...lignes, { article, quantite: 1 }];
       return lignes.map((l) => (l === existante ? { ...l, quantite: l.quantite + 1 } : l));
     });
@@ -211,6 +229,26 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
         remise_pct: a.remise_pct,
       })),
     ]);
+  }
+
+  function ajouterLentilles(jeu: SaisieLentilles, choisies: LentilleChoisie[]) {
+    setDerniereVente(null);
+    const rang = jeuxLentilles.length;
+    setJeuxLentilles([...jeuxLentilles, jeu]);
+    setPanier((lignes) => [...lignes, ...choisies.map((c) => ({ ...c, lentilles: rang }))]);
+  }
+
+  function retirerLentilles(rang: number) {
+    setJeuxLentilles((liste) => liste.filter((_, i) => i !== rang));
+    setPanier((lignes) =>
+      lignes
+        .filter((l) => l.lentilles !== rang)
+        .map((l) => (l.lentilles !== undefined && l.lentilles > rang ? { ...l, lentilles: l.lentilles - 1 } : l)),
+    );
+  }
+
+  function changerLigne(ligne: Ligne, modification: Partial<Ligne>) {
+    setPanier((lignes) => lignes.map((l) => (l === ligne ? { ...l, ...modification } : l)));
   }
 
   /** Retire une lunette et ses articles ; les suivantes reprennent leur numéro. */
@@ -233,6 +271,7 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
     setMagasin(id);
     setPanier([]);
     setLunettes([]);
+    setJeuxLentilles([]);
     setDerniereVente(null);
   }
 
@@ -273,6 +312,17 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
             />
           ) : (
             <>
+              {ficheLentilles && parcours && (
+                <FicheLentilles
+                  key={`lentilles-${jeuxLentilles.length}-${derniereVente?.id ?? ""}`}
+                  magasin={magasin}
+                  client={client}
+                  monnaie={monnaie}
+                  numero={jeuxLentilles.length + 1}
+                  droits={parcours.droits ?? { remise: false, voirOrdonnances: false, saisirOrdonnance: false }}
+                  onValider={ajouterLentilles}
+                />
+              )}
               <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
                 {!parcours && (
                   <TextField
@@ -344,40 +394,77 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
               <TableHead>
                 <TableRow>
                   <TableCell>Article</TableCell>
-                  {lunettes.length > 0 && <TableCell>Lunette</TableCell>}
+                  {(lunettes.length > 0 || jeuxLentilles.length > 0) && <TableCell>Équipement</TableCell>}
+                  {avecLots && <TableCell>N° lot</TableCell>}
+                  {avecLots && <TableCell>Péremption</TableCell>}
                   <TableCell align="center">Quantité</TableCell>
                   <TableCell align="right">Total</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {panier.map((ligne, i) => (
-                  <TableRow key={`${ligne.article.id}-${ligne.lunette ?? ""}-${ligne.role ?? ""}-${i}`}>
+                  <TableRow key={`${ligne.article.id}-${equipement(ligne) ?? ""}-${ligne.role ?? ""}-${i}`}>
                     <TableCell>
                       {ligne.article.libelle}
                       {Number(ligne.remise_pct || 0) > 0 && ` (remise ${ligne.remise_pct} %)`}
                     </TableCell>
-                    {lunettes.length > 0 && (
+                    {(lunettes.length > 0 || jeuxLentilles.length > 0) && (
                       <TableCell>
                         {ligne.lunette !== undefined && ligne.role && (
                           <>
-                            n° {ligne.lunette + 1} · {PLACES[ligne.role]}
-                            {(i === 0 || panier[i - 1].lunette !== ligne.lunette) && (
+                            Lunette n° {ligne.lunette + 1} · {PLACES[ligne.role]}
+                            {(i === 0 || equipement(panier[i - 1]) !== equipement(ligne)) && (
                               <Button size="small" color="error" onClick={() => retirerLunette(ligne.lunette!)}>
                                 Retirer la lunette
                               </Button>
                             )}
                           </>
                         )}
+                        {ligne.lentilles !== undefined && ligne.role && (
+                          <>
+                            Lentilles n° {ligne.lentilles + 1} · {PLACES[ligne.role]}
+                            {(i === 0 || equipement(panier[i - 1]) !== equipement(ligne)) && (
+                              <Button size="small" color="error" onClick={() => retirerLentilles(ligne.lentilles!)}>
+                                Retirer les lentilles
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </TableCell>
+                    )}
+                    {avecLots && (
+                      <TableCell>
+                        <TextField
+                          size="small"
+                          variant="standard"
+                          value={ligne.numero_lot ?? ""}
+                          onChange={(e) => changerLigne(ligne, { numero_lot: e.target.value })}
+                          slotProps={{ htmlInput: { "aria-label": `N° de lot ${ligne.article.libelle}` } }}
+                          sx={{ width: 110 }}
+                        />
+                      </TableCell>
+                    )}
+                    {avecLots && (
+                      <TableCell>
+                        <TextField
+                          size="small"
+                          variant="standard"
+                          type="date"
+                          value={ligne.date_peremption ?? ""}
+                          onChange={(e) => changerLigne(ligne, { date_peremption: e.target.value })}
+                          slotProps={{ htmlInput: { "aria-label": `Péremption ${ligne.article.libelle}` } }}
+                          sx={{ width: 140 }}
+                        />
                       </TableCell>
                     )}
                     <TableCell align="center">
-                      {ligne.lunette === undefined && (
+                      {equipement(ligne) === null && (
                         <IconButton size="small" aria-label="Retirer un" onClick={() => changerQuantite(ligne, -1)}>
                           −
                         </IconButton>
                       )}
                       {ligne.quantite}
-                      {ligne.lunette === undefined && (
+                      {equipement(ligne) === null && (
                         <IconButton
                           size="small"
                           aria-label="Ajouter un"
