@@ -45,7 +45,15 @@ export type Vente = {
   verres?: "a_commander" | "commandes" | "recus" | null;
   facture: string | null;
   client: { id: string; nom: string; matricule_fiscal: string; organisme?: string | null } | null;
-  lignes: { id: number; libelle: string; quantite: number; quantite_reprise: number; total_ttc: string }[];
+  lignes: {
+    id: number;
+    libelle: string;
+    quantite: number;
+    quantite_reprise: number;
+    total_ttc: string;
+    prix_unitaire_ttc: string;
+    remise_pct: string;
+  }[];
 };
 
 export type SaisieVente = {

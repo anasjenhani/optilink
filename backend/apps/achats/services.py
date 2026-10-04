@@ -1,16 +1,28 @@
 from django.db import transaction
+from django.db.models import Exists, OuterRef
 from django.utils import timezone
 
 from apps.ventes.models import LigneVente, TypeDocument, Vente
 from apps.ventes.services import _aujourd_hui, _numero, _prochain_numero
 
-from .models import CommandeFournisseur, LigneCommandeFournisseur
+from .models import CasseVerre, CommandeFournisseur, LigneCommandeFournisseur
 
 EN_COURS = [CommandeFournisseur.Statut.ENVOYEE, CommandeFournisseur.Statut.RECUE]
 
 
 class CommandeFournisseurImpossible(Exception):
     pass
+
+
+class CasseImpossible(Exception):
+    pass
+
+
+def _verres_valides():
+    """Lignes fournisseurs qui comptent encore : commande en cours et verre non cassé."""
+    return LigneCommandeFournisseur.objects.filter(
+        commande__statut__in=EN_COURS, casse__isnull=True
+    )
 
 
 def verres_a_commander(magasin):
@@ -21,7 +33,7 @@ def verres_a_commander(magasin):
             vente__statut=Vente.Statut.EN_COMMANDE,
             article__sur_commande=True,
         )
-        .exclude(commandes_fournisseur__commande__statut__in=EN_COURS)
+        .exclude(Exists(_verres_valides().filter(ligne_vente=OuterRef("pk"))))
         .select_related("vente__client", "article__fournisseur")
         .order_by("vente__cree_le", "pk")
     )
@@ -34,9 +46,9 @@ def etat_verres(vente):
         return None
     statuts = []
     for ligne in lignes:
-        commandes = LigneCommandeFournisseur.objects.filter(
-            ligne_vente=ligne, commande__statut__in=EN_COURS
-        ).values_list("commande__statut", flat=True)
+        commandes = (
+            _verres_valides().filter(ligne_vente=ligne).values_list("commande__statut", flat=True)
+        )
         statuts.append(next(iter(commandes), None))
     if None in statuts:
         return "a_commander"
@@ -116,3 +128,40 @@ def annuler_commande_fournisseur(*, commande):
     commande.statut = CommandeFournisseur.Statut.ANNULEE
     commande.save(update_fields=["statut", "modifie_le"])
     return commande
+
+
+@transaction.atomic
+def declarer_casse(*, ligne_commande, cause, utilisateur, observation=""):
+    """Un verre reçu est cassé ou défectueux : il est à recommander, le suivi y revient."""
+    from apps.ventes.models import Etape, EtapeCommande
+
+    ligne_commande = (
+        LigneCommandeFournisseur.objects.select_for_update(of=("self",))
+        .select_related("commande", "ligne_vente__vente")
+        .get(pk=ligne_commande.pk)
+    )
+    vente = Vente.tous.select_for_update().get(pk=ligne_commande.ligne_vente.vente_id)
+    if ligne_commande.commande.statut != CommandeFournisseur.Statut.RECUE:
+        raise CasseImpossible("Seul un verre déjà reçu du fournisseur peut être déclaré cassé.")
+    if CasseVerre.objects.filter(ligne_commande=ligne_commande).exists():
+        raise CasseImpossible("Cette casse est déjà déclarée ; le verre est à recommander.")
+    if vente.statut != Vente.Statut.EN_COMMANDE:
+        raise CasseImpossible(f"La visite {vente.numero} n'est plus une commande en cours.")
+    casse = CasseVerre.objects.create(
+        ligne_commande=ligne_commande,
+        vente=vente,
+        cause=cause,
+        observation=observation,
+        declaree_par=utilisateur,
+    )
+    # Le suivi repart des verres à commander ; la casse reste tracée dans ses étapes.
+    vente.etape = ""
+    vente.save(update_fields=["etape", "modifie_le"])
+    EtapeCommande.objects.create(
+        vente=vente,
+        etape=Etape.A_COMMANDER,
+        observation=f"Casse verre : {casse.get_cause_display()}"
+        + (f" ({observation})" if observation else ""),
+        par=utilisateur,
+    )
+    return casse

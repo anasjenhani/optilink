@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from apps.ventes.api.serializers import client_resume
 
-from ..models import CommandeFournisseur, Fournisseur, LigneCommandeFournisseur
+from ..models import CasseVerre, CommandeFournisseur, Fournisseur, LigneCommandeFournisseur
 
 
 class FournisseurSerializer(serializers.ModelSerializer):
@@ -80,3 +80,54 @@ class CommandeFournisseurSerializer(serializers.ModelSerializer):
             "recue_le",
             "lignes",
         ]
+
+
+class CasseVerreSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source="public_id", read_only=True)
+    vente = serializers.UUIDField(source="vente.public_id", read_only=True)
+    vente_numero = serializers.CharField(source="vente.numero", read_only=True)
+    magasin = serializers.CharField(source="vente.magasin.code", read_only=True)
+    client = serializers.SerializerMethodField()
+    verre = serializers.CharField(source="ligne_commande.ligne_vente.libelle", read_only=True)
+    commande_fournisseur = serializers.CharField(
+        source="ligne_commande.commande.numero", read_only=True
+    )
+    fournisseur = serializers.CharField(
+        source="ligne_commande.commande.fournisseur.nom", read_only=True
+    )
+    cause_libelle = serializers.CharField(source="get_cause_display", read_only=True)
+    declaree_par = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CasseVerre
+        fields = [
+            "id",
+            "vente",
+            "vente_numero",
+            "magasin",
+            "client",
+            "verre",
+            "commande_fournisseur",
+            "fournisseur",
+            "cause",
+            "cause_libelle",
+            "observation",
+            "declaree_par",
+            "cree_le",
+        ]
+
+    def get_client(self, casse) -> str | None:
+        client = casse.vente.client
+        return str(client) if client else None
+
+    def get_declaree_par(self, casse) -> str:
+        auteur = casse.declaree_par
+        return auteur.get_full_name() or auteur.get_username()
+
+
+class CasseVerreSaisieSerializer(serializers.Serializer):
+    ligne_commande = serializers.IntegerField(
+        help_text="Verre reçu (``verres[].id`` de la fiche de visite)."
+    )
+    cause = serializers.ChoiceField(choices=CasseVerre.Cause.choices)
+    observation = serializers.CharField(required=False, allow_blank=True, max_length=300)

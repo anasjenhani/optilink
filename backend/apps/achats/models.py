@@ -87,3 +87,43 @@ class LigneCommandeFournisseur(models.Model):
 
     def __str__(self):
         return f"{self.quantite} × {self.article}"
+
+
+class CasseVerre(ModeleDeBase):
+    """Verre cassé ou défectueux après réception : il repasse « à commander ».
+
+    Une casse vise un verre reçu d'une commande fournisseur ; la commande client retrouve
+    alors ce verre dans la liste des verres à commander, et son suivi revient à cette étape.
+    """
+
+    class Cause(models.TextChoices):
+        ATELIER = "atelier", "Casse à l'atelier (montage)"
+        FOURNISSEUR = "fournisseur", "Défaut du fournisseur"
+        CLIENT = "client", "Casse par le client"
+
+    ligne_commande = models.OneToOneField(
+        LigneCommandeFournisseur,
+        on_delete=models.PROTECT,
+        related_name="casse",
+        verbose_name="verre commandé",
+    )
+    vente = models.ForeignKey(
+        "ventes.Vente", on_delete=models.PROTECT, related_name="casses_verres"
+    )
+    cause = models.CharField(max_length=12, choices=Cause.choices)
+    observation = models.CharField(max_length=300, blank=True)
+    declaree_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    class Meta:
+        ordering = ["-cree_le"]
+        verbose_name = "casse de verre"
+        verbose_name_plural = "casses de verres"
+
+    def __str__(self):
+        return f"Casse {self.ligne_commande.article} ({self.vente})"
+
+    @property
+    def magasin_id(self):
+        return self.vente.magasin_id

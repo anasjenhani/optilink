@@ -59,8 +59,11 @@ import { Avoirs } from "../pages/Avoirs";
 import { Caisse } from "../pages/Caisse";
 import { Catalogue } from "../pages/Catalogue";
 import { Clients } from "../pages/Clients";
+import { CassesVerres } from "../pages/CassesVerres";
 import { Commandes } from "../pages/Commandes";
 import { PrisesEnCharge } from "../pages/PrisesEnCharge";
+import { Recus } from "../pages/Recus";
+import { ResteVendeur } from "../pages/ResteVendeur";
 import { Devis } from "../pages/Devis";
 import { Factures } from "../pages/Factures";
 import { Imports } from "../pages/Imports";
@@ -68,6 +71,7 @@ import { Journee } from "../pages/Journee";
 import { Magasins } from "../pages/Magasins";
 import { RessourcesHumaines } from "../pages/RessourcesHumaines";
 import { Suivi } from "../pages/Suivi";
+import { ConsulterVisite, HistoriqueVisites, Visites } from "../pages/Visites";
 import { Tresorerie } from "../pages/Tresorerie";
 import { VenteComptoir } from "../pages/VenteComptoir";
 import { Verres } from "../pages/Verres";
@@ -128,6 +132,7 @@ export function modulesPour(session: EtatSession): Module[] {
   const voirVentes = a("ventes.view_vente");
   const voirClients = a("crm.view_client");
   const voirCatalogue = a("stock.view_article");
+  const declarerCasse = a("achats.add_casseverre");
   const droitsTresorerie = {
     cloturer: a("tresorerie.add_cloturecaisse"),
     depenses: a("tresorerie.add_depensecaisse"),
@@ -243,8 +248,20 @@ export function modulesPour(session: EtatSession): Module[] {
           ecran: comptoir,
         },
         { id: "journee", libelle: "Journée de Vente", icone: Today, couleur: COULEURS.vert, ecran: si(voirVentes, () => <Journee />) },
-        aVenir("liste-visites", "Liste Visites", ListAlt, COULEURS.jaune),
-        aVenir("visites-filtre-facture", "Visites Filtre Facture", FilterAlt, COULEURS.jaune),
+        {
+          id: "liste-visites",
+          libelle: "Liste Visites",
+          icone: ListAlt,
+          couleur: COULEURS.jaune,
+          ecran: si(voirVentes, () => <Visites casse={declarerCasse} />),
+        },
+        {
+          id: "visites-filtre-facture",
+          libelle: "Visites Filtre Facture",
+          icone: FilterAlt,
+          couleur: COULEURS.jaune,
+          ecran: si(voirVentes, () => <Visites casse={declarerCasse} factureeInitiale="false" />),
+        },
         {
           id: "suivi-visite",
           libelle: "Suivi Visite",
@@ -252,17 +269,35 @@ export function modulesPour(session: EtatSession): Module[] {
           couleur: COULEURS.orange,
           ecran: si(voirVentes, () => <Suivi modifier={vendre} />),
         },
-        aVenir("consulter-visite", "Consulter Visite", FindInPage, COULEURS.rouge),
+        {
+          id: "consulter-visite",
+          libelle: "Consulter Visite",
+          icone: FindInPage,
+          couleur: COULEURS.rouge,
+          ecran: si(voirVentes, () => <ConsulterVisite casse={declarerCasse} />),
+        },
         aVenir("lunettes-vendues", "Lunettes Vendues", Sell, COULEURS.turquoise),
-        aVenir("liste-recus", "Liste Reçus", ReceiptLong, COULEURS.jaune),
+        { id: "liste-recus", libelle: "Liste Reçus", icone: ReceiptLong, couleur: COULEURS.jaune, ecran: si(voirVentes, () => <Recus />) },
         aVenir("creation-produit", "Demande Création Produit", AddBox, COULEURS.bleu),
         aVenir("prospect", "Prospect Client", PersonSearch, COULEURS.rouge),
         aVenir("code-barre", "Code à barres", QrCode2, COULEURS.bleu),
-        aVenir("historique-visites", "Historique Visites", History, COULEURS.rouge),
-        aVenir("casse-verre", "Casse Verre", Build, COULEURS.vert),
+        {
+          id: "historique-visites",
+          libelle: "Historique Visites",
+          icone: History,
+          couleur: COULEURS.rouge,
+          ecran: si(voirVentes && voirClients, () => <HistoriqueVisites casse={declarerCasse} />),
+        },
+        {
+          id: "casse-verre",
+          libelle: "Casse Verre",
+          icone: Build,
+          couleur: COULEURS.vert,
+          ecran: si(a("achats.view_casseverre"), () => <CassesVerres declarer={declarerCasse} />),
+        },
         aVenir("code-barre-marque", "Code à barres Marque", QrCodeScanner, COULEURS.bleu),
         aVenir("visites-stock", "Visites de Stock", Inventory, COULEURS.brun),
-        aVenir("reste-vendeur", "Reste par Vendeur", Payments, COULEURS.vert),
+        { id: "reste-vendeur", libelle: "Reste par Vendeur", icone: Payments, couleur: COULEURS.vert, ecran: si(voirVentes, () => <ResteVendeur />) },
       ],
     },
     {
@@ -335,7 +370,7 @@ export function modulesPour(session: EtatSession): Module[] {
           ecran: si(droitsRh.voirAcomptes, () => <RessourcesHumaines droits={droitsRh} ongletInitial="acomptes" />),
         },
         aVenir("vente-credit", "Liste Vente à Crédit", ListAlt, COULEURS.brun),
-        aVenir("liste-reglements", "Liste Règlements", ReceiptLong, COULEURS.gris),
+        { id: "liste-reglements", libelle: "Liste Règlements", icone: ReceiptLong, couleur: COULEURS.gris, ecran: si(voirVentes, () => <Recus />) },
         aVenir("changement-cheques", "Changement Chèques", SwapHoriz, COULEURS.brun),
         {
           id: "prises-en-charge",
