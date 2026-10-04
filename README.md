@@ -162,6 +162,36 @@ La CI GitHub Actions lance les tests backend sur un vrai PostgreSQL 17, les cont
 
 Nginx redirige HTTP vers HTTPS (TLS 1.2 minimum, HSTS). La connexion Django vers PostgreSQL exige TLS (`DB_SSLMODE=require` par défaut) ; en production, utiliser `DB_SSLMODE=verify-full` avec `DB_SSLROOTCERT` (certificat de l'autorité, monté dans le conteneur) pour vérifier aussi le certificat du serveur.
 
+## Qualification
+
+Environnement d'essai sur **un seul serveur** (2 cœurs, 4 Go de mémoire, 80 Go SSD ; 8 Go conseillés pour les gros imports), PostgreSQL compris. Mêmes images et même sécurité que la production (HTTPS, MFA, Row-Level Security), ressources réduites :
+
+| Conteneur | Réglage qualification | Mémoire max |
+|---|---|---|
+| postgres | `shared_buffers` 256 Mo, 40 connexions, non exposé hors de Docker | 1 Go |
+| backend | 2 processus Gunicorn (`WEB_CONCURRENCY`) | 768 Mo |
+| worker | 1 processus Celery qui porte aussi le planificateur (`-B`) ; pas de conteneur `beat` | 512 Mo |
+| redis | 64 Mo de données | 128 Mo |
+| web | Nginx HTTPS | 128 Mo |
+| sauvegarde | `pg_dump` chaque nuit à 2 h dans `./sauvegardes`, gardé 7 jours | 128 Mo |
+
+1. `.env` comme en production, avec en plus `POSTGRES_ADMIN_PASSWORD` (super-utilisateur réservé à l'administration et aux sauvegardes). Utiliser des secrets différents de la production.
+2. Certificat : pour un réseau interne, un certificat auto-signé suffit :
+   `openssl req -x509 -newkey rsa:2048 -nodes -days 825 -subj "/CN=optilink-qualif" -addext "subjectAltName=DNS:optilink-qualif" -keyout certs/optilink.key -out certs/optilink.crt`
+3. `docker compose -f docker-compose.yml -f docker-compose.qualif.yml up -d --build`
+4. `docker compose -f docker-compose.yml -f docker-compose.qualif.yml exec backend python manage.py createsuperuser`, puis créer pays, magasin, fournisseurs et comptes dans l'administration (`charger_demo` ajoute des articles d'essai).
+
+### Avec Vagrant (VirtualBox ou VMware Workstation)
+
+Le `Vagrantfile` crée la machine virtuelle dans VirtualBox, ou dans VMware Workstation avec `--provider vmware_desktop` (Ubuntu 24.04, 2 cœurs, 4 Go, carte « Bridged » à adresse fixe) et y lance `deploy/qualification/provision.sh`, qui installe Docker depuis son dépôt officiel, génère les secrets (`.env`) et un certificat auto-signé, ouvre le pare-feu (SSH, 80, 443) et démarre OptiLink. Le script se relance sans risque (`vagrant provision`) : secrets et certificat sont gardés. Il sert aussi sur un Ubuntu installé à la main : `sudo OPTILINK_SOURCE=. OPTILINK_IP=192.168.1.50 bash deploy/qualification/provision.sh`.
+
+1. Sur le PC Windows : `winget install --id Oracle.VirtualBox -e` et `winget install --id Hashicorp.Vagrant -e`, puis redémarrage. Avec VMware Workstation à la place de VirtualBox : `winget install --id Hashicorp.VagrantVMwareUtility -e` et `vagrant plugin install vagrant-vmware-desktop`.
+2. Dans le dossier d'OptiLink : `$env:OPTILINK_IP = "192.168.1.50"` (une adresse libre du réseau du magasin), puis `vagrant up --provider virtualbox`. Vagrant demande sur quelle carte réseau du PC faire le pont.
+3. `vagrant ssh`, puis `cd /opt/optilink && sudo docker compose -f docker-compose.yml -f docker-compose.qualif.yml exec backend python manage.py createsuperuser`.
+4. OptiLink répond sur `https://<adresse>` ; le navigateur signale le certificat auto-signé, à accepter (ou à installer sur les postes).
+
+Restaurer une sauvegarde : `docker compose -f docker-compose.yml -f docker-compose.qualif.yml exec -T postgres pg_restore -U postgres -d optilink --clean --if-exists < sauvegardes/optilink-AAAA-MM-JJ.dump`. Copier régulièrement `./sauvegardes` sur un autre support, et garder `PRESCRIPTIONS_CLES` hors du serveur.
+
 ## Suite
 
 - Reprise rapide par code PIN sur le poste de caisse

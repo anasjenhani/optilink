@@ -1,0 +1,111 @@
+# Qualification : tout OptiLink sur un seul petit serveur (2 cœurs, 4 Go), PostgreSQL compris.
+# Mêmes images et mêmes réglages de sécurité que la production (HTTPS, MFA, RLS), ressources réduites.
+# docker compose -f docker-compose.yml -f docker-compose.qualif.yml up -d --build
+x-qualif-env: &qualif-env
+  DB_HOST: postgres
+  # PostgreSQL n'est joignable que par le réseau interne de Docker, jamais depuis l'extérieur.
+  DB_SSLMODE: disable
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=768MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - max_connections=40
+    environment:
+      # Super-utilisateur réservé à l'administration et aux sauvegardes ; l'application
+      # utilise DB_USER, créé sans droit de contourner la Row-Level Security.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD manque dans .env}
+      APP_DB_NAME: ${DB_NAME:-optilink}
+      APP_DB_USER: ${DB_USER:-optilink}
+      APP_DB_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d \"$$APP_DB_NAME\""]
+      interval: 10s
+      retries: 10
+    mem_limit: 1g
+    restart: unless-stopped
+
+  # Copie de la base chaque nuit à 2 h dans ./sauvegardes, gardée 7 jours.
+  sauvegarde:
+    image: postgres:17-alpine
+    entrypoint: ["/bin/sh", "/sauvegarde.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      PGDATABASE: ${DB_NAME:-optilink}
+      SAUVEGARDE_HEURE: ${SAUVEGARDE_HEURE:-2}
+      SAUVEGARDE_JOURS: ${SAUVEGARDE_JOURS:-7}
+      TZ: ${TZ:-Africa/Tunis}
+    volumes:
+      - ./docker/sauvegarde.sh:/sauvegarde.sh:ro
+      - ./sauvegardes:/sauvegardes
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 128m
+    restart: unless-stopped
+
+  redis:
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 64mb
+      - --maxmemory-policy
+      - noeviction
+    mem_limit: 128m
+
+  backend:
+    environment:
+      <<: *qualif-env
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      RUN_MIGRATIONS: "1"
+      WEB_CONCURRENCY: "2"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    mem_limit: 768m
+
+  # Un seul processus de tâches de fond, qui porte aussi le planificateur (option -B).
+  worker:
+    command: ["celery", "-A", "config", "worker", "-B", "--concurrency=1", "--loglevel=info"]
+    environment:
+      <<: *qualif-env
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+    mem_limit: 512m
+
+  # Le planificateur séparé ne sert qu'en production ; ici il tourne dans worker.
+  beat:
+    profiles: ["production"]
+
+  web:
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./frontend/nginx/https.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    mem_limit: 128m
+
+volumes:
+  postgres-data:

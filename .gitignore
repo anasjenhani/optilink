@@ -10,3 +10,5 @@ backend/staticfiles/
 node_modules/
 dist/
 *.tsbuildinfo
+sauvegardes/
+.vagrant/
