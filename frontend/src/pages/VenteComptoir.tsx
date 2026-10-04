@@ -16,7 +16,7 @@ import { useState } from "react";
 import { TYPES_VENTE, type TypeVente } from "../api/caisse";
 import { nomClient, type Client } from "../api/clients";
 import { listerMagasins } from "../api/magasins";
-import { Caisse } from "./Caisse";
+import { Caisse, type DroitsLunette } from "./Caisse";
 import { FicheClient } from "./Clients";
 import { RechercheClients } from "./RechercheClients";
 
@@ -84,7 +84,7 @@ function ChoixType({ onChoisi }: { onChoisi: (type: TypeVente) => void }) {
 }
 
 /** Vente au comptoir en trois étapes : client, type de vente, puis saisie et encaissement. */
-export function VenteComptoir({ creerClient }: { creerClient: boolean }) {
+export function VenteComptoir({ creerClient, droits }: { creerClient: boolean; droits?: DroitsLunette }) {
   const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
   const [magasinChoisi, setMagasin] = useState("");
   const magasin = magasinChoisi || magasins.data?.[0]?.id || "";
@@ -163,7 +163,7 @@ export function VenteComptoir({ creerClient }: { creerClient: boolean }) {
             <Box hidden={etape !== 2}>
               <Caisse
                 key={`${vente}-${magasin}`}
-                parcours={{ client, magasin, typeVente, onTypeVente: setTypeVente, onNouvelleVente: recommencer }}
+                parcours={{ client, magasin, typeVente, onTypeVente: setTypeVente, onNouvelleVente: recommencer, droits }}
               />
             </Box>
           )}

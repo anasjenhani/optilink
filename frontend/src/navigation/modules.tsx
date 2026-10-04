@@ -179,7 +179,18 @@ export function modulesPour(session: EtatSession): Module[] {
   };
 
   const comptoir = si(vendre, () =>
-            voirClients ? <VenteComptoir creerClient={a("crm.add_client")} /> : <Caisse />,
+            voirClients ? (
+              <VenteComptoir
+                creerClient={a("crm.add_client")}
+                droits={{
+                  remise: a("ventes.appliquer_remise"),
+                  voirOrdonnances: a("optique.view_prescription"),
+                  saisirOrdonnance: a("optique.add_prescription"),
+                }}
+              />
+            ) : (
+              <Caisse />
+            ),
           );
 
   const modules: Module[] = [

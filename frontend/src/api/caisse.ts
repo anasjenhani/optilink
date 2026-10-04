@@ -18,13 +18,14 @@ export type Article = {
   stock: number | null;
 };
 
-export type Famille = "monture" | "verre" | "lentille" | "divers";
+export type Famille = "monture" | "verre" | "lentille" | "divers" | "supplement";
 
 export const FAMILLES: { valeur: Famille; libelle: string }[] = [
   { valeur: "monture", libelle: "Montures" },
   { valeur: "verre", libelle: "Verres" },
   { valeur: "lentille", libelle: "Lentilles" },
   { valeur: "divers", libelle: "Divers" },
+  { valeur: "supplement", libelle: "Suppléments verre" },
 ];
 
 export type ModePaiement = "carte" | "especes" | "cheque";
@@ -53,14 +54,73 @@ export type Vente = {
     total_ttc: string;
     prix_unitaire_ttc: string;
     remise_pct: string;
+    /** N° de la lunette qui contient l'article, et sa place. */
+    lunette?: number | null;
+    role?: RoleLunette | "";
   }[];
+  lunettes?: Lunette[];
 };
+
+export type RoleLunette = "monture" | "verre_d" | "verre_g" | "supplement_d" | "supplement_g";
+export type Vision = "loin" | "pres" | "double_foyer" | "degressif" | "progressif";
+
+export const VISIONS: { valeur: Vision; libelle: string }[] = [
+  { valeur: "loin", libelle: "Loin" },
+  { valeur: "pres", libelle: "Près" },
+  { valeur: "double_foyer", libelle: "Double foyer" },
+  { valeur: "degressif", libelle: "Dégressif" },
+  { valeur: "progressif", libelle: "Progressif" },
+];
+
+/** Paire de lunettes : vision, ordonnance, mesures de montage (mm). */
+export type SaisieLunette = {
+  vision: Vision | "";
+  solaire: boolean;
+  inadaptation: boolean;
+  prescription: string | null;
+  oeil_directeur: "" | "droit" | "gauche";
+  ecart_d: string | null;
+  ecart_g: string | null;
+  ecart_pres_d: string | null;
+  ecart_pres_g: string | null;
+  hauteur_d: string | null;
+  hauteur_g: string | null;
+  observation: string;
+  client_absent: boolean;
+};
+
+export type Lunette = SaisieLunette & {
+  numero: number;
+  vision_libelle: string;
+  monture: string | null;
+  verre_d: string | null;
+  verre_g: string | null;
+  supplements_d: string[];
+  supplements_g: string[];
+};
+
+export type LunetteClient = Lunette & {
+  id: string;
+  vente: string;
+  vente_numero: string;
+  date: string;
+  magasin: string;
+  peniche: number | null;
+  statut: Vente["statut"];
+};
+
+export const listerLunettesClient = (client: string) =>
+  appeler<{ results: LunetteClient[] }>(`/api/v1/lunettes/?${new URLSearchParams({ client })}`).then(
+    (page) => page.results,
+  );
 
 export type SaisieVente = {
   magasin: string;
   client?: string;
-  lignes: { article: string; quantite: number }[];
+  lignes: { article: string; quantite: number; remise_pct?: string; lunette?: number; role?: RoleLunette }[];
   paiements: { mode: ModePaiement; montant: string }[];
+  /** Paires de lunettes ; leurs articles sont dans ``lignes`` (``lunette`` = rang dans cette liste). */
+  lunettes?: SaisieLunette[];
   /** Commande : acompte maintenant (paiements, éventuellement vides), solde à la livraison. */
   commande?: boolean;
   livraison_prevue_le?: string;
