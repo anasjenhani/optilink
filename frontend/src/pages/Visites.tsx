@@ -3,9 +3,6 @@ import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Chip from "@mui/material/Chip";
-import List from "@mui/material/List";
-import ListItemButton from "@mui/material/ListItemButton";
-import ListItemText from "@mui/material/ListItemText";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
@@ -19,11 +16,12 @@ import Typography from "@mui/material/Typography";
 import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 
-import { chercherClients, type Client } from "../api/clients";
+import { type Client } from "../api/clients";
 import { listerMagasins } from "../api/magasins";
 import { listerVisites, type FiltresVisites } from "../api/visites";
 import { Filtres } from "../navigation/Filtres";
 import { dateHeure, FicheVisite, STATUTS_VENTE, useMontant } from "./FicheVisite";
+import { RechercheClients } from "./RechercheClients";
 
 const STATUTS = [
   { valeur: "", libelle: "Tous" },
@@ -213,14 +211,7 @@ export function ConsulterVisite({ casse = false }: { casse?: boolean }) {
 
 /** Historique d'un client : on le cherche, puis on voit toutes ses visites. */
 export function HistoriqueVisites({ casse = false }: { casse?: boolean }) {
-  const [saisie, setSaisie] = useState("");
-  const [recherche, setRecherche] = useState("");
   const [client, setClient] = useState<Client | null>(null);
-  const clients = useQuery({
-    queryKey: ["clients", recherche],
-    queryFn: () => chercherClients(recherche),
-    enabled: recherche.length >= 2,
-  });
   return (
     <Card>
       <CardContent>
@@ -242,37 +233,7 @@ export function HistoriqueVisites({ casse = false }: { casse?: boolean }) {
               </Button>
             </Stack>
           ) : (
-            <Stack
-              component="form"
-              direction="row"
-              spacing={2}
-              onSubmit={(e) => {
-                e.preventDefault();
-                setRecherche(saisie.trim());
-              }}
-            >
-              <TextField
-                size="small"
-                autoFocus
-                label="Nom, prénom, téléphone ou n° de fiche"
-                value={saisie}
-                onChange={(e) => setSaisie(e.target.value)}
-                sx={{ flex: 1, minWidth: 0 }}
-              />
-              <Button type="submit" variant="contained">
-                Chercher
-              </Button>
-            </Stack>
-          )}
-          {!client && clients.data?.length === 0 && <Typography color="text.secondary">Aucun client trouvé.</Typography>}
-          {!client && clients.data && clients.data.length > 0 && (
-            <List dense aria-label="Clients trouvés">
-              {clients.data.map((c) => (
-                <ListItemButton key={c.id} onClick={() => setClient(c)}>
-                  <ListItemText primary={`${c.nom} ${c.prenom}`} secondary={`Fiche n° ${c.numero}${c.telephone ? ` · ${c.telephone}` : ""}`} />
-                </ListItemButton>
-              ))}
-            </List>
+            <RechercheClients onChoisi={setClient} />
           )}
           {client && <ListeVisites filtres={{ client: client.id }} casse={casse} resume />}
         </Stack>
