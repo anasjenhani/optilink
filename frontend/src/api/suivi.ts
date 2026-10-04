@@ -60,6 +60,10 @@ export type LigneJournee = {
   vendeur: string;
   total_ttc: string;
   regle: string;
+  /** Organisme de prise en charge du client (CNAM, assurance, mutuelle). */
+  pec_client: string | null;
+  /** Part prise en charge sur cette visite. */
+  pec_visite: string;
   reste: string;
   soldee: boolean;
   livree: boolean;
@@ -74,6 +78,7 @@ export type Journee = {
   nombre_ventes: number;
   total_ventes: string;
   regle_sur_ventes: string;
+  pris_en_charge: string;
   reste_sur_ventes: string;
   encaisse: string;
   encaisse_par_mode: { mode: string; montant: string }[];

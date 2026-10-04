@@ -12,6 +12,8 @@ const vente = (numero: string, nom: string, soldee: boolean, livree: boolean) =>
   vendeur: "Claire Martin",
   total_ttc: "649.500",
   regle: soldee ? "649.500" : "200.000",
+  pec_client: soldee ? null : "CNAM",
+  pec_visite: "0.000",
   reste: soldee ? "0.000" : "449.500",
   soldee,
   livree,
@@ -37,6 +39,7 @@ test("affiche les totaux de la journée et filtre les visites non soldées", asy
             nombre_ventes: 2,
             total_ventes: "1299.000",
             regle_sur_ventes: "849.500",
+            pris_en_charge: "0.000",
             reste_sur_ventes: "449.500",
             encaisse: "849.500",
             encaisse_par_mode: [{ mode: "Espèces", montant: "849.500" }],
@@ -53,6 +56,8 @@ test("affiche les totaux de la journée et filtre les visites non soldées", asy
   );
   expect(await screen.findByText("BEN SALAH Amira")).toBeInTheDocument();
   expect(screen.getByText(/Reste à régler : 449,500/)).toBeInTheDocument();
+  expect(screen.getByRole("columnheader", { name: "PEC client" })).toBeInTheDocument();
+  expect(screen.getByRole("cell", { name: "CNAM" })).toBeInTheDocument();
   expect(urls.some((u) => u.startsWith("/api/v1/ventes/journee/?magasin=m1&date="))).toBe(true);
 
   fireEvent.click(within(screen.getByRole("group", { name: "Soldée" })).getByRole("button", { name: "Non soldé" }));

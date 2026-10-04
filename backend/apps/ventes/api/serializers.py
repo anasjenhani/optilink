@@ -126,7 +126,12 @@ class VenteSerializer(serializers.ModelSerializer):
         ]
 
     def get_client(self, vente) -> dict | None:
-        return client_resume(vente.client)
+        resume = client_resume(vente.client)
+        if resume is not None:
+            # Organisme de prise en charge proposé d'office quand on saisit une PEC.
+            organisme = vente.client.organisme
+            resume["organisme"] = str(organisme.public_id) if organisme else None
+        return resume
 
     def get_facture(self, vente) -> str | None:
         facture = getattr(vente, "facture", None)

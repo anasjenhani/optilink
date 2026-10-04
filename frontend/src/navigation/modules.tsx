@@ -60,6 +60,7 @@ import { Caisse } from "../pages/Caisse";
 import { Catalogue } from "../pages/Catalogue";
 import { Clients } from "../pages/Clients";
 import { Commandes } from "../pages/Commandes";
+import { PrisesEnCharge } from "../pages/PrisesEnCharge";
 import { Devis } from "../pages/Devis";
 import { Factures } from "../pages/Factures";
 import { Imports } from "../pages/Imports";
@@ -224,7 +225,7 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Commandes en cours",
           icone: LocalShipping,
           couleur: COULEURS.bleu,
-          ecran: si(vendre, () => <Commandes />),
+          ecran: si(vendre, () => <Commandes saisirPec={a("ventes.add_priseencharge")} />),
         },
         {
           id: "nouvelle-visite",
@@ -309,7 +310,7 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Règlement",
           icone: Payments,
           couleur: COULEURS.vert,
-          ecran: si(vendre, () => <Commandes />),
+          ecran: si(vendre, () => <Commandes saisirPec={a("ventes.add_priseencharge")} />),
         },
         {
           id: "remboursement",
@@ -328,7 +329,15 @@ export function modulesPour(session: EtatSession): Module[] {
         aVenir("vente-credit", "Liste Vente à Crédit", ListAlt, COULEURS.brun),
         aVenir("liste-reglements", "Liste Règlements", ReceiptLong, COULEURS.gris),
         aVenir("changement-cheques", "Changement Chèques", SwapHoriz, COULEURS.brun),
-        aVenir("bon-cnam", "Bon CNAM", Description, COULEURS.orange),
+        {
+          id: "prises-en-charge",
+          libelle: "Prises en Charge (CNAM)",
+          icone: Description,
+          couleur: COULEURS.orange,
+          ecran: si(a("ventes.view_priseencharge"), () => (
+            <PrisesEnCharge modifier={a("ventes.change_priseencharge")} />
+          )),
+        },
         aVenir("reglement-credit", "Règlement Crédit", CreditCard, COULEURS.brun),
         aVenir("transfert-solde", "Transfert Solde", CompareArrows, COULEURS.gris),
         aVenir("impaye", "Impayé Client", ReportProblem, COULEURS.rouge),

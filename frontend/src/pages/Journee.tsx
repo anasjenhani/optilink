@@ -88,6 +88,9 @@ export function Journee() {
               <Chip label={`${journee.data.nombre_ventes} visite(s)`} />
               <Chip color="primary" label={`Ventes : ${montant(journee.data.total_ventes)}`} />
               <Chip label={`Réglé : ${montant(journee.data.regle_sur_ventes)}`} />
+              {Number(journee.data.pris_en_charge) > 0 && (
+                <Chip label={`Pris en charge : ${montant(journee.data.pris_en_charge)}`} />
+              )}
               <Chip color="warning" label={`Reste à régler : ${montant(journee.data.reste_sur_ventes)}`} />
               <Chip color="success" label={`Encaissé ce jour : ${montant(journee.data.encaisse)}`} />
               {journee.data.encaisse_par_mode.map((m) => (
@@ -99,7 +102,7 @@ export function Journee() {
             <Table size="small" stickyHeader aria-label="Visites de la journée" sx={{ "& td, & th": { whiteSpace: "nowrap" } }}>
               <TableHead>
                 <TableRow>
-                  {["N° fiche", "Tél", "Nom & prénom", "N° visite", "Heure", "Soldée", "Livrée", "Vendeur", "Total", "Réglé", "Reste", "N° facture"].map(
+                  {["N° fiche", "Tél", "Nom & prénom", "N° visite", "Heure", "Soldée", "Livrée", "Vendeur", "Total", "PEC client", "PEC visite", "Réglé", "Reste", "N° facture"].map(
                     (titre) => (
                       <TableCell key={titre} sx={{ fontWeight: 700, color: "primary.main" }}>
                         {titre}
@@ -122,6 +125,8 @@ export function Journee() {
                     <TableCell>{v.livree ? "Oui" : "Non"}</TableCell>
                     <TableCell>{v.vendeur}</TableCell>
                     <TableCell>{montant(v.total_ttc)}</TableCell>
+                    <TableCell>{v.pec_client ?? ""}</TableCell>
+                    <TableCell>{Number(v.pec_visite) ? montant(v.pec_visite) : ""}</TableCell>
                     <TableCell>{montant(v.regle)}</TableCell>
                     <TableCell>{montant(v.reste)}</TableCell>
                     <TableCell>{v.facture ?? ""}</TableCell>
