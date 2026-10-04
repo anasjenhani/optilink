@@ -10,7 +10,7 @@ import Typography from "@mui/material/Typography";
 import { useEffect, useMemo, useState } from "react";
 
 import type { EtatSession } from "../api/auth";
-import { modulesPour, type Module, type Tuile } from "./modules";
+import { modulesPour, RACCOURCIS, type Module, type Tuile } from "./modules";
 
 /** Lit « #/vente/comptoir » : le module, puis l'écran ouvert s'il y en a un. */
 function lireAdresse() {
@@ -131,6 +131,9 @@ export function Espace({ session }: { session: EtatSession }) {
   const [adresse, aller] = useAdresse();
   const module = modules.find((m) => m.id === adresse.module) ?? modules[0];
   const tuile = module.tuiles.find((t) => t.id === adresse.ecran && t.ecran);
+  const raccourcis = RACCOURCIS.filter((r) =>
+    modules.find((m) => m.id === r.module)?.tuiles.some((t) => t.id === r.tuile && t.ecran),
+  );
 
   return (
     <Stack spacing={2}>
@@ -145,6 +148,30 @@ export function Espace({ session }: { session: EtatSession }) {
             <Tab key={m.id} value={m.id} label={m.libelle} sx={{ fontSize: 16, fontWeight: 600 }} />
           ))}
         </Tabs>
+        {raccourcis.length > 0 && (
+          <Stack
+            component="nav"
+            aria-label="Raccourcis"
+            direction="row"
+            sx={{ flexWrap: "wrap", gap: 1, px: 1, py: 1, borderTop: 1, borderColor: "divider" }}
+          >
+            {raccourcis.map((r) => {
+              const actif = module.id === r.module && tuile?.id === r.tuile;
+              return (
+                <Button
+                  key={r.tuile}
+                  size="small"
+                  variant={actif ? "contained" : "outlined"}
+                  aria-current={actif ? "page" : undefined}
+                  onClick={() => aller(r.module, r.tuile)}
+                  sx={{ textTransform: "none" }}
+                >
+                  {r.libelle}
+                </Button>
+              );
+            })}
+          </Stack>
+        )}
       </Box>
       {tuile?.ecran ? (
         <Stack spacing={2}>

@@ -10,6 +10,14 @@ PRIVILEGES = {
         "ventes.add_vente": "Encaisser (caisse, acomptes, livraisons)",
         "ventes.appliquer_remise": "Accorder une remise",
     },
+    "Prises en charge": {
+        "ventes.view_priseencharge": "Voir les prises en charge (CNAM, assurances, mutuelles)",
+        "ventes.add_priseencharge": "Saisir une prise en charge sur une commande",
+        "ventes.change_priseencharge": "Suivre une prise en charge (accordée, réglée, refusée)",
+        "crm.view_organisme": "Voir les organismes de prise en charge",
+        "crm.add_organisme": "Créer un organisme de prise en charge",
+        "crm.change_organisme": "Modifier un organisme de prise en charge",
+    },
     "Pilotage": {
         "ventes.consulter_reporting": "Consulter le reporting (chiffre d'affaires, ventes)",
     },

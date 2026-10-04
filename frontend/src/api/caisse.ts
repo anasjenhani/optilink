@@ -34,6 +34,8 @@ export type Vente = {
   numero: string;
   devise: string;
   total_ttc: string;
+  /** Part de la CNAM, d'une assurance ou d'une mutuelle (hors refus). */
+  pris_en_charge: string;
   reste_a_payer: string;
   statut: "en_commande" | "livree" | "annulee";
   /** Bac numéroté où l'équipement d'une commande attend sa livraison. */
@@ -42,7 +44,7 @@ export type Vente = {
   /** Verres commandés au fournisseur ; null si la commande n'en comporte pas. */
   verres?: "a_commander" | "commandes" | "recus" | null;
   facture: string | null;
-  client: { id: string; nom: string; matricule_fiscal: string } | null;
+  client: { id: string; nom: string; matricule_fiscal: string; organisme?: string | null } | null;
   lignes: { id: number; libelle: string; quantite: number; quantite_reprise: number; total_ttc: string }[];
 };
 

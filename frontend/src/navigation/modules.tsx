@@ -43,6 +43,7 @@ import Store from "@mui/icons-material/Store";
 import SwapHoriz from "@mui/icons-material/SwapHoriz";
 import Sync from "@mui/icons-material/Sync";
 import TableChart from "@mui/icons-material/TableChart";
+import Today from "@mui/icons-material/Today";
 import TrackChanges from "@mui/icons-material/TrackChanges";
 import Undo from "@mui/icons-material/Undo";
 import UploadFile from "@mui/icons-material/UploadFile";
@@ -59,11 +60,14 @@ import { Caisse } from "../pages/Caisse";
 import { Catalogue } from "../pages/Catalogue";
 import { Clients } from "../pages/Clients";
 import { Commandes } from "../pages/Commandes";
+import { PrisesEnCharge } from "../pages/PrisesEnCharge";
 import { Devis } from "../pages/Devis";
 import { Factures } from "../pages/Factures";
 import { Imports } from "../pages/Imports";
+import { Journee } from "../pages/Journee";
 import { Magasins } from "../pages/Magasins";
 import { RessourcesHumaines } from "../pages/RessourcesHumaines";
+import { Suivi } from "../pages/Suivi";
 import { Tresorerie } from "../pages/Tresorerie";
 import { VenteComptoir } from "../pages/VenteComptoir";
 import { Verres } from "../pages/Verres";
@@ -79,6 +83,17 @@ export type Tuile = {
 };
 
 export type Module = { id: string; libelle: string; tuiles: Tuile[] };
+
+/** Boutons fixes sous les onglets : les écrans du quotidien, accessibles depuis partout. */
+export const RACCOURCIS: { module: string; tuile: string; libelle: string }[] = [
+  { module: "vente", tuile: "journee", libelle: "Journée" },
+  { module: "vente", tuile: "nouvelle-visite", libelle: "Nouvelle visite" },
+  { module: "vente", tuile: "suivi-visite", libelle: "Suivi" },
+  { module: "vente", tuile: "recherche-verre", libelle: "Recherche verre" },
+  { module: "vente", tuile: "recherche-monture", libelle: "Recherche monture" },
+  { module: "vente", tuile: "recherche-lentille", libelle: "Recherche lentille" },
+  { module: "vente", tuile: "clients", libelle: "Clients" },
+];
 
 const COULEURS = {
   violet: "#6a3fb5",
@@ -110,6 +125,7 @@ export function modulesPour(session: EtatSession): Module[] {
   const si = (condition: boolean, ecran: () => ReactNode) => (condition ? ecran : undefined);
 
   const vendre = a("ventes.add_vente");
+  const voirVentes = a("ventes.view_vente");
   const voirClients = a("crm.view_client");
   const voirCatalogue = a("stock.view_article");
   const droitsTresorerie = {
@@ -154,7 +170,12 @@ export function modulesPour(session: EtatSession): Module[] {
   const imports = {
     catalogue: a("stock.add_article") && a("stock.change_prixarticle"),
     stock: a("stock.add_mouvementstock"),
+    clients: a("crm.add_client") && a("crm.change_client"),
   };
+
+  const comptoir = si(vendre, () =>
+            voirClients ? <VenteComptoir creerClient={a("crm.add_client")} /> : <Caisse />,
+          );
 
   const modules: Module[] = [
     {
@@ -162,6 +183,13 @@ export function modulesPour(session: EtatSession): Module[] {
       libelle: "Vente",
       tuiles: [
         { id: "recherche-verre", libelle: "Recherche Verre", icone: Visibility, couleur: COULEURS.violet, ecran: stock("verre") },
+        {
+          id: "recherche-monture",
+          libelle: "Recherche Monture",
+          icone: Visibility,
+          couleur: COULEURS.brun,
+          ecran: stock("monture"),
+        },
         {
           id: "recherche-lentille",
           libelle: "Recherche Lentille",
@@ -174,9 +202,7 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Vente au Comptoir",
           icone: PointOfSale,
           couleur: COULEURS.turquoise,
-          ecran: si(vendre, () =>
-            voirClients ? <VenteComptoir creerClient={a("crm.add_client")} /> : <Caisse />,
-          ),
+          ecran: comptoir,
         },
         {
           id: "devis",
@@ -196,16 +222,36 @@ export function modulesPour(session: EtatSession): Module[] {
         },
         { id: "clients", libelle: "Clients et ordonnances", icone: People, couleur: COULEURS.turquoise, ecran: clients },
         {
+          id: "import-clients",
+          libelle: "Import Clients",
+          icone: UploadFile,
+          couleur: COULEURS.bleu,
+          ecran: si(imports.clients, () => <Imports droits={{ catalogue: false, stock: false, clients: true }} />),
+        },
+        {
           id: "commandes",
           libelle: "Commandes en cours",
           icone: LocalShipping,
           couleur: COULEURS.bleu,
-          ecran: si(vendre, () => <Commandes />),
+          ecran: si(vendre, () => <Commandes saisirPec={a("ventes.add_priseencharge")} />),
         },
-        aVenir("nouvelle-visite", "Nouvelle Visite", PersonAddAlt, COULEURS.turquoise),
+        {
+          id: "nouvelle-visite",
+          libelle: "Nouvelle Visite",
+          icone: PersonAddAlt,
+          couleur: COULEURS.turquoise,
+          ecran: comptoir,
+        },
+        { id: "journee", libelle: "Journée de Vente", icone: Today, couleur: COULEURS.vert, ecran: si(voirVentes, () => <Journee />) },
         aVenir("liste-visites", "Liste Visites", ListAlt, COULEURS.jaune),
         aVenir("visites-filtre-facture", "Visites Filtre Facture", FilterAlt, COULEURS.jaune),
-        aVenir("suivi-visite", "Suivi Visite", TrackChanges, COULEURS.orange),
+        {
+          id: "suivi-visite",
+          libelle: "Suivi Visite",
+          icone: TrackChanges,
+          couleur: COULEURS.orange,
+          ecran: si(voirVentes, () => <Suivi modifier={vendre} />),
+        },
         aVenir("consulter-visite", "Consulter Visite", FindInPage, COULEURS.rouge),
         aVenir("lunettes-vendues", "Lunettes Vendues", Sell, COULEURS.turquoise),
         aVenir("liste-recus", "Liste Reçus", ReceiptLong, COULEURS.jaune),
@@ -272,7 +318,7 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Règlement",
           icone: Payments,
           couleur: COULEURS.vert,
-          ecran: si(vendre, () => <Commandes />),
+          ecran: si(vendre, () => <Commandes saisirPec={a("ventes.add_priseencharge")} />),
         },
         {
           id: "remboursement",
@@ -291,7 +337,15 @@ export function modulesPour(session: EtatSession): Module[] {
         aVenir("vente-credit", "Liste Vente à Crédit", ListAlt, COULEURS.brun),
         aVenir("liste-reglements", "Liste Règlements", ReceiptLong, COULEURS.gris),
         aVenir("changement-cheques", "Changement Chèques", SwapHoriz, COULEURS.brun),
-        aVenir("bon-cnam", "Bon CNAM", Description, COULEURS.orange),
+        {
+          id: "prises-en-charge",
+          libelle: "Prises en Charge (CNAM)",
+          icone: Description,
+          couleur: COULEURS.orange,
+          ecran: si(a("ventes.view_priseencharge"), () => (
+            <PrisesEnCharge modifier={a("ventes.change_priseencharge")} />
+          )),
+        },
         aVenir("reglement-credit", "Règlement Crédit", CreditCard, COULEURS.brun),
         aVenir("transfert-solde", "Transfert Solde", CompareArrows, COULEURS.gris),
         aVenir("impaye", "Impayé Client", ReportProblem, COULEURS.rouge),

@@ -4,6 +4,8 @@ export type Client = {
   id: string;
   /** N° de fiche, attribué par le serveur à la création. */
   numero: number;
+  /** N° de la fiche dans l'ancien logiciel, gardé à l'import. */
+  reference_externe?: string;
   civilite: "" | "mme" | "m";
   nom: string;
   prenom: string;
@@ -18,9 +20,13 @@ export type Client = {
   matricule_fiscal: string;
   magasin_origine: string;
   accepte_relances: boolean;
+  /** Organisme de prise en charge (CNAM, assurance, mutuelle), s'il y en a un. */
+  organisme: string | null;
+  organisme_nom: string | null;
+  numero_affilie: string;
 };
 
-export type SaisieClient = Omit<Client, "id" | "numero">;
+export type SaisieClient = Omit<Client, "id" | "numero" | "reference_externe" | "organisme_nom">;
 
 export type MesureOeil = { sphere: string; cylindre?: string; axe?: number | null; addition?: string | null };
 

@@ -26,6 +26,7 @@ import {
   type MesureOeil,
 } from "../api/clients";
 import { listerMagasins } from "../api/magasins";
+import { listerOrganismes } from "../api/prisesEnCharge";
 
 type Droits = {
   creerClient: boolean;
@@ -68,11 +69,13 @@ const FICHE_VIDE = {
   matricule_fiscal: "",
   magasin_origine: "",
   accepte_relances: false,
+  organisme: "",
+  numero_affilie: "",
 };
 type SaisieFiche = typeof FICHE_VIDE;
 
 function versFiche(client: Client): SaisieFiche {
-  return { ...client, date_naissance: client.date_naissance ?? "" };
+  return { ...client, date_naissance: client.date_naissance ?? "", organisme: client.organisme ?? "" };
 }
 
 /** Création d'un client, ou modification de sa fiche quand ``client`` est donné. */
@@ -86,6 +89,8 @@ export function FicheClient({ client, onEnregistre }: { client?: Client; onEnreg
         date_naissance: saisie.date_naissance || null,
         societe: professionnel ? saisie.societe : "",
         matricule_fiscal: professionnel ? saisie.matricule_fiscal : "",
+        organisme: saisie.organisme || null,
+        numero_affilie: saisie.organisme ? saisie.numero_affilie : "",
       };
       if (!client) return creerClient(fiche);
       const { magasin_origine: _, ...modifications } = fiche;
@@ -93,6 +98,7 @@ export function FicheClient({ client, onEnregistre }: { client?: Client; onEnreg
     },
     onSuccess: onEnregistre,
   });
+  const organismes = useQuery({ queryKey: ["organismes"], queryFn: listerOrganismes });
   const choisirMagasin = useCallback(
     (id: string) => setSaisie((s) => ({ ...s, magasin_origine: id })),
     [],
@@ -143,6 +149,24 @@ export function FicheClient({ client, onEnregistre }: { client?: Client; onEnreg
         {champ("ville", "Ville")}
         {!client && <ChoixMagasin valeur={saisie.magasin_origine} onChange={choisirMagasin} />}
       </Stack>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+        <TextField
+          select
+          size="small"
+          label="Prise en charge"
+          value={saisie.organisme}
+          onChange={(e) => setSaisie({ ...saisie, organisme: e.target.value })}
+          sx={{ minWidth: 220 }}
+        >
+          <MenuItem value="">Aucune</MenuItem>
+          {organismes.data?.map((o) => (
+            <MenuItem key={o.id} value={o.id}>
+              {o.nom} ({o.type_libelle})
+            </MenuItem>
+          ))}
+        </TextField>
+        {saisie.organisme && champ("numero_affilie", "N° d'affilié")}
+      </Stack>
       <FormControlLabel
         control={<Checkbox checked={professionnel} onChange={(e) => setProfessionnel(e.target.checked)} />}
         label="Client professionnel (société)"
@@ -179,6 +203,8 @@ function Coordonnees({ client }: { client: Client }) {
   const lignes = [
     client.societe && `${client.societe}${client.matricule_fiscal ? ` · MF ${client.matricule_fiscal}` : ""}`,
     [client.telephone, client.telephone_2, client.email].filter(Boolean).join(" · "),
+    client.organisme_nom &&
+      `Prise en charge ${client.organisme_nom}${client.numero_affilie ? ` · n° ${client.numero_affilie}` : ""}`,
     [client.adresse, ville].filter(Boolean).join(", "),
     client.date_naissance && `Né(e) le ${new Date(client.date_naissance).toLocaleDateString("fr-FR")}`,
   ].filter(Boolean);

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Client
+from .models import Client, Organisme
 
 
 @admin.register(Client)
@@ -26,5 +26,15 @@ class ClientAdmin(admin.ModelAdmin):
     )
 
     # Un client garde son historique d'achats et ses ordonnances : on le désactive.
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Organisme)
+class OrganismeAdmin(admin.ModelAdmin):
+    list_display = ("nom", "type", "pays", "est_actif")
+    list_filter = ("type", "pays", "est_actif")
+    search_fields = ("nom",)
+
     def has_delete_permission(self, request, obj=None):
         return False

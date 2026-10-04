@@ -1,5 +1,10 @@
 import uuid
+from datetime import date
 
+from django.db.models import DecimalField, Prefetch, Sum, Value
+from django.db.models.functions import Coalesce
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import mixins, status, viewsets
@@ -12,7 +17,7 @@ from apps.optique.models import Prescription
 from apps.reseau.models import Magasin
 from apps.stock.models import Article
 
-from ..models import Avoir, Devis, Facture, Vente
+from ..models import Avoir, Devis, EtapeCommande, Facture, Paiement, Vente
 from ..services import (
     AvoirImpossible,
     DevisImpossible,
@@ -29,6 +34,7 @@ from ..services import (
     refuser_devis,
     regler_commande,
 )
+from ..suivi import EtapeImpossible, changer_etape, commandes, etat, journee
 from .serializers import (
     AvoirSaisieSerializer,
     AvoirSerializer,
@@ -42,6 +48,21 @@ from .serializers import (
     VenteSaisieSerializer,
     VenteSerializer,
 )
+from .suivi import ETATS, EtapeSaisieSerializer, JourneeSerializer, SuiviSerializer
+
+
+def _uuid(valeur, champ):
+    try:
+        return uuid.UUID(str(valeur))
+    except ValueError:
+        raise ValidationError({champ: "Identifiant invalide."}) from None
+
+
+def _entier(valeur, champ):
+    try:
+        return int(valeur)
+    except ValueError:
+        raise ValidationError({champ: "Nombre entier attendu."}) from None
 
 
 class VenteViewSet(
@@ -59,8 +80,8 @@ class VenteViewSet(
 
     def get_queryset(self):
         return Vente.objects.select_related(
-            "magasin", "vendeur", "client", "facture"
-        ).prefetch_related("lignes__article", "lignes__retours", "paiements")
+            "magasin", "vendeur", "client__organisme", "facture"
+        ).prefetch_related("lignes__article", "lignes__retours", "paiements", "prises_en_charge")
 
     def _apres(self, operation, **parametres):
         try:
@@ -84,6 +105,101 @@ class VenteViewSet(
         saisie = LivraisonSerializer(data=request.data)
         saisie.is_valid(raise_exception=True)
         return self._apres(livrer_commande, paiements=saisie.validated_data.get("paiements", []))
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("magasin", OpenApiTypes.UUID, description="Un seul magasin."),
+            OpenApiParameter("annee", OpenApiTypes.INT),
+            OpenApiParameter("mois", OpenApiTypes.INT),
+            OpenApiParameter("etat", OpenApiTypes.STR, enum=[e for e, _ in ETATS]),
+            OpenApiParameter("type", OpenApiTypes.STR, enum=["verre", "lentille", "autre"]),
+        ],
+        responses={200: SuiviSerializer(many=True)},
+    )
+    @action(detail=False, pagination_class=None)
+    def suivi(self, request):
+        """Suivi qualité des commandes : étape de chacune, de la visite à la livraison."""
+        parametres = request.query_params
+        ventes = commandes(self.get_queryset()).prefetch_related(
+            Prefetch("etapes", queryset=EtapeCommande.objects.order_by("le", "pk"))
+        )
+        if parametres.get("magasin"):
+            ventes = ventes.filter(magasin__public_id=_uuid(parametres["magasin"], "magasin"))
+        for champ, filtre in (("annee", "cree_le__year"), ("mois", "cree_le__month")):
+            if parametres.get(champ):
+                ventes = ventes.filter(**{filtre: _entier(parametres[champ], champ)})
+        ventes = list(ventes[:2000])
+        etats = {vente.pk: etat(vente) for vente in ventes}
+        serializer = SuiviSerializer(ventes, many=True, context={"etats": etats})
+        lignes = serializer.data
+        if parametres.get("etat"):
+            lignes = [ligne for ligne in lignes if ligne["etat"] == parametres["etat"]]
+        if parametres.get("type"):
+            lignes = [ligne for ligne in lignes if ligne["type"] == parametres["type"]]
+        return Response(lignes)
+
+    @extend_schema(request=EtapeSaisieSerializer, responses={200: VenteSerializer})
+    @action(detail=True, methods=["post"])
+    def etape(self, request, public_id=None):
+        """Fait passer une commande à une étape du suivi (montage, contrôle qualité…)."""
+        saisie = EtapeSaisieSerializer(data=request.data)
+        saisie.is_valid(raise_exception=True)
+        try:
+            vente = changer_etape(
+                vente=self.get_object(),
+                utilisateur=request.user,
+                etape=saisie.validated_data["etape"],
+                observation=saisie.validated_data.get("observation", ""),
+            )
+        except EtapeImpossible as erreur:
+            return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(VenteSerializer(self.get_queryset().get(pk=vente.pk)).data)
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("magasin", OpenApiTypes.UUID, required=True),
+            OpenApiParameter("date", OpenApiTypes.DATE, description="Par défaut, aujourd'hui."),
+        ],
+        responses={200: JourneeSerializer},
+    )
+    @action(detail=False, pagination_class=None)
+    def journee(self, request):
+        """État de la journée de vente d'un magasin : ventes, réglé, reste, encaissements."""
+        parametres = request.query_params
+        magasin = get_object_or_404(
+            Magasin.objects.select_related("pays"),
+            public_id=_uuid(parametres.get("magasin", ""), "magasin"),
+        )
+        jour = timezone.localdate()
+        if parametres.get("date"):
+            try:
+                jour = date.fromisoformat(parametres["date"])
+            except ValueError:
+                raise ValidationError({"date": "Date attendue au format AAAA-MM-JJ."}) from None
+        ventes = list(
+            self.get_queryset()
+            .filter(magasin=magasin, cree_le__date=jour)
+            .exclude(statut=Vente.Statut.ANNULEE)
+            .annotate(
+                regle=Coalesce(
+                    Sum("paiements__montant"),
+                    Value(0),
+                    output_field=DecimalField(max_digits=14, decimal_places=3),
+                )
+            )
+            .order_by("cree_le")
+        )
+        paiements = Paiement.objects.filter(
+            vente__in=Vente.objects.filter(magasin=magasin), recu_le__date=jour
+        )
+        donnees = {
+            "date": jour,
+            "magasin": magasin.nom,
+            "devise": magasin.pays.devise,
+            **journee(ventes, paiements),
+            "ventes": ventes,
+        }
+        return Response(JourneeSerializer(donnees).data)
 
     @extend_schema(request=VenteSaisieSerializer, responses={201: VenteSerializer})
     def create(self, request):

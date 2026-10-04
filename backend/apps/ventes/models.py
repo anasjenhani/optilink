@@ -51,6 +51,17 @@ class CompteurFacture(models.Model):
         return f"{self.magasin_id}/{self.annee}/{self.type_document} : {self.dernier}"
 
 
+class Etape(models.TextChoices):
+    """Étapes du suivi qualité d'une commande, de la visite à la remise au client."""
+
+    A_COMMANDER = "a_commander", "Visite créée à commander"
+    COMMANDEE = "commandee", "Commandée, en attente de réception BL"
+    MONTAGE = "montage", "Montage en cours"
+    CONTROLE = "controle", "Contrôle qualité"
+    CONTACT_CLIENT = "contact_client", "Client prévenu"
+    INSTANCE = "instance", "En instance"
+
+
 class Vente(ModeleDeBase):
     """Vente enregistrée en caisse, avec son ticket. Jamais modifiée : une correction passera
     par un avoir.
@@ -92,6 +103,13 @@ class Vente(ModeleDeBase):
     livree_par = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
     )
+    etape = models.CharField(
+        "étape de l'atelier",
+        max_length=16,
+        choices=Etape.choices,
+        blank=True,
+        help_text="Dernière étape saisie au suivi ; vide, l'étape vient des verres commandés.",
+    )
 
     objects = ParMagasinManager()
     tous = models.Manager()
@@ -119,9 +137,25 @@ class Vente(ModeleDeBase):
         return self.numero
 
     @property
+    def regle_par_le_client(self):
+        return sum((p.montant for p in self.paiements.all()), Decimal("0"))
+
+    @property
+    def pris_en_charge(self):
+        """Part des organismes (CNAM, assurance, mutuelle), sauf prise en charge refusée."""
+        return sum(
+            (
+                pec.montant
+                for pec in self.prises_en_charge.all()
+                if pec.statut != PriseEnCharge.Statut.REFUSEE
+            ),
+            Decimal("0"),
+        )
+
+    @property
     def reste_a_payer(self):
-        paye = sum((p.montant for p in self.paiements.all()), Decimal("0"))
-        return self.total_ttc - paye
+        """Ce que doit encore le client : total moins ses règlements et la part des organismes."""
+        return self.total_ttc - self.regle_par_le_client - self.pris_en_charge
 
 
 class Facture(ModeleDeBase):
@@ -361,3 +395,58 @@ class Paiement(models.Model):
 
     def __str__(self):
         return f"{self.get_mode_display()} {self.montant}"
+
+
+class EtapeCommande(models.Model):
+    """Passage d'une commande à une étape du suivi qualité, avec qui et quand (traçabilité)."""
+
+    Etape = Etape
+
+    vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="etapes")
+    etape = models.CharField(max_length=16, choices=Etape.choices)
+    observation = models.CharField(max_length=300, blank=True)
+    le = models.DateTimeField(default=timezone.now)
+    par = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+
+    class Meta:
+        ordering = ["le", "pk"]
+        verbose_name = "étape de commande"
+        verbose_name_plural = "étapes de commande"
+
+    def __str__(self):
+        return f"{self.vente} : {self.get_etape_display()}"
+
+
+class PriseEnCharge(ModeleDeBase):
+    """Part d'une vente payée par un organisme (CNAM, assurance, mutuelle) et non par le client.
+
+    Elle vient en déduction de ce que doit le client ; refusée, elle redevient à sa charge.
+    """
+
+    class Statut(models.TextChoices):
+        DEMANDEE = "demandee", "Demandée"
+        ACCORDEE = "accordee", "Accordée"
+        REGLEE = "reglee", "Réglée par l'organisme"
+        REFUSEE = "refusee", "Refusée"
+
+    vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="prises_en_charge")
+    organisme = models.ForeignKey("crm.Organisme", on_delete=models.PROTECT, related_name="+")
+    montant = models.DecimalField(max_digits=14, decimal_places=3)
+    numero_dossier = models.CharField("n° de dossier", max_length=60, blank=True)
+    statut = models.CharField(max_length=10, choices=Statut.choices, default=Statut.DEMANDEE)
+    saisie_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    class Meta:
+        ordering = ["cree_le"]
+        verbose_name = "prise en charge"
+        verbose_name_plural = "prises en charge"
+
+    def __str__(self):
+        return f"{self.organisme} : {self.montant}"
+
+    @property
+    def magasin_id(self):
+        """Pour les droits par magasin : celui de la vente."""
+        return self.vente.magasin_id

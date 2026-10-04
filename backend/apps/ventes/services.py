@@ -522,7 +522,7 @@ def _emettre(*, vente, retours, motif, emetteur, mode_remboursement, annulation)
 
     total_ttc = sum((d[3] for d in detail), Decimal("0"))
     total_ht = sum((d[4] for d in detail), Decimal("0"))
-    paye = vente.total_ttc - vente.reste_a_payer
+    paye = vente.regle_par_le_client
     # On ne rend jamais plus que ce que le client a versé (acomptes d'une commande annulée).
     rembourse = max(Decimal("0"), min(total_ttc, paye - deja_rembourse))
     if rembourse > 0 and not mode_remboursement:
@@ -640,4 +640,38 @@ def annuler_vente(*, vente, motif, emetteur, mode_remboursement="", remis_en_sto
         emetteur=emetteur,
         mode_remboursement=mode_remboursement,
         annulation=True,
+    )
+
+
+class PriseEnChargeImpossible(Exception):
+    pass
+
+
+@transaction.atomic
+def ajouter_prise_en_charge(*, vente, organisme, montant, utilisateur, numero_dossier=""):
+    """Part d'une commande payée par la CNAM, une assurance ou une mutuelle."""
+    from .models import PriseEnCharge
+
+    vente = _verrouiller_vente(vente)
+    if vente.statut != Vente.Statut.EN_COMMANDE:
+        raise PriseEnChargeImpossible(
+            f"La prise en charge se saisit sur une commande en cours, pas sur {vente.numero}."
+        )
+    pays = vente.magasin.pays
+    if not organisme.est_actif or organisme.pays_id != pays.pk:
+        raise PriseEnChargeImpossible(f"{organisme} ne prend pas en charge dans ce pays.")
+    montant = arrondir(montant, pays.decimales)
+    if montant <= 0:
+        raise PriseEnChargeImpossible("Le montant pris en charge doit être positif.")
+    reste = vente.reste_a_payer
+    if montant > reste:
+        raise PriseEnChargeImpossible(
+            f"La prise en charge dépasse le reste à payer ({reste} {vente.devise})."
+        )
+    return PriseEnCharge.objects.create(
+        vente=vente,
+        organisme=organisme,
+        montant=montant,
+        numero_dossier=numero_dossier,
+        saisie_par=utilisateur,
     )

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import { Commandes } from "./Commandes";
 
@@ -18,6 +18,7 @@ function commande(reste: string) {
     numero: "T01-T2026-000003",
     devise: "TND",
     total_ttc: "649.500",
+    pris_en_charge: "0.000",
     reste_a_payer: reste,
     statut: reste === "0.000" ? "livree" : "en_commande",
     livraison_prevue_le: "2026-10-15",
@@ -102,4 +103,40 @@ test("retrouve une commande par sa péniche", async () => {
   expect(screen.queryByText("T01-T2026-000003")).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Chercher par péniche"), { target: { value: "17" } });
   expect(screen.getByText("T01-T2026-000003")).toBeInTheDocument();
+});
+
+test("saisit la part prise en charge par la CNAM sur une commande", async () => {
+  const envois: { url: string; corps: unknown }[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string, init?: RequestInit) => {
+      if (url === "/api/v1/magasins/") return json({ results: [TUNIS] });
+      if (url === "/api/v1/organismes/")
+        return json([{ id: "o1", nom: "CNAM", type: "caisse", type_libelle: "Caisse d'assurance maladie", pays: "TN" }]);
+      if (init?.method === "POST") {
+        envois.push({ url, corps: JSON.parse(init.body as string) });
+        return json({ id: "p1", organisme_nom: "CNAM", montant: "150.000" }, 201);
+      }
+      return json({ results: [commande("449.500")] });
+    }),
+  );
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <Commandes saisirPec />
+    </QueryClientProvider>,
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "Prise en charge" }));
+  const dialogue = await screen.findByRole("dialog", { name: /Prise en charge/ });
+  await within(dialogue).findByText(/CNAM/);
+  fireEvent.change(within(dialogue).getByLabelText("Montant pris en charge"), { target: { value: "150" } });
+  fireEvent.change(within(dialogue).getByLabelText(/N° de dossier/), { target: { value: "BS-118" } });
+  fireEvent.click(within(dialogue).getByRole("button", { name: "Enregistrer" }));
+
+  expect(await screen.findByText(/Prise en charge CNAM de 150,000/)).toBeInTheDocument();
+  expect(envois).toEqual([
+    {
+      url: "/api/v1/prises-en-charge/",
+      corps: { vente: "v1", organisme: "o1", montant: "150", numero_dossier: "BS-118" },
+    },
+  ]);
 });
