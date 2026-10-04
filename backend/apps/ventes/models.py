@@ -51,6 +51,17 @@ class CompteurFacture(models.Model):
         return f"{self.magasin_id}/{self.annee}/{self.type_document} : {self.dernier}"
 
 
+class Etape(models.TextChoices):
+    """Étapes du suivi qualité d'une commande, de la visite à la remise au client."""
+
+    A_COMMANDER = "a_commander", "Visite créée à commander"
+    COMMANDEE = "commandee", "Commandée, en attente de réception BL"
+    MONTAGE = "montage", "Montage en cours"
+    CONTROLE = "controle", "Contrôle qualité"
+    CONTACT_CLIENT = "contact_client", "Client prévenu"
+    INSTANCE = "instance", "En instance"
+
+
 class Vente(ModeleDeBase):
     """Vente enregistrée en caisse, avec son ticket. Jamais modifiée : une correction passera
     par un avoir.
@@ -91,6 +102,13 @@ class Vente(ModeleDeBase):
     livree_le = models.DateTimeField(null=True, blank=True)
     livree_par = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    etape = models.CharField(
+        "étape de l'atelier",
+        max_length=16,
+        choices=Etape.choices,
+        blank=True,
+        help_text="Dernière étape saisie au suivi ; vide, l'étape vient des verres commandés.",
     )
 
     objects = ParMagasinManager()
@@ -361,3 +379,23 @@ class Paiement(models.Model):
 
     def __str__(self):
         return f"{self.get_mode_display()} {self.montant}"
+
+
+class EtapeCommande(models.Model):
+    """Passage d'une commande à une étape du suivi qualité, avec qui et quand (traçabilité)."""
+
+    Etape = Etape
+
+    vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="etapes")
+    etape = models.CharField(max_length=16, choices=Etape.choices)
+    observation = models.CharField(max_length=300, blank=True)
+    le = models.DateTimeField(default=timezone.now)
+    par = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+
+    class Meta:
+        ordering = ["le", "pk"]
+        verbose_name = "étape de commande"
+        verbose_name_plural = "étapes de commande"
+
+    def __str__(self):
+        return f"{self.vente} : {self.get_etape_display()}"

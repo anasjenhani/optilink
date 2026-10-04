@@ -15,7 +15,9 @@ function session(permissions: string[]): EtatSession {
 function afficher(permissions: string[]) {
   vi.stubGlobal(
     "fetch",
-    vi.fn(() => Promise.resolve(new Response(JSON.stringify({ results: [] }), { status: 200 }))),
+    vi.fn((url: string) =>
+      Promise.resolve(new Response(JSON.stringify(url.includes("/suivi/") ? [] : { results: [] }), { status: 200 })),
+    ),
   );
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
@@ -58,7 +60,27 @@ test("un bouton ouvre son écran, et le retour ramène à la grille", async () =
 test("sans le droit, le bouton disparaît ; une fonction pas encore faite est grisée", () => {
   afficher([]);
   expect(screen.queryByRole("button", { name: "Vente au Comptoir" })).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Nouvelle Visite/ })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: /Nouvelle Visite/ })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Liste Visites/ })).toBeDisabled();
+  expect(screen.queryByRole("navigation", { name: "Raccourcis" })).not.toBeInTheDocument();
+});
+
+test("les boutons fixes sous le menu ouvrent les écrans du quotidien depuis tout onglet", async () => {
+  afficher(["ventes.add_vente", "ventes.view_vente", "stock.view_article"]);
+  const raccourcis = within(screen.getByRole("navigation", { name: "Raccourcis" }));
+  expect(raccourcis.getAllByRole("button").map((b) => b.textContent)).toEqual([
+    "Journée",
+    "Nouvelle visite",
+    "Suivi",
+    "Recherche verre",
+    "Recherche monture",
+    "Recherche lentille",
+  ]);
+  fireEvent.click(screen.getByRole("tab", { name: "Caisse" }));
+  fireEvent.click(raccourcis.getByRole("button", { name: "Suivi" }));
+  expect(await screen.findByRole("heading", { name: "Suivi des visites" })).toBeInTheDocument();
+  expect(window.location.hash).toBe("#/vente/suivi-visite");
+  expect(raccourcis.getByRole("button", { name: "Suivi" })).toHaveAttribute("aria-current", "page");
 });
 
 test("la recherche filtre les boutons du module", () => {
