@@ -23,6 +23,7 @@ class Article(ModeleDeBase):
         VERRE = "verre", "Verre"
         LENTILLE = "lentille", "Lentille"
         DIVERS = "divers", "Divers"
+        SUPPLEMENT = "supplement", "Supplément verre"
 
     reference = models.CharField(max_length=40, unique=True)
     libelle = models.CharField(max_length=200)
@@ -77,7 +78,7 @@ class Article(ModeleDeBase):
     @property
     def caracteristiques(self):
         """Fiche de la famille de l'article (``Monture``, ``Verre``, ``Lentille``), ou None."""
-        if self.famille == self.Famille.DIVERS:
+        if self.famille in (self.Famille.DIVERS, self.Famille.SUPPLEMENT):
             return None
         return getattr(self, self.famille, None)
 

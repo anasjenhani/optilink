@@ -32,7 +32,15 @@ export type Client = {
 
 export type SaisieClient = Omit<Client, "id" | "numero" | "reference_externe" | "organisme_nom" | "solde">;
 
-export type MesureOeil = { sphere: string; cylindre?: string; axe?: number | null; addition?: string | null };
+export type MesureOeil = {
+  sphere: string;
+  cylindre?: string;
+  axe?: number | null;
+  addition?: string | null;
+  /** Lentilles : rayon de courbure et diamètre (mm). */
+  rayon?: string | null;
+  diametre?: string | null;
+};
 
 export type Prescription = {
   id: string;
