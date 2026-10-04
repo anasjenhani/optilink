@@ -112,3 +112,17 @@ def admin_global_securite(db, client_de):
         utilisateur=anas, role=Group.objects.get(name="Administrateur Global"), portee="reseau"
     )
     return client_de(anas), Utilisateur.objects.create_user("sami")
+
+
+def test_modifications_des_droits_dans_le_journal_d_audit(admin_global_securite):
+    anas = Utilisateur.objects.get(username="anas")
+    anas.is_staff = anas.is_superuser = True
+    anas.save()
+    navigateur, _ = admin_global_securite
+    sections = navigateur.get("/admin/", {"onglet": "securite"}).context["app_list"]
+    modeles = {app["name"]: [m["name"] for m in app["models"]] for app in sections}
+    assert modeles["Journal d'audit"] == [
+        "Modifications des droits",
+        "Historique complet des modifications",
+    ]
+    assert "Modifications des droits" not in modeles["Sécurité"]

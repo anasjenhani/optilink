@@ -55,6 +55,24 @@ class OptiLinkAdminSite(OTPAdminSite):
         ]
         return contexte
 
+    def get_app_list(self, request, app_label=None):
+        """« Modifications des droits » (app securite) rejoint la section du journal d'audit."""
+        apps = super().get_app_list(request)
+        par_label = {app["app_label"]: app for app in apps}
+        journal, securite = par_label.get("auditlog"), par_label.get("securite")
+        if journal is not None:
+            journal["name"] = "Journal d'audit"
+            for modele in journal["models"]:
+                if modele["object_name"] == "LogEntry":
+                    modele["name"] = "Historique complet des modifications"
+            if securite is not None:
+                droits = [m for m in securite["models"] if m["object_name"] == "ModificationDroits"]
+                securite["models"] = [m for m in securite["models"] if m not in droits]
+                journal["models"] = droits + journal["models"]
+        if app_label:
+            return [app for app in apps if app["app_label"] == app_label]
+        return apps
+
     def index(self, request, extra_context=None):
         reponse = super().index(request, extra_context)
         onglet = request.GET.get("onglet")
