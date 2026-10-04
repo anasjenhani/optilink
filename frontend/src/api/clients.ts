@@ -24,11 +24,23 @@ export type Client = {
   organisme: string | null;
   organisme_nom: string | null;
   numero_affilie: string;
+  /** Observation libre sur la fiche. */
+  notes?: string;
+  /** Reste dû sur les commandes en cours (négatif : trop perçu) ; fourni en liste et en fiche. */
+  solde?: string | null;
 };
 
-export type SaisieClient = Omit<Client, "id" | "numero" | "reference_externe" | "organisme_nom">;
+export type SaisieClient = Omit<Client, "id" | "numero" | "reference_externe" | "organisme_nom" | "solde">;
 
-export type MesureOeil = { sphere: string; cylindre?: string; axe?: number | null; addition?: string | null };
+export type MesureOeil = {
+  sphere: string;
+  cylindre?: string;
+  axe?: number | null;
+  addition?: string | null;
+  /** Lentilles : rayon de courbure et diamètre (mm). */
+  rayon?: string | null;
+  diametre?: string | null;
+};
 
 export type Prescription = {
   id: string;
@@ -49,6 +61,24 @@ export const chercherClients = (recherche: string) =>
   appeler<{ results: Client[] }>(`/api/v1/clients/?${new URLSearchParams({ recherche })}`).then(
     (page) => page.results,
   );
+
+/** Filtres par colonne du tableau « Recherche Clients ». */
+export type FiltresClients = {
+  fiche?: string;
+  telephone?: string;
+  nom?: string;
+  prenom?: string;
+  observation?: string;
+  tri?: "fiche" | "-fiche" | "nom" | "-nom";
+};
+
+export const listerClients = (filtres: FiltresClients, page = 1) => {
+  const parametres = new URLSearchParams({ page: String(page) });
+  Object.entries(filtres).forEach(([cle, valeur]) => {
+    if (valeur?.trim()) parametres.set(cle, valeur.trim());
+  });
+  return appeler<{ count: number; results: Client[] }>(`/api/v1/clients/?${parametres}`);
+};
 
 export const creerClient = (saisie: SaisieClient) =>
   appeler<Client>("/api/v1/clients/", { methode: "POST", corps: saisie });

@@ -71,11 +71,18 @@ const FICHE_VIDE = {
   accepte_relances: false,
   organisme: "",
   numero_affilie: "",
+  notes: "",
 };
 type SaisieFiche = typeof FICHE_VIDE;
 
 function versFiche(client: Client): SaisieFiche {
-  return { ...client, date_naissance: client.date_naissance ?? "", organisme: client.organisme ?? "" };
+  const { solde: _, ...fiche } = client;
+  return {
+    ...fiche,
+    date_naissance: client.date_naissance ?? "",
+    organisme: client.organisme ?? "",
+    notes: client.notes ?? "",
+  };
 }
 
 /** Création d'un client, ou modification de sa fiche quand ``client`` est donné. */
@@ -167,6 +174,14 @@ export function FicheClient({ client, onEnregistre }: { client?: Client; onEnreg
         </TextField>
         {saisie.organisme && champ("numero_affilie", "N° d'affilié")}
       </Stack>
+      <TextField
+        size="small"
+        label="Observation"
+        multiline
+        minRows={1}
+        value={saisie.notes}
+        onChange={(e) => setSaisie({ ...saisie, notes: e.target.value })}
+      />
       <FormControlLabel
         control={<Checkbox checked={professionnel} onChange={(e) => setProfessionnel(e.target.checked)} />}
         label="Client professionnel (société)"

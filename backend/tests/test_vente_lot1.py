@@ -134,3 +134,31 @@ def test_recus_et_reste_par_vendeur(opticien, client_de, tunis, monture, verre, 
     livrer_commande(vente=vente, utilisateur=opticien, paiements=especes("349.500"))
     assert api.get("/api/v1/ventes/reste-par-vendeur/").json() == []
     assert vente.reste_a_payer == Decimal("0")
+
+
+def test_recherche_clients_par_colonne_avec_solde(opticien, client_de, tunis, monture, verre, amel):  # noqa: F811
+    api = client_de(opticien)
+    Client.objects.create(
+        magasin_origine=tunis,
+        nom="Hakim",
+        prenom="Ahlem",
+        telephone="20422000",
+        reference_externe="CM2/10/2024",
+        notes="Préfère les montures légères",
+    )
+    commander(tunis, monture, verre, opticien, client=amel)  # 649,500 dont 200 réglés
+
+    def lignes(**filtres):
+        reponse = api.get("/api/v1/clients/", filtres)
+        assert reponse.status_code == 200, reponse.json()
+        return [(c["nom"], c["solde"]) for c in reponse.json()["results"]]
+
+    assert lignes(tri="fiche") == [("Ben Salah", "449.500"), ("Hakim", "0.000")]
+    assert lignes(fiche="10/2024") == [("Hakim", "0.000")]
+    # Comme dans l'ancien logiciel, la colonne cherche « contient » : 1 trouve aussi CM2/10/2024.
+    assert ("Ben Salah", "449.500") in lignes(fiche=str(amel.numero))
+    assert lignes(telephone="98 123") == [("Ben Salah", "449.500")]
+    assert lignes(nom="amel ben") == [("Ben Salah", "449.500")]
+    assert lignes(prenom="ahl") == [("Hakim", "0.000")]
+    assert lignes(observation="légères") == [("Hakim", "0.000")]
+    assert api.get(f"/api/v1/clients/{amel.public_id}/").json()["solde"] == "449.500"

@@ -195,5 +195,6 @@ def test_articles_par_type_de_vente(api, catalogue):
 
     assert references("optique") == ["MON-2", "MON-T", "VER-1"]
     assert references("solaire") == ["SOL-1"]
-    assert references("lentille") == ["LEN-1"]
+    # Avec les lentilles, on vend aussi leurs produits (solutions, étuis…).
+    assert references("lentille") == ["DIV-1", "LEN-1"]
     assert references("produit") == ["DIV-1"]

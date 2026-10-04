@@ -29,7 +29,7 @@ TYPES_DE_VENTE = {
     | Q(famille=Article.Famille.MONTURE, monture__solaire=False)
     | Q(famille=Article.Famille.MONTURE, monture__isnull=True),
     "solaire": Q(famille=Article.Famille.MONTURE, monture__solaire=True),
-    "lentille": Q(famille=Article.Famille.LENTILLE),
+    "lentille": Q(famille=Article.Famille.LENTILLE) | Q(famille=Article.Famille.DIVERS),
     "produit": Q(famille=Article.Famille.DIVERS),
 }
 

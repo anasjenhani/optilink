@@ -1,8 +1,25 @@
+from decimal import Decimal
+
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.reseau.models import Magasin
 
 from ..models import Client, Organisme
+
+
+def soldes(clients):
+    """Ce que chaque client doit encore sur ses commandes en cours (négatif : trop perçu)."""
+    from apps.ventes.models import Vente
+
+    resultat = {client.pk: Decimal("0.000") for client in clients}
+    commandes = Vente.objects.filter(
+        client__in=resultat, statut=Vente.Statut.EN_COMMANDE
+    ).prefetch_related("paiements", "prises_en_charge")
+    for vente in commandes:
+        resultat[vente.client_id] += vente.reste_a_payer
+    return resultat
 
 
 class OrganismeSerializer(serializers.ModelSerializer):
@@ -25,6 +42,9 @@ class ClientSerializer(serializers.ModelSerializer):
         help_text="CNAM, assurance ou mutuelle du client (PEC client).",
     )
     organisme_nom = serializers.CharField(source="organisme.nom", read_only=True, default=None)
+    solde = serializers.SerializerMethodField(
+        help_text="Reste dû sur les commandes en cours (négatif : trop perçu)."
+    )
     magasin_origine = serializers.SlugRelatedField(
         slug_field="public_id",
         queryset=Magasin.objects,
@@ -56,9 +76,20 @@ class ClientSerializer(serializers.ModelSerializer):
             "numero_affilie",
             "notes",
             "est_actif",
+            "solde",
             "cree_le",
         ]
         read_only_fields = ["numero", "reference_externe", "cree_le"]
+
+    @extend_schema_field(OpenApiTypes.DECIMAL)
+    def get_solde(self, client):
+        if "soldes" in self.context:
+            solde = self.context["soldes"].get(client.pk)
+        elif self.context.get("avec_solde"):
+            solde = soldes([client])[client.pk]
+        else:
+            return None
+        return None if solde is None else str(solde)
 
     def validate(self, attrs):
         if self.instance is not None:
