@@ -53,7 +53,7 @@ export function TicketRecu({ recu }: { recu: Recu }) {
   const montant = useMontant();
   const m = (valeur: string) => montant(valeur, recu.devise);
   const ligne = (libelle: string, valeur: string, fort = false) => (
-    <Stack direction="row" sx={{ justifyContent: "space-between", fontWeight: fort ? 700 : 400 }}>
+    <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", fontWeight: fort ? 700 : 400 }}>
       <span>{libelle}</span>
       <span>{valeur}</span>
     </Stack>
