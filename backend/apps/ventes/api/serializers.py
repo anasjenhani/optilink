@@ -2,7 +2,17 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from ..models import Avoir, Devis, Facture, LigneAvoir, LigneDevis, LigneVente, Paiement, Vente
+from ..models import (
+    Avoir,
+    Devis,
+    Facture,
+    LigneAvoir,
+    LigneDevis,
+    LigneVente,
+    Lunette,
+    Paiement,
+    Vente,
+)
 
 
 class LigneSaisieSerializer(serializers.Serializer):
@@ -15,6 +25,134 @@ class LigneSaisieSerializer(serializers.Serializer):
         max_value=Decimal("100"),
         default=Decimal("0"),
     )
+    lunette = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=0,
+        help_text="Rang de la lunette (dans ``lunettes``, à partir de 0) qui contient l'article.",
+    )
+    role = serializers.ChoiceField(
+        choices=LigneVente.Role.choices,
+        required=False,
+        allow_blank=True,
+        help_text="Place de l'article dans la lunette.",
+    )
+
+
+def _mesure_mm(aide):
+    return serializers.DecimalField(
+        max_digits=4,
+        decimal_places=1,
+        min_value=Decimal("0"),
+        max_value=Decimal("60"),
+        required=False,
+        allow_null=True,
+        help_text=aide,
+    )
+
+
+class LunetteSaisieSerializer(serializers.Serializer):
+    vision = serializers.ChoiceField(
+        choices=Lunette.Vision.choices, required=False, allow_blank=True
+    )
+    solaire = serializers.BooleanField(default=False)
+    inadaptation = serializers.BooleanField(default=False)
+    prescription = serializers.UUIDField(
+        required=False, allow_null=True, help_text="Ordonnance du client d'où vient la correction."
+    )
+    oeil_directeur = serializers.ChoiceField(
+        choices=Lunette.Oeil.choices, required=False, allow_blank=True
+    )
+    ecart_d = _mesure_mm("Demi-écart de loin, œil droit (mm).")
+    ecart_g = _mesure_mm("Demi-écart de loin, œil gauche (mm).")
+    ecart_pres_d = _mesure_mm("Demi-écart de près, œil droit (mm).")
+    ecart_pres_g = _mesure_mm("Demi-écart de près, œil gauche (mm).")
+    hauteur_d = _mesure_mm("Hauteur de montage, œil droit (mm).")
+    hauteur_g = _mesure_mm("Hauteur de montage, œil gauche (mm).")
+    observation = serializers.CharField(required=False, allow_blank=True, max_length=1000)
+    client_absent = serializers.BooleanField(default=False)
+
+
+class LunetteSerializer(serializers.ModelSerializer):
+    vision_libelle = serializers.CharField(source="get_vision_display", read_only=True)
+    prescription = serializers.UUIDField(
+        source="prescription.public_id", read_only=True, default=None
+    )
+    monture = serializers.SerializerMethodField()
+    verre_d = serializers.SerializerMethodField()
+    verre_g = serializers.SerializerMethodField()
+    supplements_d = serializers.SerializerMethodField()
+    supplements_g = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Lunette
+        fields = [
+            "numero",
+            "vision",
+            "vision_libelle",
+            "solaire",
+            "inadaptation",
+            "prescription",
+            "oeil_directeur",
+            "ecart_d",
+            "ecart_g",
+            "ecart_pres_d",
+            "ecart_pres_g",
+            "hauteur_d",
+            "hauteur_g",
+            "observation",
+            "client_absent",
+            "monture",
+            "verre_d",
+            "verre_g",
+            "supplements_d",
+            "supplements_g",
+        ]
+
+    def _libelles(self, lunette, role):
+        return [ligne.libelle for ligne in lunette.lignes.all() if ligne.role == role]
+
+    def get_monture(self, lunette) -> str | None:
+        return next(iter(self._libelles(lunette, LigneVente.Role.MONTURE)), None)
+
+    def get_verre_d(self, lunette) -> str | None:
+        return next(iter(self._libelles(lunette, LigneVente.Role.VERRE_D)), None)
+
+    def get_verre_g(self, lunette) -> str | None:
+        return next(iter(self._libelles(lunette, LigneVente.Role.VERRE_G)), None)
+
+    def get_supplements_d(self, lunette) -> list[str]:
+        return self._libelles(lunette, LigneVente.Role.SUPPLEMENT_D)
+
+    def get_supplements_g(self, lunette) -> list[str]:
+        return self._libelles(lunette, LigneVente.Role.SUPPLEMENT_G)
+
+
+class LunetteClientSerializer(LunetteSerializer):
+    """Lunette dans l'historique d'un client : avec sa visite."""
+
+    id = serializers.SerializerMethodField(help_text="N° de lunette : n° de visite / rang.")
+    vente = serializers.UUIDField(source="vente.public_id", read_only=True)
+    vente_numero = serializers.CharField(source="vente.numero", read_only=True)
+    date = serializers.DateTimeField(source="vente.cree_le", read_only=True)
+    magasin = serializers.CharField(source="vente.magasin.code", read_only=True)
+    peniche = serializers.IntegerField(source="vente.peniche", read_only=True)
+    statut = serializers.CharField(source="vente.statut", read_only=True)
+
+    class Meta(LunetteSerializer.Meta):
+        fields = [
+            "id",
+            "vente",
+            "vente_numero",
+            "date",
+            "magasin",
+            "peniche",
+            "statut",
+            *LunetteSerializer.Meta.fields,
+        ]
+
+    def get_id(self, lunette) -> str:
+        return f"{lunette.vente.numero}/{lunette.numero}"
 
 
 class PaiementSaisieSerializer(serializers.Serializer):
@@ -41,6 +179,9 @@ class VenteSaisieSerializer(serializers.Serializer):
         min_value=1,
         help_text="Commande : n° de la péniche libre où le vendeur range l'équipement.",
     )
+    lunettes = LunetteSaisieSerializer(
+        many=True, required=False, help_text="Paires de lunettes ; leurs articles sont dans lignes."
+    )
 
 
 class ReglementSerializer(serializers.Serializer):
@@ -55,6 +196,9 @@ class LivraisonSerializer(serializers.Serializer):
 
 class LigneVenteSerializer(serializers.ModelSerializer):
     article = serializers.UUIDField(source="article.public_id", read_only=True)
+    lunette = serializers.IntegerField(
+        source="lunette.numero", read_only=True, default=None, help_text="N° de la lunette."
+    )
     quantite_reprise = serializers.SerializerMethodField(help_text="Déjà reprise par avoir.")
 
     class Meta:
@@ -69,6 +213,8 @@ class LigneVenteSerializer(serializers.ModelSerializer):
             "remise_pct",
             "taux_tva",
             "total_ttc",
+            "lunette",
+            "role",
         ]
 
     def get_quantite_reprise(self, ligne) -> int:
@@ -98,6 +244,7 @@ class VenteSerializer(serializers.ModelSerializer):
         help_text="Verres commandés au fournisseur : a_commander, commandes ou recus (null sinon)."
     )
     lignes = LigneVenteSerializer(many=True, read_only=True)
+    lunettes = LunetteSerializer(many=True, read_only=True)
     paiements = PaiementSerializer(many=True, read_only=True)
 
     class Meta:
@@ -122,6 +269,7 @@ class VenteSerializer(serializers.ModelSerializer):
             "verres",
             "facture",
             "lignes",
+            "lunettes",
             "paiements",
         ]
 

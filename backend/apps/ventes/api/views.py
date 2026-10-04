@@ -96,7 +96,15 @@ class VenteViewSet(
     def get_queryset(self):
         return Vente.objects.select_related(
             "magasin", "vendeur", "client__organisme", "facture"
-        ).prefetch_related("lignes__article", "lignes__retours", "paiements", "prises_en_charge")
+        ).prefetch_related(
+            "lignes__article",
+            "lignes__retours",
+            "lignes__lunette",
+            "lunettes__lignes",
+            "lunettes__prescription",
+            "paiements",
+            "prises_en_charge",
+        )
 
     @extend_schema(responses={200: FicheVisiteSerializer})
     @action(detail=True)
@@ -301,6 +309,7 @@ class VenteViewSet(
             client = Client.objects.filter(public_id=donnees["client"]).first()
             if client is None:
                 raise ValidationError({"client": "Client inconnu."})
+        lunettes = self._lunettes(donnees.get("lunettes", []), user)
 
         try:
             vente = enregistrer_vente(
@@ -314,11 +323,24 @@ class VenteViewSet(
                 commande=donnees["commande"],
                 livraison_prevue_le=donnees.get("livraison_prevue_le"),
                 peniche=donnees.get("peniche"),
+                lunettes=lunettes,
             )
         except VenteInvalide as erreur:
             return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)
         vente = self.get_queryset().get(pk=vente.pk)
         return Response(VenteSerializer(vente).data, status=status.HTTP_201_CREATED)
+
+    def _lunettes(self, saisies, user):
+        """Remplace l'identifiant de l'ordonnance de chaque lunette par l'ordonnance elle-même."""
+        identifiants = {s["prescription"] for s in saisies if s.get("prescription")}
+        if identifiants and not user.has_perm("optique.view_prescription"):
+            raise PermissionDenied("Pas d'accès aux ordonnances.")
+        ordonnances = Prescription.objects.filter(public_id__in=identifiants).in_bulk(
+            field_name="public_id"
+        )
+        if len(ordonnances) != len(identifiants):
+            raise ValidationError({"lunettes": "Ordonnance inconnue."})
+        return [{**s, "prescription": ordonnances.get(s.get("prescription"))} for s in saisies]
 
 
 class FactureViewSet(

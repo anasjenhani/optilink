@@ -8,7 +8,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from apps.reseau.models import Magasin
-from apps.stock.models import MouvementStock, PrixArticle
+from apps.stock.models import Article, MouvementStock, PrixArticle
 
 from .models import (
     PREFIXES,
@@ -19,6 +19,7 @@ from .models import (
     LigneAvoir,
     LigneDevis,
     LigneVente,
+    Lunette,
     Paiement,
     TypeDocument,
     Vente,
@@ -86,6 +87,56 @@ def _chiffrer(pays, lignes):
     return detail
 
 
+# Famille d'article attendue à chaque place d'une lunette.
+_FAMILLE_DU_ROLE = {
+    LigneVente.Role.MONTURE: Article.Famille.MONTURE,
+    LigneVente.Role.VERRE_D: Article.Famille.VERRE,
+    LigneVente.Role.VERRE_G: Article.Famille.VERRE,
+    LigneVente.Role.SUPPLEMENT_D: Article.Famille.SUPPLEMENT,
+    LigneVente.Role.SUPPLEMENT_G: Article.Famille.SUPPLEMENT,
+}
+_UNIQUES = (LigneVente.Role.MONTURE, LigneVente.Role.VERRE_D, LigneVente.Role.VERRE_G)
+
+
+def _verifier_lunettes(lunettes, lignes, client):
+    """Chaque lunette a au plus une monture et un verre par œil, chacun à sa place."""
+    roles = [[] for _ in lunettes]
+    for ligne in lignes:
+        rang = ligne.get("lunette")
+        if rang is None:
+            continue
+        if not 0 <= rang < len(lunettes):
+            raise VenteInvalide("Ligne rattachée à une lunette inconnue.")
+        role = ligne.get("role")
+        if role not in _FAMILLE_DU_ROLE:
+            raise VenteInvalide("Préciser la place de l'article dans la lunette.")
+        article = ligne["article"]
+        if article.famille != _FAMILLE_DU_ROLE[role]:
+            raise VenteInvalide(
+                f"{article.libelle} ne peut pas servir de {LigneVente.Role(role).label.lower()}."
+            )
+        if role in _UNIQUES and ligne["quantite"] != 1:
+            raise VenteInvalide(f"{LigneVente.Role(role).label} : quantité 1 par lunette.")
+        roles[rang].append(role)
+    for numero, (lunette, places) in enumerate(zip(lunettes, roles, strict=True), start=1):
+        if not places:
+            raise VenteInvalide(f"La lunette {numero} ne contient aucun article.")
+        for role in _UNIQUES:
+            if places.count(role) > 1:
+                raise VenteInvalide(
+                    f"Lunette {numero} : {LigneVente.Role(role).label.lower()} en double."
+                )
+        for supplement, verre in (
+            (LigneVente.Role.SUPPLEMENT_D, LigneVente.Role.VERRE_D),
+            (LigneVente.Role.SUPPLEMENT_G, LigneVente.Role.VERRE_G),
+        ):
+            if supplement in places and verre not in places:
+                raise VenteInvalide(f"Lunette {numero} : un supplément va avec son verre.")
+        prescription = lunette.get("prescription")
+        if prescription is not None and (client is None or prescription.client_id != client.pk):
+            raise VenteInvalide(f"Lunette {numero} : l'ordonnance n'est pas celle du client.")
+
+
 def _stocks(magasin, articles):
     lignes = (
         MouvementStock.tous.filter(magasin=magasin, article__in=articles)
@@ -127,6 +178,7 @@ def enregistrer_vente(
     livraison_prevue_le=None,
     peniche=None,
     articles_retires_admis=False,
+    lunettes=(),
 ):
     """Enregistre une vente : lignes, sortie de stock, paiements et numéro de ticket.
 
@@ -137,10 +189,13 @@ def enregistrer_vente(
     Les articles sur commande ne sortent pas du stock du magasin.
     Une commande est rangée dans la péniche libre que saisit le vendeur (``peniche``).
     La facture, elle, se génère à part (``generer_facture``).
+    ``lunettes`` : paires de lunettes (vision, ordonnance, mesures de montage…) ; une ligne y
+    entre par ``lunette`` (son rang dans cette liste) et ``role`` (monture, verre_d…).
     Tout est écrit dans une seule transaction, ou rien.
     """
     if not lignes:
         raise VenteInvalide("La vente ne contient aucun article.")
+    _verifier_lunettes(lunettes, lignes, client)
 
     quantites = {}
     for ligne in lignes:
@@ -196,6 +251,10 @@ def enregistrer_vente(
         livree_le=None if commande else timezone.now(),
         livree_par=None if commande else vendeur,
     )
+    paires = [
+        Lunette.objects.create(vente=vente, numero=rang, **lunette)
+        for rang, lunette in enumerate(lunettes, start=1)
+    ]
     LigneVente.objects.bulk_create(
         LigneVente(
             vente=vente,
@@ -206,8 +265,10 @@ def enregistrer_vente(
             remise_pct=remise,
             taux_tva=taux,
             total_ttc=ttc,
+            lunette=paires[ligne["lunette"]] if ligne.get("lunette") is not None else None,
+            role=ligne.get("role", "") if ligne.get("lunette") is not None else "",
         )
-        for article, quantite, remise, ttc, _, prix, taux, _ in detail
+        for article, quantite, remise, ttc, _, prix, taux, ligne in detail
     )
     MouvementStock.tous.bulk_create(
         MouvementStock(

@@ -339,9 +339,84 @@ class Avoir(ModeleDeBase):
         return self.numero
 
 
+def _mesure(aide):
+    return models.DecimalField(
+        max_digits=4, decimal_places=1, null=True, blank=True, help_text=aide
+    )
+
+
+class Lunette(models.Model):
+    """Une paire de lunettes d'une visite : sa monture, ses deux verres et leurs suppléments.
+
+    La correction vient d'une ordonnance (``optique.Prescription``, chiffrée) ; la lunette garde
+    les mesures de montage prises par l'opticien (écarts et hauteurs) et l'œil directeur.
+    """
+
+    class Vision(models.TextChoices):
+        LOIN = "loin", "Loin"
+        PRES = "pres", "Près"
+        DOUBLE_FOYER = "double_foyer", "Double foyer"
+        DEGRESSIF = "degressif", "Dégressif"
+        PROGRESSIF = "progressif", "Progressif"
+
+    class Oeil(models.TextChoices):
+        DROIT = "droit", "Droit"
+        GAUCHE = "gauche", "Gauche"
+
+    vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="lunettes")
+    numero = models.PositiveSmallIntegerField(help_text="N° de la lunette dans la visite (1, 2…).")
+    vision = models.CharField(max_length=20, choices=Vision.choices, blank=True)
+    solaire = models.BooleanField(default=False, help_text="Lunette solaire (sinon optique).")
+    inadaptation = models.BooleanField(
+        default=False, help_text="Refaite parce que le client ne s'est pas adapté."
+    )
+    prescription = models.ForeignKey(
+        "optique.Prescription",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="lunettes",
+        help_text="Ordonnance d'où vient la correction ; vide pour une solaire sans correction.",
+    )
+    oeil_directeur = models.CharField(max_length=10, choices=Oeil.choices, blank=True)
+    ecart_d = _mesure("Demi-écart pupillaire de loin, œil droit (mm).")
+    ecart_g = _mesure("Demi-écart pupillaire de loin, œil gauche (mm).")
+    ecart_pres_d = _mesure("Demi-écart de près, œil droit (mm).")
+    ecart_pres_g = _mesure("Demi-écart de près, œil gauche (mm).")
+    hauteur_d = _mesure("Hauteur de montage, œil droit (mm).")
+    hauteur_g = _mesure("Hauteur de montage, œil gauche (mm).")
+    observation = models.TextField(blank=True)
+    client_absent = models.BooleanField(
+        default=False, help_text="Mesures prises sans le client (reprise d'une ancienne lunette)."
+    )
+
+    class Meta:
+        ordering = ["vente", "numero"]
+        verbose_name = "lunette"
+        constraints = [
+            models.UniqueConstraint(fields=["vente", "numero"], name="lunette_numero_unique")
+        ]
+
+    def __str__(self):
+        return f"{self.vente.numero}/{self.numero}"
+
+
 class LigneVente(models.Model):
+    class Role(models.TextChoices):
+        MONTURE = "monture", "Monture"
+        VERRE_D = "verre_d", "Verre droit"
+        VERRE_G = "verre_g", "Verre gauche"
+        SUPPLEMENT_D = "supplement_d", "Supplément verre droit"
+        SUPPLEMENT_G = "supplement_g", "Supplément verre gauche"
+
     vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="lignes")
     article = models.ForeignKey("stock.Article", on_delete=models.PROTECT, related_name="+")
+    lunette = models.ForeignKey(
+        Lunette, on_delete=models.PROTECT, null=True, blank=True, related_name="lignes"
+    )
+    role = models.CharField(
+        max_length=20, choices=Role.choices, blank=True, help_text="Place dans la lunette."
+    )
     libelle = models.CharField(max_length=200)
     quantite = models.PositiveIntegerField()
     prix_unitaire_ttc = models.DecimalField(max_digits=14, decimal_places=3)
