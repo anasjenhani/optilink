@@ -4,6 +4,31 @@ from django.db.models import Max
 from core.models import ModeleDeBase
 
 
+class Organisme(ModeleDeBase):
+    """Organisme qui prend en charge une partie des lunettes : CNAM, assurance ou mutuelle."""
+
+    class Type(models.TextChoices):
+        CAISSE = "caisse", "Caisse d'assurance maladie"
+        ASSURANCE = "assurance", "Assurance"
+        MUTUELLE = "mutuelle", "Mutuelle"
+
+    nom = models.CharField(max_length=120)
+    type = models.CharField(max_length=10, choices=Type.choices)
+    pays = models.ForeignKey("reseau.Pays", on_delete=models.PROTECT, related_name="+")
+    est_actif = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["nom"]
+        verbose_name = "organisme de prise en charge"
+        verbose_name_plural = "organismes de prise en charge"
+        constraints = [
+            models.UniqueConstraint(fields=["pays", "nom"], name="organisme_unique_par_pays")
+        ]
+
+    def __str__(self):
+        return self.nom
+
+
 class Client(ModeleDeBase):
     """Client partagé par tout le réseau : il peut acheter dans n'importe quel magasin.
 
@@ -53,6 +78,18 @@ class Client(ModeleDeBase):
         blank=True,
         db_index=True,
         help_text="N° de la fiche dans l'ancien logiciel, conservé à l'import des clients.",
+    )
+    organisme = models.ForeignKey(
+        Organisme,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="clients",
+        verbose_name="prise en charge",
+        help_text="CNAM, assurance ou mutuelle du client (PEC client).",
+    )
+    numero_affilie = models.CharField(
+        "n° d'affilié", max_length=40, blank=True, help_text="N° d'assuré ou d'adhérent."
     )
     notes = models.TextField(blank=True)
     est_actif = models.BooleanField(default=True)

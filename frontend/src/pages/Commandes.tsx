@@ -1,4 +1,8 @@
 import Alert from "@mui/material/Alert";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
@@ -17,6 +21,7 @@ import { useState } from "react";
 import { listerCommandes, livrerCommande, reglerCommande, type ModePaiement, type Vente } from "../api/caisse";
 import { listerMagasins } from "../api/magasins";
 import { formaterTexte, type Monnaie } from "../api/monnaie";
+import { listerOrganismes, saisirPriseEnCharge } from "../api/prisesEnCharge";
 
 const MODES: { valeur: ModePaiement; libelle: string }[] = [
   { valeur: "especes", libelle: "Espèces" },
@@ -24,12 +29,78 @@ const MODES: { valeur: ModePaiement; libelle: string }[] = [
   { valeur: "cheque", libelle: "Chèque" },
 ];
 
+/** Part d'une commande prise en charge par la CNAM, une assurance ou une mutuelle. */
+function SaisiePriseEnCharge({
+  vente,
+  monnaie,
+  onFermer,
+  onEnregistree,
+}: {
+  vente: Vente;
+  monnaie: Monnaie;
+  onFermer: () => void;
+  onEnregistree: (texte: string) => void;
+}) {
+  const organismes = useQuery({ queryKey: ["organismes"], queryFn: listerOrganismes });
+  const [organisme, setOrganisme] = useState("");
+  const [montant, setMontant] = useState("");
+  const [dossier, setDossier] = useState("");
+  // L'organisme de la fiche client d'abord, sinon le premier de la liste (la CNAM).
+  const parDefaut = organismes.data?.find((o) => o.id === vente.client?.organisme) ?? organismes.data?.find((o) => o.type === "caisse");
+  const choisi = organisme || parDefaut?.id || organismes.data?.[0]?.id || "";
+  const saisie = useMutation({
+    mutationFn: () =>
+      saisirPriseEnCharge({ vente: vente.id, organisme: choisi, montant, numero_dossier: dossier }),
+    onSuccess: (pec) =>
+      onEnregistree(
+        `Prise en charge ${pec.organisme_nom} de ${formaterTexte(pec.montant, monnaie)} saisie sur ${vente.numero}.`,
+      ),
+  });
+  return (
+    <Dialog open onClose={onFermer} aria-labelledby="titre-pec">
+      <DialogTitle id="titre-pec">Prise en charge · {vente.numero}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1, minWidth: 320 }}>
+          <Typography variant="body2" color="text.secondary">
+            Reste à payer : {formaterTexte(vente.reste_a_payer, monnaie)}
+          </Typography>
+          <TextField select label="Organisme" value={choisi} onChange={(e) => setOrganisme(e.target.value)}>
+            {organismes.data?.map((o) => (
+              <MenuItem key={o.id} value={o.id}>
+                {o.nom} ({o.type_libelle})
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            type="number"
+            label="Montant pris en charge"
+            value={montant}
+            onChange={(e) => setMontant(e.target.value)}
+          />
+          <TextField label="N° de dossier (bulletin de soins)" value={dossier} onChange={(e) => setDossier(e.target.value)} />
+          {saisie.isError && <Alert severity="error">{saisie.error.message}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onFermer}>Annuler</Button>
+        <Button
+          variant="contained"
+          disabled={!choisi || !Number(montant) || saisie.isPending}
+          onClick={() => saisie.mutate()}
+        >
+          Enregistrer
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 const dateCourte = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("fr-FR");
 
 /**
  * Commandes en cours du magasin : règlements successifs, puis livraison contre le solde.
  */
-export function Commandes() {
+export function Commandes({ saisirPec = false }: { saisirPec?: boolean }) {
   const queryClient = useQueryClient();
   const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
   const [magasinChoisi, setMagasin] = useState("");
@@ -39,6 +110,7 @@ export function Commandes() {
   const [montants, setMontants] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   const [peniche, setPeniche] = useState("");
+  const [pecPour, setPecPour] = useState<Vente | null>(null);
 
   const commandes = useQuery({
     queryKey: ["commandes", magasin],
@@ -145,6 +217,11 @@ export function Commandes() {
                         <Typography variant="body2" color="text.secondary">
                           sur {formaterTexte(vente.total_ttc, monnaie(vente))}
                         </Typography>
+                        {Number(vente.pris_en_charge) > 0 && (
+                          <Typography variant="body2" color="text.secondary">
+                            dont prise en charge {formaterTexte(vente.pris_en_charge, monnaie(vente))}
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell>
                         {Number(vente.reste_a_payer) > 0 && (
@@ -164,6 +241,11 @@ export function Commandes() {
                             >
                               Encaisser
                             </Button>
+                            {saisirPec && (
+                              <Button size="small" onClick={() => setPecPour(vente)}>
+                                Prise en charge
+                              </Button>
+                            )}
                           </Stack>
                         )}
                       </TableCell>
@@ -189,6 +271,18 @@ export function Commandes() {
           )}
           {action.isError && <Alert severity="error">{action.error.message}</Alert>}
           {message && <Alert severity="success">{message}</Alert>}
+          {pecPour && (
+            <SaisiePriseEnCharge
+              vente={pecPour}
+              monnaie={monnaie(pecPour)}
+              onFermer={() => setPecPour(null)}
+              onEnregistree={(texte) => {
+                setPecPour(null);
+                setMessage(texte);
+                void queryClient.invalidateQueries({ queryKey: ["commandes"] });
+              }}
+            />
+          )}
         </Stack>
       </CardContent>
     </Card>

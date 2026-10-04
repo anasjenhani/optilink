@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("crm", "0005_numero_fiche"),
+        ("crm", "0006_prise_en_charge"),
         ("reseau", "0005_societes"),
     ]
 

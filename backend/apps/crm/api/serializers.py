@@ -2,11 +2,29 @@ from rest_framework import serializers
 
 from apps.reseau.models import Magasin
 
-from ..models import Client
+from ..models import Client, Organisme
+
+
+class OrganismeSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source="public_id", read_only=True)
+    pays = serializers.CharField(source="pays.code", read_only=True)
+    type_libelle = serializers.CharField(source="get_type_display", read_only=True)
+
+    class Meta:
+        model = Organisme
+        fields = ["id", "nom", "type", "type_libelle", "pays"]
 
 
 class ClientSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source="public_id", read_only=True)
+    organisme = serializers.SlugRelatedField(
+        slug_field="public_id",
+        queryset=Organisme.objects.filter(est_actif=True),
+        allow_null=True,
+        required=False,
+        help_text="CNAM, assurance ou mutuelle du client (PEC client).",
+    )
+    organisme_nom = serializers.CharField(source="organisme.nom", read_only=True, default=None)
     magasin_origine = serializers.SlugRelatedField(
         slug_field="public_id",
         queryset=Magasin.objects,
@@ -33,6 +51,9 @@ class ClientSerializer(serializers.ModelSerializer):
             "matricule_fiscal",
             "magasin_origine",
             "accepte_relances",
+            "organisme",
+            "organisme_nom",
+            "numero_affilie",
             "notes",
             "est_actif",
             "cree_le",

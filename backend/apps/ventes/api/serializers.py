@@ -86,6 +86,12 @@ class VenteSerializer(serializers.ModelSerializer):
     magasin = serializers.CharField(source="magasin.code", read_only=True)
     vendeur = serializers.CharField(source="vendeur.get_username", read_only=True)
     client = serializers.SerializerMethodField()
+    pris_en_charge = serializers.DecimalField(
+        max_digits=14,
+        decimal_places=3,
+        read_only=True,
+        help_text="Part de la CNAM, d'une assurance ou d'une mutuelle (hors refus).",
+    )
     reste_a_payer = serializers.DecimalField(max_digits=14, decimal_places=3, read_only=True)
     facture = serializers.SerializerMethodField(help_text="N° de la facture, si elle est émise.")
     verres = serializers.SerializerMethodField(
@@ -107,6 +113,7 @@ class VenteSerializer(serializers.ModelSerializer):
             "total_ht",
             "total_tva",
             "total_ttc",
+            "pris_en_charge",
             "reste_a_payer",
             "statut",
             "livraison_prevue_le",
@@ -119,7 +126,12 @@ class VenteSerializer(serializers.ModelSerializer):
         ]
 
     def get_client(self, vente) -> dict | None:
-        return client_resume(vente.client)
+        resume = client_resume(vente.client)
+        if resume is not None:
+            # Organisme de prise en charge proposé d'office quand on saisit une PEC.
+            organisme = vente.client.organisme
+            resume["organisme"] = str(organisme.public_id) if organisme else None
+        return resume
 
     def get_facture(self, vente) -> str | None:
         facture = getattr(vente, "facture", None)
