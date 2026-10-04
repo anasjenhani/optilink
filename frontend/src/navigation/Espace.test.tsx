@@ -61,7 +61,7 @@ test("sans le droit, le bouton disparaît ; une fonction pas encore faite est gr
   afficher([]);
   expect(screen.queryByRole("button", { name: "Vente au Comptoir" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Nouvelle Visite/ })).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Liste Visites/ })).toBeDisabled();
+  expect(screen.getByRole("button", { name: /Lunettes Vendues/ })).toBeDisabled();
   expect(screen.queryByRole("navigation", { name: "Raccourcis" })).not.toBeInTheDocument();
 });
 
