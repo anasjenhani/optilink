@@ -170,6 +170,7 @@ export function modulesPour(session: EtatSession): Module[] {
   const imports = {
     catalogue: a("stock.add_article") && a("stock.change_prixarticle"),
     stock: a("stock.add_mouvementstock"),
+    clients: a("crm.add_client") && a("crm.change_client"),
   };
 
   const comptoir = si(vendre, () =>
@@ -220,6 +221,13 @@ export function modulesPour(session: EtatSession): Module[] {
           )),
         },
         { id: "clients", libelle: "Clients et ordonnances", icone: People, couleur: COULEURS.turquoise, ecran: clients },
+        {
+          id: "import-clients",
+          libelle: "Import Clients",
+          icone: UploadFile,
+          couleur: COULEURS.bleu,
+          ecran: si(imports.clients, () => <Imports droits={{ catalogue: false, stock: false, clients: true }} />),
+        },
         {
           id: "commandes",
           libelle: "Commandes en cours",

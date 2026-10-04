@@ -7,7 +7,10 @@ const MAGASIN = { id: "m1", code: "T01", nom: "Tunis Centre", societe: "", ville
 
 afterEach(() => vi.unstubAllGlobals());
 
-function afficher(reponse: (url: string, corps: FormData) => { status: number; donnees: unknown }) {
+function afficher(
+  reponse: (url: string, corps: FormData) => { status: number; donnees: unknown },
+  droits = { catalogue: true, stock: true, clients: false },
+) {
   const envois: { url: string; corps: Record<string, string> }[] = [];
   vi.stubGlobal(
     "fetch",
@@ -24,7 +27,7 @@ function afficher(reponse: (url: string, corps: FormData) => { status: number; d
   );
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <Imports droits={{ catalogue: true, stock: true }} />
+      <Imports droits={droits} />
     </QueryClientProvider>,
   );
   return envois;
@@ -91,4 +94,37 @@ test("une entrée de stock en erreur ne peut pas être importée", async () => {
     url: "/api/v1/imports/stock/",
     corps: { fichier: "bl.csv", magasin: "m1", piece: "BL-778", apercu: "true" },
   });
+});
+
+test("importe les clients d'un autre logiciel dans le magasin choisi", async () => {
+  const envois = afficher(
+    (_, corps) => {
+      const apercu = corps.get("apercu") === "true";
+      return {
+        status: 200,
+        donnees: {
+          apercu,
+          lignes: 2,
+          crees: 2,
+          modifies: 0,
+          erreurs: [],
+          alertes: [{ ligne: 2, message: "BEN SALAH Amira ressemble à la fiche n° 12 : doublon possible." }],
+          jeton: apercu ? "j-cli" : "",
+        },
+      };
+    },
+    { catalogue: false, stock: false, clients: true },
+  );
+  await screen.findByText("Tunis Centre");
+  choisir("Clients d'un autre logiciel", "export.xlsx");
+  fireEvent.click(screen.getByRole("button", { name: "1. Vérifier" }));
+  expect(
+    await screen.findByText("Ligne 2 : BEN SALAH Amira ressemble à la fiche n° 12 : doublon possible."),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "2. Importer" }));
+  expect(await screen.findByText("Import terminé : 2 créé(s).")).toBeInTheDocument();
+  expect(envois.map((e) => [e.url, e.corps.magasin, e.corps.jeton])).toEqual([
+    ["/api/v1/imports/clients/", "m1", undefined],
+    ["/api/v1/imports/clients/", "m1", "j-cli"],
+  ]);
 });

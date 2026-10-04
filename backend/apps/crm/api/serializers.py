@@ -36,6 +36,7 @@ class ClientSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "numero",
+            "reference_externe",
             "civilite",
             "nom",
             "prenom",
@@ -57,7 +58,7 @@ class ClientSerializer(serializers.ModelSerializer):
             "est_actif",
             "cree_le",
         ]
-        read_only_fields = ["numero", "cree_le"]
+        read_only_fields = ["numero", "reference_externe", "cree_le"]
 
     def validate(self, attrs):
         if self.instance is not None:

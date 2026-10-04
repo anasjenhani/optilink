@@ -72,6 +72,13 @@ class Client(ModeleDeBase):
     accepte_relances = models.BooleanField(
         default=False, help_text="Consentement aux relances par e-mail ou SMS (RGPD)."
     )
+    reference_externe = models.CharField(
+        "ancien n° de fiche",
+        max_length=60,
+        blank=True,
+        db_index=True,
+        help_text="N° de la fiche dans l'ancien logiciel, conservé à l'import des clients.",
+    )
     organisme = models.ForeignKey(
         Organisme,
         on_delete=models.PROTECT,
@@ -91,6 +98,13 @@ class Client(ModeleDeBase):
         ordering = ["nom", "prenom"]
         verbose_name = "client"
         indexes = [models.Index(fields=["nom", "prenom"])]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["reference_externe"],
+                condition=~models.Q(reference_externe=""),
+                name="client_reference_externe_unique",
+            )
+        ]
 
     def __str__(self):
         return f"{self.nom.upper()} {self.prenom}"
