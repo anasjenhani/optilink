@@ -14,8 +14,8 @@ from .serializers import ClientSerializer
             OpenApiParameter(
                 "recherche",
                 OpenApiTypes.STR,
-                description="N° de fiche, nom, prénom, téléphones, e-mail, société "
-                "ou matricule fiscal",
+                description="N° de fiche, nom, prénom, téléphones, e-mail, société, "
+                "matricule fiscal ou ancien n° de fiche",
             )
         ]
     )
@@ -48,6 +48,7 @@ class ClientViewSet(
                 | Q(email__icontains=mot)
                 | Q(societe__icontains=mot)
                 | Q(matricule_fiscal__icontains=mot)
+                | Q(reference_externe__iexact=mot)
             )
         return clients
 

@@ -4,6 +4,8 @@ export type Client = {
   id: string;
   /** N° de fiche, attribué par le serveur à la création. */
   numero: number;
+  /** N° de la fiche dans l'ancien logiciel, gardé à l'import. */
+  reference_externe?: string;
   civilite: "" | "mme" | "m";
   nom: string;
   prenom: string;
@@ -20,7 +22,7 @@ export type Client = {
   accepte_relances: boolean;
 };
 
-export type SaisieClient = Omit<Client, "id" | "numero">;
+export type SaisieClient = Omit<Client, "id" | "numero" | "reference_externe">;
 
 export type MesureOeil = { sphere: string; cylindre?: string; axe?: number | null; addition?: string | null };
 

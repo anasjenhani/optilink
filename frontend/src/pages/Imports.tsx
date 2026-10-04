@@ -14,8 +14,10 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import {
   COLONNES_CATALOGUE,
+  COLONNES_CLIENTS,
   COLONNES_STOCK,
   importerCatalogue,
+  importerClients,
   importerStock,
   urlModele,
   type RapportImport,
@@ -26,7 +28,7 @@ function Alertes({ rapport }: { rapport: RapportImport }) {
   if (rapport.alertes.length === 0) return null;
   return (
     <Alert severity="warning">
-      {rapport.alertes.length} article(s) déjà au catalogue ou en stock :
+      {rapport.alertes.length} ligne(s) à regarder avant d'importer :
       <List dense>
         {rapport.alertes.slice(0, 100).map((a) => (
           <ListItemText key={`${a.ligne}-${a.message}`} primary={`Ligne ${a.ligne} : ${a.message}`} />
@@ -91,6 +93,7 @@ function Bloc({
         setFichier(null);
         void queryClient.invalidateQueries({ queryKey: ["catalogue"] });
         void queryClient.invalidateQueries({ queryKey: ["articles"] });
+        void queryClient.invalidateQueries({ queryKey: ["clients"] });
       }
     },
   });
@@ -140,8 +143,32 @@ function Bloc({
   );
 }
 
-/** Imports Excel ou CSV : catalogue (articles, fiches, prix) et entrées de stock d'un magasin. */
-export function Imports({ droits }: { droits: { catalogue: boolean; stock: boolean } }) {
+function ChoixMagasin({
+  magasins,
+  valeur,
+  onChange,
+}: {
+  magasins: { id: string; nom: string }[] | undefined;
+  valeur: string;
+  onChange: (magasin: string) => void;
+}) {
+  return (
+    <TextField select size="small" label="Magasin" value={valeur} onChange={(e) => onChange(e.target.value)}>
+      {magasins?.map((m) => (
+        <MenuItem key={m.id} value={m.id}>
+          {m.nom}
+        </MenuItem>
+      ))}
+    </TextField>
+  );
+}
+
+/** Imports Excel ou CSV : catalogue, entrées de stock d'un magasin et clients d'un autre logiciel. */
+export function Imports({
+  droits,
+}: {
+  droits: { catalogue: boolean; stock: boolean; clients?: boolean };
+}) {
   const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
   const [magasinChoisi, setMagasin] = useState("");
   const magasin = magasinChoisi || magasins.data?.[0]?.id || "";
@@ -173,19 +200,7 @@ export function Imports({ droits }: { droits: { catalogue: boolean; stock: boole
               contexte={`${magasin}|${piece}`}
               champs={
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                  <TextField
-                    select
-                    size="small"
-                    label="Magasin"
-                    value={magasin}
-                    onChange={(e) => setMagasin(e.target.value)}
-                  >
-                    {magasins.data?.map((m) => (
-                      <MenuItem key={m.id} value={m.id}>
-                        {m.nom}
-                      </MenuItem>
-                    ))}
-                  </TextField>
+                  <ChoixMagasin magasins={magasins.data} valeur={magasin} onChange={setMagasin} />
                   <TextField
                     size="small"
                     label="N° du bon de livraison"
@@ -195,6 +210,18 @@ export function Imports({ droits }: { droits: { catalogue: boolean; stock: boole
                 </Stack>
               }
               envoyer={(fichier, jeton) => importerStock(fichier, magasin, piece, jeton)}
+            />
+          )}
+          {droits.clients && (
+            <Bloc
+              titre="Clients d'un autre logiciel"
+              aide="Export Excel ou CSV de l'ancien logiciel, une ligne par client. Les noms de colonnes courants sont reconnus (N° fiche, Nom, Prénom, Tél, GSM, Date de naissance…). L'ancien n° de fiche est gardé : réimporter le même fichier met les fiches à jour sans doublon."
+              colonnes={COLONNES_CLIENTS}
+              nomModele="modele-clients.csv"
+              pret={Boolean(magasin)}
+              contexte={magasin}
+              champs={<ChoixMagasin magasins={magasins.data} valeur={magasin} onChange={setMagasin} />}
+              envoyer={(fichier, jeton) => importerClients(fichier, magasin, jeton)}
             />
           )}
         </Stack>
