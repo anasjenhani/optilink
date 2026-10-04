@@ -194,6 +194,7 @@ SPECTACULAR_SETTINGS = {
         "ModeVersementEnum": "apps.rh.models.Acompte.Mode",
         "StatutPrimeEnum": "apps.rh.models.Prime.Statut",
         "TypePrimeEnum": "apps.rh.models.Prime.Type",
+        "StatutPriseEnChargeEnum": "apps.ventes.models.PriseEnCharge.Statut",
     },
 }
 
