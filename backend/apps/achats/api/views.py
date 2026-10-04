@@ -10,15 +10,19 @@ from rest_framework.response import Response
 
 from apps.reseau.models import Magasin
 
-from ..models import CommandeFournisseur, Fournisseur
+from ..models import CasseVerre, CommandeFournisseur, Fournisseur, LigneCommandeFournisseur
 from ..services import (
+    CasseImpossible,
     CommandeFournisseurImpossible,
     annuler_commande_fournisseur,
+    declarer_casse,
     passer_commande,
     receptionner,
     verres_a_commander,
 )
 from .serializers import (
+    CasseVerreSaisieSerializer,
+    CasseVerreSerializer,
     CommandeFournisseurSaisieSerializer,
     CommandeFournisseurSerializer,
     FournisseurSerializer,
@@ -130,3 +134,54 @@ class CommandeFournisseurViewSet(
     def annuler(self, request, public_id=None):
         """Les verres repassent « à commander »."""
         return self._changer(annuler_commande_fournisseur)
+
+
+class CasseVerreViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+    """Verres cassés ou défectueux après réception, à recommander au fournisseur."""
+
+    serializer_class = CasseVerreSerializer
+    filterset_fields = ["cause", "vente__magasin__public_id"]
+    permissions_requises = {"list": "achats.view_casseverre", "create": "achats.add_casseverre"}
+
+    def get_queryset(self):
+        # Les ventes visibles portent le périmètre de magasins de l'utilisateur.
+        from apps.ventes.models import Vente
+
+        return CasseVerre.objects.filter(vente__in=Vente.objects.all()).select_related(
+            "vente__magasin",
+            "vente__client",
+            "ligne_commande__ligne_vente",
+            "ligne_commande__commande__fournisseur",
+            "declaree_par",
+        )
+
+    @extend_schema(request=CasseVerreSaisieSerializer, responses={201: CasseVerreSerializer})
+    def create(self, request):
+        """Déclare une casse : le verre repasse « à commander » et le suivi y revient."""
+        from apps.ventes.models import Vente
+
+        saisie = CasseVerreSaisieSerializer(data=request.data)
+        saisie.is_valid(raise_exception=True)
+        donnees = saisie.validated_data
+        ligne = (
+            LigneCommandeFournisseur.objects.filter(
+                pk=donnees["ligne_commande"], ligne_vente__vente__in=Vente.objects.all()
+            )
+            .select_related("ligne_vente__vente")
+            .first()
+        )
+        if ligne is None:
+            raise ValidationError({"ligne_commande": "Verre inconnu ou hors de votre périmètre."})
+        if not request.user.has_perm("achats.add_casseverre", ligne.ligne_vente.vente):
+            raise PermissionDenied("Pas de droit de déclarer une casse dans ce magasin.")
+        try:
+            casse = declarer_casse(
+                ligne_commande=ligne,
+                cause=donnees["cause"],
+                observation=donnees.get("observation", ""),
+                utilisateur=request.user,
+            )
+        except CasseImpossible as erreur:
+            return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)
+        casse = self.get_queryset().get(pk=casse.pk)
+        return Response(CasseVerreSerializer(casse).data, status=status.HTTP_201_CREATED)

@@ -155,6 +155,19 @@ PERMISSIONS_ACHATS = {
     "Commande": COMMANDES_FOURNISSEURS,
 }
 
+# Casses de verres : déclarées par l'atelier, l'opticien et les responsables, qui
+# recommandent ensuite le verre ; vues par les achats et la finance (coût des casses).
+CASSES = ["achats.view_casseverre", "achats.add_casseverre"]
+PERMISSIONS_CASSES = {
+    "Administrateur Global": CASSES,
+    "Responsable de magasin": CASSES,
+    "Opticien": CASSES,
+    "Atelier": CASSES,
+    "Commande": CASSES,
+    "Achats & Gestionnaire de Stock": ["achats.view_casseverre"],
+    "Comptabilité & Finance": ["achats.view_casseverre"],
+}
+
 # Trésorerie : le caissier clôture sa caisse chaque jour, la finance vérifie et valide.
 CLOTURE = ["tresorerie.view_cloturecaisse", "tresorerie.add_cloturecaisse"]
 DEPENSES = ["tresorerie.view_depensecaisse", "tresorerie.add_depensecaisse"]
@@ -269,6 +282,7 @@ for _par_role in (
     PERMISSIONS_REMUNERATIONS,
     PERMISSIONS_PILOTAGE,
     PERMISSIONS_PRISES_EN_CHARGE,
+    PERMISSIONS_CASSES,
 ):
     for _nom, _permissions in _par_role.items():
         ROLES_DE_DEPART[_nom] = ROLES_DE_DEPART[_nom] + _permissions

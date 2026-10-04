@@ -195,6 +195,7 @@ SPECTACULAR_SETTINGS = {
         "StatutPrimeEnum": "apps.rh.models.Prime.Statut",
         "TypePrimeEnum": "apps.rh.models.Prime.Type",
         "StatutPriseEnChargeEnum": "apps.ventes.models.PriseEnCharge.Statut",
+        "StatutVenteEnum": "apps.ventes.models.Vente.Statut",
     },
 }
 
