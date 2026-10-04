@@ -192,6 +192,19 @@ Le `Vagrantfile` crée la machine virtuelle dans VirtualBox, ou dans VMware Work
 
 Restaurer une sauvegarde : `docker compose -f docker-compose.yml -f docker-compose.qualif.yml exec -T postgres pg_restore -U postgres -d optilink --clean --if-exists < sauvegardes/optilink-AAAA-MM-JJ.dump`. Copier régulièrement `./sauvegardes` sur un autre support, et garder `PRESCRIPTIONS_CLES` hors du serveur.
 
+### États de la base pour les essais
+
+`./etats-base.sh` photographie la base sous un nom et la remet dans n'importe quel état enregistré, pour rejouer un essai à partir des mêmes données :
+
+```bash
+./etats-base.sh sauver avant-essai-caisse "catalogue et 3 clients"
+./etats-base.sh lister
+./etats-base.sh restaurer avant-essai-caisse
+./etats-base.sh supprimer avant-essai-caisse
+```
+
+Les états vont dans `./sauvegardes/etats`. Une restauration arrête l'application quelques secondes et photographie d'abord l'état courant (`avant-restauration-<date>`), ce qui permet de l'annuler. Les comptes, mots de passe et MFA reviennent eux aussi à l'état restauré.
+
 ## Suite
 
 - Reprise rapide par code PIN sur le poste de caisse
