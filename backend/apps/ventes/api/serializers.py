@@ -1,11 +1,14 @@
 from decimal import Decimal
 
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from ..models import (
     Avoir,
     Devis,
     Facture,
+    Lentilles,
     LigneAvoir,
     LigneDevis,
     LigneVente,
@@ -31,12 +34,20 @@ class LigneSaisieSerializer(serializers.Serializer):
         min_value=0,
         help_text="Rang de la lunette (dans ``lunettes``, à partir de 0) qui contient l'article.",
     )
+    lentilles = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=0,
+        help_text="Rang des lentilles (dans ``lentilles``, à partir de 0) de l'article.",
+    )
     role = serializers.ChoiceField(
         choices=LigneVente.Role.choices,
         required=False,
         allow_blank=True,
-        help_text="Place de l'article dans la lunette.",
+        help_text="Place de l'article dans la lunette ou les lentilles.",
     )
+    numero_lot = serializers.CharField(required=False, allow_blank=True, max_length=40)
+    date_peremption = serializers.DateField(required=False, allow_null=True)
 
 
 def _mesure_mm(aide):
@@ -71,6 +82,73 @@ class LunetteSaisieSerializer(serializers.Serializer):
     hauteur_g = _mesure_mm("Hauteur de montage, œil gauche (mm).")
     observation = serializers.CharField(required=False, allow_blank=True, max_length=1000)
     client_absent = serializers.BooleanField(default=False)
+
+
+class LentillesSaisieSerializer(serializers.Serializer):
+    prescription = serializers.UUIDField(
+        required=False, allow_null=True, help_text="Ordonnance de lentilles du client."
+    )
+    observation = serializers.CharField(required=False, allow_blank=True, max_length=1000)
+
+
+class LentilleOeilSerializer(serializers.Serializer):
+    libelle = serializers.CharField()
+    quantite = serializers.IntegerField()
+    numero_lot = serializers.CharField()
+    date_peremption = serializers.DateField(allow_null=True)
+    total_ttc = serializers.DecimalField(max_digits=14, decimal_places=3)
+
+
+class LentillesSerializer(serializers.ModelSerializer):
+    prescription = serializers.UUIDField(
+        source="prescription.public_id", read_only=True, default=None
+    )
+    droite = serializers.SerializerMethodField()
+    gauche = serializers.SerializerMethodField()
+    total_ttc = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Lentilles
+        fields = ["numero", "prescription", "observation", "droite", "gauche", "total_ttc"]
+
+    def _oeil(self, lentilles, role):
+        ligne = next((x for x in lentilles.lignes.all() if x.role == role), None)
+        return LentilleOeilSerializer(ligne).data if ligne else None
+
+    @extend_schema_field(LentilleOeilSerializer(allow_null=True))
+    def get_droite(self, lentilles):
+        return self._oeil(lentilles, LigneVente.Role.LENTILLE_D)
+
+    @extend_schema_field(LentilleOeilSerializer(allow_null=True))
+    def get_gauche(self, lentilles):
+        return self._oeil(lentilles, LigneVente.Role.LENTILLE_G)
+
+    @extend_schema_field(OpenApiTypes.DECIMAL)
+    def get_total_ttc(self, lentilles):
+        return str(sum((x.total_ttc for x in lentilles.lignes.all()), Decimal("0")))
+
+
+class LentillesClientSerializer(LentillesSerializer):
+    """Lentilles dans l'historique d'un client : avec leur visite."""
+
+    id = serializers.SerializerMethodField(help_text="N° : n° de visite / L rang.")
+    vente = serializers.UUIDField(source="vente.public_id", read_only=True)
+    vente_numero = serializers.CharField(source="vente.numero", read_only=True)
+    date = serializers.DateTimeField(source="vente.cree_le", read_only=True)
+    peniche = serializers.IntegerField(source="vente.peniche", read_only=True)
+
+    class Meta(LentillesSerializer.Meta):
+        fields = [
+            "id",
+            "vente",
+            "vente_numero",
+            "date",
+            "peniche",
+            *LentillesSerializer.Meta.fields,
+        ]
+
+    def get_id(self, lentilles) -> str:
+        return f"{lentilles.vente.numero}/L{lentilles.numero}"
 
 
 class LunetteSerializer(serializers.ModelSerializer):
@@ -182,6 +260,9 @@ class VenteSaisieSerializer(serializers.Serializer):
     lunettes = LunetteSaisieSerializer(
         many=True, required=False, help_text="Paires de lunettes ; leurs articles sont dans lignes."
     )
+    lentilles = LentillesSaisieSerializer(
+        many=True, required=False, help_text="Lentilles droite et gauche ; articles dans lignes."
+    )
 
 
 class ReglementSerializer(serializers.Serializer):
@@ -199,6 +280,9 @@ class LigneVenteSerializer(serializers.ModelSerializer):
     lunette = serializers.IntegerField(
         source="lunette.numero", read_only=True, default=None, help_text="N° de la lunette."
     )
+    lentilles = serializers.IntegerField(
+        source="lentilles.numero", read_only=True, default=None, help_text="N° des lentilles."
+    )
     quantite_reprise = serializers.SerializerMethodField(help_text="Déjà reprise par avoir.")
 
     class Meta:
@@ -214,7 +298,10 @@ class LigneVenteSerializer(serializers.ModelSerializer):
             "taux_tva",
             "total_ttc",
             "lunette",
+            "lentilles",
             "role",
+            "numero_lot",
+            "date_peremption",
         ]
 
     def get_quantite_reprise(self, ligne) -> int:
@@ -245,6 +332,7 @@ class VenteSerializer(serializers.ModelSerializer):
     )
     lignes = LigneVenteSerializer(many=True, read_only=True)
     lunettes = LunetteSerializer(many=True, read_only=True)
+    lentilles = LentillesSerializer(many=True, read_only=True)
     paiements = PaiementSerializer(many=True, read_only=True)
 
     class Meta:
@@ -270,6 +358,7 @@ class VenteSerializer(serializers.ModelSerializer):
             "facture",
             "lignes",
             "lunettes",
+            "lentilles",
             "paiements",
         ]
 

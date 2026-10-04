@@ -401,6 +401,36 @@ class Lunette(models.Model):
         return f"{self.vente.numero}/{self.numero}"
 
 
+class Lentilles(models.Model):
+    """Lentilles de contact d'une visite : celle de l'œil droit et celle de l'œil gauche.
+
+    La correction (avec rayon et diamètre) vient d'une ordonnance de lentilles du client.
+    """
+
+    vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="lentilles")
+    numero = models.PositiveSmallIntegerField(help_text="N° dans la visite (1, 2…).")
+    prescription = models.ForeignKey(
+        "optique.Prescription",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="lentilles",
+        help_text="Ordonnance de lentilles d'où vient la correction.",
+    )
+    observation = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["vente", "numero"]
+        verbose_name = "lentilles"
+        verbose_name_plural = "lentilles"
+        constraints = [
+            models.UniqueConstraint(fields=["vente", "numero"], name="lentilles_numero_unique")
+        ]
+
+    def __str__(self):
+        return f"{self.vente.numero}/L{self.numero}"
+
+
 class LigneVente(models.Model):
     class Role(models.TextChoices):
         MONTURE = "monture", "Monture"
@@ -408,15 +438,27 @@ class LigneVente(models.Model):
         VERRE_G = "verre_g", "Verre gauche"
         SUPPLEMENT_D = "supplement_d", "Supplément verre droit"
         SUPPLEMENT_G = "supplement_g", "Supplément verre gauche"
+        LENTILLE_D = "lentille_d", "Lentille droite"
+        LENTILLE_G = "lentille_g", "Lentille gauche"
 
     vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="lignes")
     article = models.ForeignKey("stock.Article", on_delete=models.PROTECT, related_name="+")
     lunette = models.ForeignKey(
         Lunette, on_delete=models.PROTECT, null=True, blank=True, related_name="lignes"
     )
-    role = models.CharField(
-        max_length=20, choices=Role.choices, blank=True, help_text="Place dans la lunette."
+    lentilles = models.ForeignKey(
+        Lentilles, on_delete=models.PROTECT, null=True, blank=True, related_name="lignes"
     )
+    role = models.CharField(
+        max_length=20,
+        choices=Role.choices,
+        blank=True,
+        help_text="Place dans la lunette ou les lentilles.",
+    )
+    numero_lot = models.CharField(
+        "n° de lot", max_length=40, blank=True, help_text="Lentilles, produits : traçabilité."
+    )
+    date_peremption = models.DateField("date de péremption", null=True, blank=True)
     libelle = models.CharField(max_length=200)
     quantite = models.PositiveIntegerField()
     prix_unitaire_ttc = models.DecimalField(max_digits=14, decimal_places=3)

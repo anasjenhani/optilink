@@ -141,8 +141,8 @@ def test_lunette_enregistree_avec_ses_verres_et_mesures(
         (lambda s: s["lignes"][1].update(quantite=2), "quantité 1 par lunette"),
         (lambda s: s["lignes"][0].update(role="verre_d"), "ne peut pas servir de verre droit"),
         (lambda s: s["lignes"].pop(1), "un supplément va avec son verre"),
-        (lambda s: s["lignes"][3].update(lunette=1), "lunette inconnue"),
-        (lambda s: s["lunettes"].append({}), "La lunette 2 ne contient aucun article"),
+        (lambda s: s["lignes"][3].update(lunette=1), "lunettes inconnues"),
+        (lambda s: s["lunettes"].append({}), "Lunette 2 : aucun article"),
     ],
 )
 def test_lunette_mal_composee_refusee(
@@ -182,3 +182,77 @@ def test_ordonnance_d_un_autre_client_ou_sans_droit_refusee(
     vendeur = affecter("vendeur", *DROITS[:3], portee="magasin", magasin=tunis)
     corps = saisie(tunis, amel, monture, verre, antireflet, ordonnance(amel, tunis, opticien))
     assert client_de(vendeur).post("/api/v1/ventes/", corps, format="json").status_code == 403
+
+
+@pytest.fixture
+def lentille(tunis):
+    article = Article.objects.create(
+        reference="LEN-M", libelle="Acuvue Oasys (6)", famille="lentille"
+    )
+    PrixArticle.objects.create(
+        article=article, pays=tunis.pays, prix_vente_ttc=Decimal("95.000"), tva=tva(tunis.pays, 7)
+    )
+    from apps.stock.models import MouvementStock
+
+    MouvementStock.tous.create(magasin=tunis, article=article, quantite=10, type="reception")
+    return article
+
+
+def ordonnance_lentilles(client, tunis, opticien):
+    prescription = Prescription(
+        client=client,
+        type="lentilles",
+        date_prescription=date(2026, 9, 1),
+        prescripteur="Dr Gharbi",
+        magasin_saisie=tunis,
+        saisie_par=opticien,
+    )
+    prescription.mesures = {
+        "od": {"sphere": "-2.00", "rayon": "8.60", "diametre": "14.20"},
+        "og": {"sphere": "-1.75", "rayon": "8.60", "diametre": "14.20"},
+    }
+    prescription.save()
+    return prescription
+
+
+def test_lentilles_droite_gauche_avec_lot_et_peremption(opticien, client_de, tunis, lentille, amel):
+    api = client_de(opticien)
+    prescription = ordonnance_lentilles(amel, tunis, opticien)
+    corps = {
+        "magasin": str(tunis.public_id),
+        "client": str(amel.public_id),
+        "paiements": [{"mode": "carte", "montant": "285.000"}],
+        "lentilles": [{"prescription": str(prescription.public_id), "observation": "Essai"}],
+        "lignes": [
+            {
+                "article": str(lentille.public_id),
+                "quantite": 2,
+                "lentilles": 0,
+                "role": "lentille_d",
+                "numero_lot": "B12345",
+                "date_peremption": "2028-03-31",
+            },
+            {
+                "article": str(lentille.public_id),
+                "quantite": 1,
+                "lentilles": 0,
+                "role": "lentille_g",
+                "numero_lot": "B12346",
+            },
+        ],
+    }
+    reponse = api.post("/api/v1/ventes/", corps, format="json")
+    assert reponse.status_code == 201, reponse.json()
+    (jeu,) = reponse.json()["lentilles"]
+    assert (jeu["droite"]["quantite"], jeu["droite"]["numero_lot"]) == (2, "B12345")
+    assert jeu["droite"]["date_peremption"] == "2028-03-31"
+    assert (jeu["gauche"]["numero_lot"], jeu["total_ttc"]) == ("B12346", "285.000")
+
+    historique = api.get("/api/v1/lentilles/", {"client": amel.public_id}).json()["results"]
+    assert [h["id"] for h in historique] == [f"{reponse.json()['numero']}/L1"]
+
+    # Une ordonnance de lunettes ne vaut pas pour des lentilles.
+    corps["lentilles"][0]["prescription"] = str(ordonnance(amel, tunis, opticien).public_id)
+    refus = api.post("/api/v1/ventes/", corps, format="json")
+    assert refus.status_code == 400
+    assert "ordonnance de lentilles" in refus.json()["detail"]
