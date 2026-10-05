@@ -47,6 +47,23 @@ class Article(ModeleDeBase):
         ),
     )
     est_actif = models.BooleanField(default=True)
+    suivi_numero_serie = models.BooleanField(
+        "numéro de série", default=False, help_text="Chaque pièce a son numéro de série."
+    )
+    promotion = models.BooleanField(default=False)
+    etui_special = models.BooleanField("étui spécial", default=False)
+    fodec = models.BooleanField(
+        "FODEC", default=False, help_text="Achat soumis au FODEC (1 % du net HT)."
+    )
+    observation = models.TextField(blank=True)
+    cree_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="créé par",
+    )
 
     class Meta:
         ordering = ["reference"]
@@ -114,18 +131,49 @@ class Monture(Caracteristiques):
         MIXTE = "mixte", "Mixte"
         ENFANT = "enfant", "Enfant"
 
+    class Categorie(models.TextChoices):
+        OPTIQUE = "optique", "Lunette Optique"
+        SOLAIRE = "solaire", "Lunette Solaire"
+        APPLIQUE = "applique", "Lunette Applique"
+
+    class Matiere(models.TextChoices):
+        ACETATE = "acetate", "Acétate"
+        TITANE = "titane", "Titane"
+        ACIER = "acier", "Acier"
+        TR90 = "tr90", "TR90"
+        CORNE = "corne", "Corne"
+        BOIS = "bois", "Bois"
+        METAL = "metal", "Métal"
+
+    class TrancheAge(models.TextChoices):
+        ADULTE = "adulte", "Adulte"
+        JUNIOR = "junior", "Junior"
+        ENFANT = "enfant", "Enfant"
+        BEBE = "bebe", "Bébé"
+
     article = models.OneToOneField(
         Article, on_delete=models.CASCADE, primary_key=True, related_name="monture"
     )
+    categorie = models.CharField(
+        "famille", max_length=10, choices=Categorie.choices, default=Categorie.OPTIQUE
+    )
     modele = models.CharField("modèle", max_length=100, blank=True)
-    couleur = models.CharField(max_length=60, blank=True)
-    matiere = models.CharField("matière", max_length=60, blank=True)
+    couleur = models.CharField("couleur monture", max_length=60, blank=True)
+    couleur_verres = models.CharField(max_length=60, blank=True)
+    matiere = models.CharField("matière", max_length=60, choices=Matiere.choices, blank=True)
     type = models.CharField(max_length=20, choices=Type.choices, blank=True)
+    forme = models.CharField(max_length=40, blank=True, help_text="Ronde, rectangle, papillon…")
     genre = models.CharField(max_length=10, choices=Genre.choices, blank=True)
-    calibre = models.PositiveSmallIntegerField(null=True, blank=True, help_text="mm")
+    tranche_age = models.CharField(
+        "tranche d'âge", max_length=10, choices=TrancheAge.choices, blank=True
+    )
+    calibre = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="Taille du verre, mm."
+    )
     pont = models.PositiveSmallIntegerField(null=True, blank=True, help_text="mm")
     branche = models.PositiveSmallIntegerField(null=True, blank=True, help_text="mm")
-    solaire = models.BooleanField(default=False)
+    # Suit la famille (« Lunette Solaire ») : la vente au comptoir filtre dessus.
+    solaire = models.BooleanField(default=False, editable=False)
 
     class Meta:
         verbose_name = "caractéristiques de la monture"
@@ -133,6 +181,12 @@ class Monture(Caracteristiques):
 
     def __str__(self):
         return str(self.article)
+
+    def save(self, *args, **kwargs):
+        self.solaire = self.categorie == self.Categorie.SOLAIRE
+        if kwargs.get("update_fields") is not None and "categorie" in kwargs["update_fields"]:
+            kwargs["update_fields"] = {*kwargs["update_fields"], "solaire"}
+        super().save(*args, **kwargs)
 
 
 class Verre(Caracteristiques):
@@ -157,7 +211,7 @@ class Verre(Caracteristiques):
     indice = models.DecimalField(
         max_digits=4, decimal_places=3, null=True, blank=True, help_text="1.500, 1.600, 1.670…"
     )
-    matiere = models.CharField("matière", max_length=20, choices=Matiere.choices, blank=True)
+    matiere = models.CharField("matière", max_length=60, choices=Matiere.choices, blank=True)
     traitements = models.CharField(
         max_length=200, blank=True, help_text="Antireflet, durci, filtre lumière bleue…"
     )
@@ -231,6 +285,22 @@ class PrixArticle(models.Model):
     )
     tva = models.ForeignKey(
         "reseau.TauxTva", on_delete=models.PROTECT, related_name="prix", verbose_name="TVA"
+    )
+    prix_achat_ht = models.DecimalField(
+        "prix d'achat HT",
+        max_digits=14,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="Prix d'achat brut, avant remise.",
+    )
+    taux_remise_achat = models.DecimalField(
+        "remise à l'achat (%)",
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal("0")), MaxValueValidator(Decimal("100"))],
     )
 
     class Meta:

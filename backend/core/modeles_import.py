@@ -74,7 +74,18 @@ MODELES = {
         colonnes=COLONNES_CATALOGUE,
         obligatoires={"reference", "libelle", "famille", "fournisseur"},
         aide=_COMMUN_ARTICLES
-        | {"famille": "Monture, Verre, Lentille, Divers ou Supplément verre."},
+        | {
+            "famille": "Monture, Verre, Lentille, Divers ou Supplément verre.",
+            "prix_achat_ht": "Prix d'achat HT avant remise (avec prix_ttc).",
+            "categorie": "Montures : Lunette Optique (par défaut), Lunette Solaire ou Lunette "
+            "Applique.",
+            "matiere": "Montures : Acétate, Titane, Acier, TR90, Corne, Bois ou Métal. "
+            "Verres : Organique, Polycarbonate ou Minéral.",
+            "type": "Montures : Cerclée, Semi-cerclée ou Percée (vide = aucun).",
+            "forme": "Ronde, rectangle, papillon…",
+            "tranche_age": "Adulte, Junior, Enfant ou Bébé.",
+            "calibre": "Taille (mm).",
+        },
         exemples=[
             {
                 "reference": "MON-RB5154",
@@ -84,9 +95,15 @@ MODELES = {
                 "code_barres": "8053672000001",
                 "prix_ttc": "450,000",
                 "tva": "19",
+                "prix_achat_ht": "220,000",
+                "categorie": "Lunette Optique",
                 "marque": "Ray-Ban",
                 "modele": "RB5154",
                 "couleur": "Écaille",
+                "matiere": "Acétate",
+                "type": "Cerclée",
+                "forme": "Clubmaster",
+                "tranche_age": "Adulte",
                 "calibre": "51",
                 "pont": "21",
                 "branche": "145",

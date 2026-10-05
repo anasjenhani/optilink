@@ -13,9 +13,9 @@ class PrixArticleInline(admin.TabularInline):
 class MontureInline(admin.StackedInline):
     model = Monture
     fields = (
-        ("marque", "modele"),
-        ("couleur", "matiere"),
-        ("type", "genre", "solaire"),
+        ("categorie", "marque", "modele"),
+        ("couleur", "couleur_verres", "matiere"),
+        ("type", "forme", "genre", "tranche_age"),
         ("calibre", "pont", "branche"),
     )
 

@@ -195,16 +195,20 @@ COLONNES_CATALOGUE = [
     "sur_commande",
     "prix_ttc",
     "tva",
+    "prix_achat_ht",
+    "categorie",
     "marque",
     "modele",
     "couleur",
+    "couleur_verres",
     "matiere",
     "type",
+    "forme",
     "genre",
+    "tranche_age",
     "calibre",
     "pont",
     "branche",
-    "solaire",
     "gamme",
     "geometrie",
     "indice",
@@ -250,6 +254,8 @@ def _valeurs_fiche(modele, ligne):
         if nom == "article" or nom not in ligne:
             continue
         texte = ligne[nom]
+        if texte == "" and not champ.blank:
+            continue  # Case vide : valeur par défaut, ou valeur déjà enregistrée.
         if champ.choices:
             valeurs[nom] = _choix(texte, champ.choices, nom)
         elif champ.get_internal_type() == "BooleanField":
@@ -366,7 +372,11 @@ def _importer_article(ligne, pays, fournisseurs, taux, imposee=None):
     modele = FICHES.get(famille)
     if modele is not None:
         fiche = modele.objects.filter(article=article).first() or modele(article=article)
-        for nom, valeur in _valeurs_fiche(modele, ligne).items():
+        valeurs = _valeurs_fiche(modele, ligne)
+        # Anciens fichiers : colonne « solaire » (oui/non) au lieu de la famille de monture.
+        if modele is Monture and "categorie" not in ligne and _booleen(ligne.get("solaire", "")):
+            valeurs["categorie"] = Monture.Categorie.SOLAIRE
+        for nom, valeur in valeurs.items():
             setattr(fiche, nom, valeur)
         fiche.full_clean()
         fiche.save()
@@ -381,6 +391,9 @@ def _importer_article(ligne, pays, fournisseurs, taux, imposee=None):
             article=article, pays=pays
         )
         tarif.prix_vente_ttc, tarif.tva = prix, taux[taux_tva]
+        achat = _decimal(ligne.get("prix_achat_ht", ""), "prix_achat_ht")
+        if achat is not None:
+            tarif.prix_achat_ht = achat
         tarif.full_clean()
         tarif.save()
     return cree
