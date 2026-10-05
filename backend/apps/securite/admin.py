@@ -3,6 +3,8 @@ from django.contrib.auth.admin import UserAdmin
 from django.contrib.contenttypes.models import ContentType
 from django.utils.html import format_html_join
 
+from core.admin_imports import AvecImport
+
 from .journal_droits import decrire, libelles_permissions, type_d_objet
 from .models import Affectation, EvenementSecurite, ModificationDroits, Utilisateur
 
@@ -13,7 +15,8 @@ class AffectationInline(admin.TabularInline):
 
 
 @admin.register(Utilisateur)
-class UtilisateurAdmin(UserAdmin):
+class UtilisateurAdmin(AvecImport, UserAdmin):
+    imports = ("utilisateurs",)
     inlines = [AffectationInline]
     # Les droits se donnent par affectation (rôle + périmètre), jamais directement au compte.
     fieldsets = (

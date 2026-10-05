@@ -1,10 +1,13 @@
 from django.contrib import admin
 
+from core.admin_imports import AvecImport
+
 from .models import Client, Organisme
 
 
 @admin.register(Client)
-class ClientAdmin(admin.ModelAdmin):
+class ClientAdmin(AvecImport, admin.ModelAdmin):
+    imports = ("clients",)
     list_display = (
         "nom",
         "prenom",

@@ -1,0 +1,55 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Accueil</a> › <a href="{{ url_liste }}">{{ opts.verbose_name_plural|capfirst }}</a> › {{ title }}</div>{% endblock %}
+{% block content %}
+<style>
+  .import p { max-width: 70em; }
+  .import .etape { margin: 1.5em 0 0.5em; font-weight: 600; }
+  .import ul.lignes { max-height: 22em; overflow: auto; margin-left: 1.5em; }
+  .import .boutons { margin-top: 1em; display: flex; gap: 1em; align-items: center; }
+</style>
+<div id="content-main" class="import">
+  <p class="etape">1. Télécharger le modèle</p>
+  <p><a class="button" href="{{ url_excel }}">Modèle Excel</a> <a class="button" href="{{ url_csv }}">Modèle CSV</a></p>
+  <p class="help">Le modèle Excel a trois feuilles : « À remplir » (la seule lue à l'import), « Exemple » et « Aide » (le sens de chaque colonne). Colonnes obligatoires : {{ obligatoires|join:", " }}.{% if aide %} {{ aide }}{% endif %}</p>
+
+  <p class="etape">2. Vérifier le fichier</p>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {% if magasins %}
+      <p><label for="magasin">Magasin :</label>
+        <select name="magasin" id="magasin">
+          {% for m in magasins %}<option value="{{ m.public_id }}"{% if m == magasin %} selected{% endif %}>{{ m.nom }}</option>{% endfor %}
+        </select></p>
+    {% endif %}
+    {% if piece is not None %}
+      <p><label for="piece">N° du bon de livraison :</label> <input type="text" name="piece" id="piece" value="{{ piece }}" maxlength="60"></p>
+    {% endif %}
+    <p><input type="file" name="fichier" accept=".xlsx,.csv" required></p>
+    <div class="boutons"><input type="submit" value="Vérifier"></div>
+  </form>
+
+  {% if rapport %}
+    {% if rapport.erreurs %}
+      <ul class="messagelist"><li class="error">{{ nom }} : {{ rapport.erreurs|length }} ligne(s) à corriger. Rien n'a été enregistré.</li></ul>
+      <ul class="lignes">{% for e in rapport.erreurs %}<li>Ligne {{ e.ligne }} : {{ e.message }}</li>{% endfor %}</ul>
+    {% elif rapport.apercu %}
+      <ul class="messagelist"><li class="info">{{ nom }} vérifié : {{ rapport.lignes }} ligne(s), {{ rapport.crees }} créé(s){% if rapport.modifies %}, {{ rapport.modifies }} mis à jour{% endif %} à l'import.</li></ul>
+      {% if rapport.alertes %}
+        <ul class="messagelist"><li class="warning">{{ rapport.alertes|length }} ligne(s) à regarder avant d'importer :</li></ul>
+        <ul class="lignes">{% for a in rapport.alertes %}<li>Ligne {{ a.ligne }} : {{ a.message }}</li>{% endfor %}</ul>
+      {% endif %}
+      <p class="etape">3. Importer</p>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="jeton" value="{{ jeton }}">
+        {% if magasin %}<input type="hidden" name="magasin" value="{{ magasin.public_id }}">{% endif %}
+        {% if piece is not None %}<input type="hidden" name="piece" value="{{ piece }}">{% endif %}
+        <div class="boutons"><input type="submit" name="importer" value="Importer {{ nom }}" class="default"></div>
+      </form>
+    {% else %}
+      <ul class="messagelist"><li class="success">Import terminé : {{ rapport.crees }} créé(s){% if rapport.modifies %}, {{ rapport.modifies }} mis à jour{% endif %}.</li></ul>
+      <p><a href="{{ url_liste }}">Retour à la liste</a></p>
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

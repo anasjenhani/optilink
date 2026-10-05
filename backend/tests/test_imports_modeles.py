@@ -51,11 +51,13 @@ def acheteur(affecter, client_de, tunis):
 
 
 def test_import_des_fournisseurs_cree_et_signale_les_existants(acheteur, tunis):
-    existant = Fournisseur.objects.create(nom="Essilor Tunisie", pays=tunis.pays)
+    existant = Fournisseur.objects.create(
+        nom="Essilor Tunisie", pays=tunis.pays, telephone="71000000"
+    )
     contenu = fichier(
-        "raison_sociale;matricule_fiscal;forme_juridique;fodec;regime_tva;ville\n"
-        "essilor tunisie;1111111/A/M/000;SARL;oui;Payer TVA;Tunis\n"
-        "Hoya Lens Tunisie;2222222/B/M/000;SUARL;non;Export;Sfax\n"
+        "raison_sociale;matricule_fiscal;forme_juridique;fodec;regime_tva;ville;telephone\n"
+        "essilor tunisie;1111111/A/M/000;SARL;oui;Payer TVA;Tunis;\n"
+        "Hoya Lens Tunisie;2222222/B/M/000;SUARL;non;Export;Sfax;74000000\n"
     )
     apercu = importer(acheteur, contenu, "fournisseurs", apercu=True).json()
     assert (apercu["crees"], apercu["modifies"]) == (1, 1)
@@ -66,6 +68,7 @@ def test_import_des_fournisseurs_cree_et_signale_les_existants(acheteur, tunis):
     assert importer(acheteur, contenu, "fournisseurs").status_code == 200
     existant.refresh_from_db()
     assert (existant.matricule_fiscal, existant.fodec) == ("1111111/A/M/000", True)
+    assert existant.telephone == "71000000"  # Case vide : valeur gardée.
     hoya = Fournisseur.objects.get(nom="Hoya Lens Tunisie")
     assert (hoya.forme_juridique, hoya.regime_tva, hoya.code) == (
         "SUARL",
