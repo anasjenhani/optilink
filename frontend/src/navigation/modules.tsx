@@ -72,6 +72,8 @@ import { Factures } from "../pages/Factures";
 import { Fournisseurs } from "../pages/Fournisseurs";
 import { Imports } from "../pages/Imports";
 import { Journee } from "../pages/Journee";
+import { FactureAchat } from "../pages/FactureAchat";
+import { ListeFacturesAchat } from "../pages/ListeFacturesAchat";
 import { ListeReceptions } from "../pages/ListeReceptions";
 import { Magasins } from "../pages/Magasins";
 import { RessourcesHumaines } from "../pages/RessourcesHumaines";
@@ -420,6 +422,20 @@ export function modulesPour(session: EtatSession): Module[] {
           icone: ListAlt,
           couleur: COULEURS.brun,
           ecran: si(a("achats.view_bonreception"), () => <ListeReceptions importer={a("achats.add_bonreception")} />),
+        },
+        {
+          id: "facture-achat",
+          libelle: "Facture Achat",
+          icone: RequestQuote,
+          couleur: COULEURS.violet,
+          ecran: si(a("achats.add_factureachat") && a("achats.view_fournisseur"), () => <FactureAchat />),
+        },
+        {
+          id: "liste-factures-achat",
+          libelle: "Liste des Factures Achat",
+          icone: ReceiptLong,
+          couleur: COULEURS.brun,
+          ecran: si(a("achats.view_factureachat"), () => <ListeFacturesAchat />),
         },
         {
           id: "fournisseurs",

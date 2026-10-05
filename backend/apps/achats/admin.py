@@ -1,10 +1,13 @@
 from django.contrib import admin
+from django.core.exceptions import PermissionDenied
 
 from core.admin_imports import AvecImport
 
+from .admin_saisie import saisir_facture, saisir_reception
 from .models import (
     BonReception,
     CommandeFournisseur,
+    FactureAchat,
     Fournisseur,
     LigneCommandeFournisseur,
     LigneReception,
@@ -36,9 +39,52 @@ class BonReceptionAdmin(AvecImport, admin.ModelAdmin):
     def get_queryset(self, request):
         return BonReception.tous.select_related("magasin", "fournisseur")
 
-    # Un bon de réception se saisit dans l'application (stock et verres reçus en même temps).
-    def has_add_permission(self, request):
+    # « Ajouter » ouvre une saisie simple qui passe par le même service que l'application.
+    # Un bon validé ne se modifie plus (stock et verres déjà reçus).
+    def add_view(self, request, form_url="", extra_context=None):
+        if not self.has_add_permission(request):
+            raise PermissionDenied
+        return saisir_reception(self, request)
+
+    def has_change_permission(self, request, obj=None):
         return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class BonFactureInline(admin.TabularInline):
+    model = BonReception
+    fk_name = "facture"
+    fields = ("numero", "numero_bl", "date_bl", "total_net_ht", "total_tva", "total_ttc")
+    readonly_fields = fields
+    extra = 0
+    can_delete = False
+
+
+@admin.register(FactureAchat)
+class FactureAchatAdmin(admin.ModelAdmin):
+    list_display = (
+        "numero",
+        "date_entree",
+        "fournisseur",
+        "reference_fournisseur",
+        "total_ttc",
+        "paiement",
+    )
+    list_filter = ("magasin", "paiement", "fournisseur")
+    search_fields = ("numero", "reference_fournisseur", "fournisseur__nom")
+    inlines = [BonFactureInline]
+
+    def get_queryset(self, request):
+        return FactureAchat.tous.select_related("magasin", "fournisseur")
+
+    # « Ajouter » ouvre une saisie simple (même service que l'application : BL marqués
+    # facturés). Une facture validée ne se modifie plus.
+    def add_view(self, request, form_url="", extra_context=None):
+        if not self.has_add_permission(request):
+            raise PermissionDenied
+        return saisir_facture(self, request)
 
     def has_change_permission(self, request, obj=None):
         return False
