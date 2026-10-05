@@ -177,3 +177,10 @@ def test_reprise_des_anciennes_montures(db):
     migration.reprendre(apps, None)
     fiche = Monture.objects.get(pk=article.pk)
     assert (fiche.categorie, fiche.matiere) == ("solaire", "titane")
+
+
+def test_suggestions_des_valeurs_deja_saisies(api, tunis, cartier):
+    api.post(url(tunis), fiche(cartier), format="json")
+    suggestions = api.get("/api/v1/fiches-articles/suggestions/").json()
+    assert suggestions["marque"] == ["Celine"]
+    assert suggestions["forme"] == ["Papillon"]

@@ -13,7 +13,7 @@ from django.db import transaction
 from django.db.models import Max, Sum
 from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import mixins, serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
@@ -115,6 +115,7 @@ class FicheArticleSerializer(serializers.ModelSerializer):
         slug_field="public_id", queryset=Fournisseur.objects.all()
     )
     fournisseur_nom = serializers.CharField(source="fournisseur.nom", read_only=True)
+    fournisseur_code = serializers.IntegerField(source="fournisseur.code", read_only=True)
     stockable = serializers.BooleanField(
         required=False, help_text="Vendu sur le stock du magasin (sinon commandé pour le client)."
     )
@@ -135,6 +136,7 @@ class FicheArticleSerializer(serializers.ModelSerializer):
             "code_barres",
             "fournisseur",
             "fournisseur_nom",
+            "fournisseur_code",
             "reference_fournisseur",
             "est_actif",
             "stockable",
@@ -314,7 +316,11 @@ MAGASIN = OpenApiParameter(
 )
 
 
-@extend_schema(parameters=[MAGASIN])
+@extend_schema_view(
+    retrieve=extend_schema(parameters=[MAGASIN]),
+    create=extend_schema(parameters=[MAGASIN]),
+    partial_update=extend_schema(parameters=[MAGASIN]),
+)
 class FicheArticleViewSet(
     mixins.CreateModelMixin,
     mixins.RetrieveModelMixin,
@@ -329,6 +335,7 @@ class FicheArticleViewSet(
     permissions_requises = {
         "retrieve": "stock.view_article",
         "mouvements": ["stock.view_article", "stock.view_mouvementstock"],
+        "suggestions": "stock.view_article",
         "create": ["stock.add_article", "stock.add_prixarticle"],
         "partial_update": [
             "stock.change_article",
@@ -353,6 +360,23 @@ class FicheArticleViewSet(
                 Magasin.objects.select_related("pays"), public_id=magasin
             )
         return contexte
+
+    @extend_schema(responses=OpenApiTypes.OBJECT)
+    @action(detail=False)
+    def suggestions(self, request):
+        """Valeurs déjà saisies sur les montures, proposées à la saisie (marques, formes…)."""
+        champs = ["marque", "modele", "forme", "couleur", "couleur_verres"]
+        return Response(
+            {
+                champ: list(
+                    Monture.objects.exclude(**{champ: ""})
+                    .order_by(champ)
+                    .values_list(champ, flat=True)
+                    .distinct()[:500]
+                )
+                for champ in champs
+            }
+        )
 
     @extend_schema(responses=OpenApiTypes.OBJECT)
     @action(detail=True)

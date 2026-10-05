@@ -122,14 +122,18 @@ const montantLigne = (l: LigneSaisie) => {
 };
 
 /** Fournisseur par son code ou sa raison sociale. */
-function ChoixFournisseur({
+export function ChoixFournisseur({
   valeur,
   onChange,
   onRechercher,
+  libelle = "Code fournisseur / Raison sociale",
+  minWidth = 320,
 }: {
   valeur: Fournisseur | null;
   onChange: (fournisseur: Fournisseur | null) => void;
-  onRechercher: () => void;
+  onRechercher?: () => void;
+  libelle?: string;
+  minWidth?: number;
 }) {
   const [saisie, setSaisie] = useState("");
   const recherche = saisie.trim();
@@ -138,7 +142,7 @@ function ChoixFournisseur({
     queryFn: () => chercherFournisseurs(/^\d+$/.test(recherche) ? { code: recherche } : { nom: recherche }),
   });
   return (
-    <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", flex: 1, minWidth: 320 }}>
+    <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", flex: 1, minWidth }}>
       <Autocomplete
         size="small"
         options={fournisseurs.data?.results ?? []}
@@ -150,12 +154,14 @@ function ChoixFournisseur({
         getOptionLabel={(f) => `${f.code} · ${f.nom}`}
         isOptionEqualToValue={(a, b) => a.id === b.id}
         noOptionsText="Aucun fournisseur"
-        renderInput={(params) => <TextField {...params} label="Code fournisseur / Raison sociale" />}
+        renderInput={(params) => <TextField {...params} label={libelle} />}
         sx={{ flex: 1, bgcolor: "#fffde7" }}
       />
-      <IconButton aria-label="Rechercher un fournisseur" onClick={onRechercher}>
-        <Search />
-      </IconButton>
+      {onRechercher && (
+        <IconButton aria-label="Rechercher un fournisseur" onClick={onRechercher}>
+          <Search />
+        </IconButton>
+      )}
     </Stack>
   );
 }
