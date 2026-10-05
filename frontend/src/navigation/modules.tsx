@@ -470,7 +470,7 @@ export function modulesPour(session: EtatSession): Module[] {
           icone: CompareArrows,
           couleur: COULEURS.bleu,
           ecran: si(a("stock.view_transfertstock"), () => (
-            <ListeTransferts recevoir={a("stock.change_transfertstock")} />
+            <ListeTransferts recevoir={a("stock.change_transfertstock")} annuler={a("stock.add_transfertstock")} />
           )),
         },
         {
