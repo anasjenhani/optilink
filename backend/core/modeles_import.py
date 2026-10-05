@@ -132,7 +132,8 @@ MODELES = {
         colonnes=COLONNES_FOURNISSEURS,
         obligatoires={"raison_sociale"},
         aide={
-            "code": "Vide pour un nouveau fournisseur (code attribué) ; le code pour modifier.",
+            "code": "Vide pour un nouveau fournisseur (code attribué) ; le code pour modifier. "
+            "Pour un fournisseur existant, une case vide garde la valeur déjà enregistrée.",
             "raison_sociale": "Nom du fournisseur ; il ne peut exister qu'une fois.",
             "notre_code": "Notre code client chez ce fournisseur.",
             "fournisseur_verres": "oui s'il fournit des verres.",

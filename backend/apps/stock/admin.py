@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from core.admin_imports import AvecImport
+
 from .models import Article, Lentille, Monture, MouvementStock, PrixArticle, Verre
 
 
@@ -46,7 +48,8 @@ CARACTERISTIQUES = {
 
 
 @admin.register(Article)
-class ArticleAdmin(admin.ModelAdmin):
+class ArticleAdmin(AvecImport, admin.ModelAdmin):
+    imports = ("catalogue", "verres")
     list_display = (
         "reference",
         "libelle",
@@ -94,7 +97,8 @@ class ArticleAdmin(admin.ModelAdmin):
 
 
 @admin.register(MouvementStock)
-class MouvementStockAdmin(admin.ModelAdmin):
+class MouvementStockAdmin(AvecImport, admin.ModelAdmin):
+    imports = ("stock",)
     list_display = ("horodatage", "magasin", "article", "type", "quantite", "reference")
     list_filter = ("type", "magasin")
     search_fields = ("article__reference", "reference")

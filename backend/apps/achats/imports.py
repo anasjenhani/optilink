@@ -207,22 +207,23 @@ def _importer_fournisseur(ligne, pays):
     if cree or par != "raison sociale":
         # Même raison sociale à la casse près : on garde l'écriture déjà enregistrée.
         fournisseur.nom = ligne["raison_sociale"]
+    # Une case vide garde la valeur déjà enregistrée : on ne complète que ce qui est rempli.
     for champ in _TEXTES:
-        if champ in ligne:
+        if ligne.get(champ, ""):
             setattr(fournisseur, champ, ligne[champ])
     for champ in _BOOLEENS:
         if ligne.get(champ, "") != "":
             setattr(fournisseur, champ, _booleen(ligne[champ]))
-    if "forme_juridique" in ligne:
+    if ligne.get("forme_juridique", ""):
         fournisseur.forme_juridique = _choix(
             ligne["forme_juridique"], Fournisseur.FormeJuridique.choices, "forme_juridique"
         )
     if ligne.get("regime_tva", ""):
         fournisseur.regime_tva = _choix(ligne["regime_tva"], _REGIMES_TVA, "regime_tva")
-    if "capital_social" in ligne:
+    if ligne.get("capital_social", ""):
         fournisseur.capital_social = _decimal(ligne["capital_social"], "capital_social")
     for champ in ("exoneration_du", "exoneration_au"):
-        if champ in ligne:
+        if ligne.get(champ, ""):
             setattr(fournisseur, champ, _date(ligne[champ], champ))
     if ligne.get("pays", ""):
         autre = Pays.objects.filter(code__iexact=ligne["pays"]).first()
