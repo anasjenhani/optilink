@@ -30,7 +30,7 @@
     {% if lignes %}
       {{ lignes.management_form }}
       <fieldset class="module">
-        <h2>Articles reçus</h2>
+        <h2>{{ titre_lignes }}</h2>
         {% if lignes.non_form_errors %}<p class="errornote">{{ lignes.non_form_errors|join:" " }}</p>{% endif %}
         <table class="lignes" style="width: 100%">
           <thead><tr>{% for champ in lignes.empty_form %}<th>{{ champ.label }}</th>{% endfor %}</tr></thead>
@@ -42,7 +42,7 @@
         </table>
         <template id="ligne-vide"><tr>{% for champ in lignes.empty_form %}<td>{{ champ }}</td>{% endfor %}</tr></template>
         <p><a href="#" class="addlink" id="ajouter-ligne">Ajouter une ligne</a></p>
-        <p class="help">Les lignes laissées vides sont ignorées. TVA vide : taux de l'article dans le pays du magasin.</p>
+        <p class="help">{{ aide_lignes }}</p>
       </fieldset>
       <script>
         document.getElementById("ajouter-ligne").addEventListener("click", function (e) {

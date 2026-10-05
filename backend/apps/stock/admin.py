@@ -1,10 +1,14 @@
 from django.contrib import admin
+from django.core.exceptions import PermissionDenied
 
 from core.admin_imports import AvecImport
 
+from .admin_saisie import saisir_inventaire
 from .models import (
     Article,
+    Inventaire,
     Lentille,
+    LigneInventaire,
     LigneTransfert,
     Monture,
     MouvementStock,
@@ -142,6 +146,36 @@ class TransfertStockAdmin(admin.ModelAdmin):
     # Envoyé par le dépôt et réceptionné par le magasin dans l'application (stock des deux).
     def has_add_permission(self, request):
         return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class LigneInventaireInline(admin.TabularInline):
+    model = LigneInventaire
+    extra = 0
+    can_delete = False
+
+
+@admin.register(Inventaire)
+class InventaireAdmin(admin.ModelAdmin):
+    list_display = ("numero", "cree_le", "magasin", "famille", "statut", "valide_le")
+    list_filter = ("statut", "magasin", "famille")
+    search_fields = ("numero",)
+    inlines = [LigneInventaireInline]
+
+    def get_queryset(self, request):
+        return Inventaire.tous.select_related("magasin")
+
+    # « Ajouter » crée l'inventaire (et de premiers comptages) par le même service que
+    # l'application ; le comptage et la validation finale se poursuivent dans l'application.
+    def add_view(self, request, form_url="", extra_context=None):
+        if not self.has_add_permission(request):
+            raise PermissionDenied
+        return saisir_inventaire(self, request)
 
     def has_change_permission(self, request, obj=None):
         return False

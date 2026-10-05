@@ -201,6 +201,8 @@ SPECTACULAR_SETTINGS = {
         "EtatReceptionEnum": "apps.achats.models.BonReception.Etat",
         "EtatRetourEnum": "apps.achats.models.BonRetour.Etat",
         "StatutTransfertEnum": "apps.stock.models.TransfertStock.Statut",
+        "StatutInventaireEnum": "apps.stock.models.Inventaire.Statut",
+        "CategorieMontureEnum": "apps.stock.models.Monture.Categorie",
     },
 }
 

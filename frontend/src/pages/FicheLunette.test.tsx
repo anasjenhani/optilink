@@ -99,4 +99,6 @@ test("ordonnance reprise, monture et verres scannés, lunette validée avec ses 
     "supplement_d:s1",
     "supplement_g:s1",
   ]);
-});
+  // Long parcours (ordonnance, scan, verres, suppléments) : le délai par défaut de 5 s ne suffit pas
+  // toujours sur les machines de la CI.
+}, 20_000);

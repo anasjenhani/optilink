@@ -81,6 +81,7 @@ import { Magasins } from "../pages/Magasins";
 import { RessourcesHumaines } from "../pages/RessourcesHumaines";
 import { Suivi } from "../pages/Suivi";
 import { ListeTransferts, TransfertStock } from "../pages/Transferts";
+import { Inventaire } from "../pages/Inventaire";
 import { ConsulterVisite, HistoriqueVisites, Visites } from "../pages/Visites";
 import { Tresorerie } from "../pages/Tresorerie";
 import { VenteComptoir } from "../pages/VenteComptoir";
@@ -94,6 +95,8 @@ export type Tuile = {
   couleur: string;
   ecran?: () => ReactNode;
   aVenir?: boolean;
+  /** Sous-onglet du module (Administration : RH, Réseau, Sécurité… comme dans /admin/). */
+  categorie?: string;
 };
 
 export type Module = { id: string; libelle: string; tuiles: Tuile[] };
@@ -479,7 +482,21 @@ export function modulesPour(session: EtatSession): Module[] {
             <Fournisseurs droits={{ creer: a("achats.add_fournisseur"), modifier: a("achats.change_fournisseur") }} />
           )),
         },
-        aVenir("inventaire", "Inventaire", Sync, COULEURS.bleu),
+        {
+          id: "inventaire",
+          libelle: "Inventaire",
+          icone: Sync,
+          couleur: COULEURS.bleu,
+          ecran: si(a("stock.view_inventaire"), () => (
+            <Inventaire
+              droits={{
+                ouvrir: a("stock.add_inventaire"),
+                compter: a("stock.change_inventaire"),
+                valider: a("stock.valider_inventaire"),
+              }}
+            />
+          )),
+        },
         aVenir("stock-date", "Stock à la Date", CalendarMonth, COULEURS.vert),
         aVenir("config-stock", "Config Stock", Widgets, COULEURS.brun),
         aVenir("stock-depense", "Stock Article Dépense", Inventory2, COULEURS.jaune),
@@ -643,6 +660,7 @@ export function modulesPour(session: EtatSession): Module[] {
       tuiles: [
         {
           id: "demande-conge",
+          categorie: "Ressources humaines",
           libelle: "Demande de Congé",
           icone: BeachAccess,
           couleur: COULEURS.turquoise,
@@ -650,16 +668,24 @@ export function modulesPour(session: EtatSession): Module[] {
         },
         {
           id: "demande-acompte",
+          categorie: "Ressources humaines",
           libelle: "Demande d'Acompte",
           icone: Savings,
           couleur: COULEURS.vert,
           ecran: () => <RessourcesHumaines droits={droitsRh} ongletInitial="mes-acomptes" />,
         },
-        aVenir("demande-attestation", "Demande d'Attestation", Description, COULEURS.violet),
-        aVenir("demande-pret", "Demande de Prêt", AccountBalance, COULEURS.brun),
-        aVenir("fiche-paie", "Fiche de Paie", ReceiptLong, COULEURS.bleu),
+        {
+          ...aVenir("demande-attestation", "Demande d'Attestation", Description, COULEURS.violet),
+          categorie: "Ressources humaines",
+        },
+        {
+          ...aVenir("demande-pret", "Demande de Prêt", AccountBalance, COULEURS.brun),
+          categorie: "Ressources humaines",
+        },
+        { ...aVenir("fiche-paie", "Fiche de Paie", ReceiptLong, COULEURS.bleu), categorie: "Ressources humaines" },
         {
           id: "rh",
+          categorie: "Ressources humaines",
           libelle: "Ressources Humaines",
           icone: Badge,
           couleur: COULEURS.bleu,
@@ -667,6 +693,7 @@ export function modulesPour(session: EtatSession): Module[] {
         },
         {
           id: "magasins",
+          categorie: "Réseau",
           libelle: "Magasins",
           icone: Store,
           couleur: COULEURS.brun,
@@ -674,6 +701,7 @@ export function modulesPour(session: EtatSession): Module[] {
         },
         {
           id: "acces",
+          categorie: "Sécurité",
           libelle: "Accès et Sécurité",
           icone: AdminPanelSettings,
           couleur: COULEURS.rouge,
@@ -693,6 +721,7 @@ export function modulesPour(session: EtatSession): Module[] {
         },
         {
           id: "plateforme",
+          categorie: "Plateforme",
           libelle: "État de la Plateforme",
           icone: MonitorHeart,
           couleur: COULEURS.vert,
