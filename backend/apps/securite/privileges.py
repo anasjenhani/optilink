@@ -86,6 +86,8 @@ PRIVILEGES = {
         "achats.view_commandefournisseur": "Voir les commandes fournisseurs",
         "achats.add_commandefournisseur": "Passer une commande fournisseur",
         "achats.change_commandefournisseur": "Réceptionner une commande fournisseur",
+        "achats.view_bonreception": "Voir les bons de réception",
+        "achats.add_bonreception": "Saisir un bon de réception (entrée de la marchandise)",
         "achats.view_casseverre": "Voir les casses de verres",
         "achats.add_casseverre": "Déclarer une casse de verre (verre à recommander)",
     },
