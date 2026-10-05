@@ -8,8 +8,10 @@ from django.db import transaction
 from apps.ventes.models import TypeDocument
 from apps.ventes.services import _aujourd_hui, _numero, _prochain_numero, arrondir
 
-from .models import BonReception, FactureAchat
+from .depot import autre_depot, magasins_geres
+from .models import BonReception, BonRetour, FactureAchat
 from .receptions import CENT, detail_tva
+from .retours import detail_tva_retour
 
 
 class FactureImpossible(Exception):
@@ -20,15 +22,16 @@ def calculer_facture(
     bons,
     *,
     pays,
+    retours=(),
     taux_remise_ex=Decimal("0"),
     frais=Decimal("0"),
     timbre=Decimal("0"),
     ajustement=Decimal("0"),
 ):
-    """Totaux d'une facture à partir des totaux figés de ses bons.
+    """Totaux d'une facture à partir des totaux figés de ses bons, moins ses bons retour.
 
-    La remise exceptionnelle de la facture s'applique au net HT des bons, et dans la même
-    proportion au FODEC et à la TVA. Timbre, frais et ajustement s'ajoutent au TTC.
+    La remise exceptionnelle de la facture s'applique au net HT (BL moins retours), et dans la
+    même proportion au FODEC et à la TVA. Timbre, frais et ajustement s'ajoutent au TTC.
     """
     decimales = pays.decimales
     total_ht = total_remise = net = fodec = Decimal("0")
@@ -41,6 +44,14 @@ def calculer_facture(
         for ligne in detail_tva(bon):
             bases[ligne["taux"]] += ligne["base_ht"]
             montants[ligne["taux"]] += ligne["montant_tva"]
+    for retour in retours:
+        total_ht -= retour.total_ht
+        total_remise -= retour.total_remise
+        net -= retour.total_net_ht
+        fodec -= retour.total_fodec
+        for ligne in detail_tva_retour(retour):
+            bases[ligne["taux"]] -= ligne["base_ht"]
+            montants[ligne["taux"]] -= ligne["montant_tva"]
     reste = 1 - taux_remise_ex / CENT
     remise_ex = arrondir(net * taux_remise_ex / CENT, decimales)
     tva = []
@@ -72,9 +83,17 @@ def timbre_par_defaut(fournisseur, pays):
 
 
 def bons_a_facturer(magasin, fournisseur):
+    """BL non facturés de ce fournisseur : ceux du magasin, et pour un dépôt de sa société."""
     return BonReception.objects.filter(
-        magasin=magasin, fournisseur=fournisseur, facture__isnull=True
+        magasin_id__in=magasins_geres(magasin), fournisseur=fournisseur, facture__isnull=True
     ).order_by("date_bl", "sequence")
+
+
+def retours_a_deduire(magasin, fournisseur):
+    """Bons retour de ce fournisseur saisis ici et pas encore déduits d'une facture."""
+    return BonRetour.objects.filter(
+        magasin=magasin, fournisseur=fournisseur, facture__isnull=True
+    ).order_by("date_retour", "sequence")
 
 
 def controler(magasin, fournisseur, bons_ids, *, verrouiller=False):
@@ -87,14 +106,43 @@ def controler(magasin, fournisseur, bons_ids, *, verrouiller=False):
     bons = list(bons.select_related("magasin__pays", "fournisseur").prefetch_related("lignes"))
     if len(bons) != len(set(bons_ids)):
         raise FactureImpossible("Bon de réception introuvable ou hors de votre périmètre.")
+    geres = set(magasins_geres(magasin))
     for bon in bons:
-        if bon.magasin_id != magasin.pk or bon.fournisseur_id != fournisseur.pk:
+        if bon.magasin_id not in geres or bon.fournisseur_id != fournisseur.pk:
             raise FactureImpossible(
                 f"Le bon {bon.numero} n'est pas un BL de {fournisseur} dans ce magasin."
             )
         if bon.facture_id is not None:
             raise FactureImpossible(f"Le bon {bon.numero} (BL {bon.numero_bl}) est déjà facturé.")
     return sorted(bons, key=lambda b: (b.date_bl, b.sequence))
+
+
+def controler_retours(magasin, fournisseur, retours_ids, *, verrouiller=False):
+    """Bons retour choisis, tous de ce fournisseur, saisis ici et pas encore déduits."""
+    if not retours_ids:
+        return []
+    retours = BonRetour.objects.filter(public_id__in=retours_ids)
+    if verrouiller:
+        retours = retours.select_for_update(of=("self",))
+    retours = list(
+        retours.select_related("magasin__pays", "fournisseur").prefetch_related("lignes")
+    )
+    if len(retours) != len(set(retours_ids)):
+        raise FactureImpossible("Bon retour introuvable ou hors de votre périmètre.")
+    for retour in retours:
+        if retour.magasin_id != magasin.pk or retour.fournisseur_id != fournisseur.pk:
+            raise FactureImpossible(
+                f"Le bon retour {retour.numero} n'est pas un retour à {fournisseur} d'ici."
+            )
+        if retour.facture_id is not None:
+            raise FactureImpossible(f"Le bon retour {retour.numero} est déjà déduit.")
+    return sorted(retours, key=lambda r: (r.date_retour, r.sequence))
+
+
+def exiger_depot(magasin):
+    depot = autre_depot(magasin)
+    if depot is not None:
+        raise FactureImpossible(f"Les factures achat se saisissent au dépôt central ({depot.nom}).")
 
 
 @transaction.atomic
@@ -106,6 +154,7 @@ def enregistrer_facture(
     date_reference,
     bons,
     auteur,
+    retours=(),
     date_entree=None,
     taux_remise_ex=Decimal("0"),
     frais=Decimal("0"),
@@ -113,7 +162,8 @@ def enregistrer_facture(
     ajustement=Decimal("0"),
     observation="",
 ):
-    """Enregistre la facture et marque ses bons « Facturé »."""
+    """Enregistre la facture, marque ses bons « Facturé » et ses bons retour « Déduit »."""
+    exiger_depot(magasin)
     reference_fournisseur = reference_fournisseur.strip()
     if not reference_fournisseur:
         raise FactureImpossible("Référence fournisseur (n° de sa facture) obligatoire.")
@@ -129,6 +179,7 @@ def enregistrer_facture(
     if frais < 0:
         raise FactureImpossible("Les frais supplémentaires ne peuvent pas être négatifs.")
     bons = controler(magasin, fournisseur, bons, verrouiller=True)
+    retours = controler_retours(magasin, fournisseur, retours, verrouiller=True)
     pays = magasin.pays
     timbre = timbre_par_defaut(fournisseur, pays) if timbre is None else timbre
     if timbre < 0:
@@ -136,6 +187,7 @@ def enregistrer_facture(
     totaux, _ = calculer_facture(
         bons,
         pays=pays,
+        retours=retours,
         taux_remise_ex=taux_remise_ex,
         frais=frais,
         timbre=timbre,
@@ -162,5 +214,8 @@ def enregistrer_facture(
     )
     BonReception.tous.filter(pk__in=[b.pk for b in bons]).update(
         facture=facture, etat=BonReception.Etat.FACTURE, numero_facture=reference_fournisseur
+    )
+    BonRetour.tous.filter(pk__in=[r.pk for r in retours]).update(
+        facture=facture, etat=BonRetour.Etat.FACTURE
     )
     return facture

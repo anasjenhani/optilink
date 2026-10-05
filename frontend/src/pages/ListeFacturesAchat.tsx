@@ -21,7 +21,7 @@ import { useState } from "react";
 import { type FactureAchatResume, type FiltresFactures, lireFacture, listerFactures } from "../api/facturesAchat";
 import { listerMagasins } from "../api/magasins";
 import { formaterTexte, type Monnaie } from "../api/monnaie";
-import { BlocTotaux, BoutonImprimer, dateCourte, TableBons, TableLignes, TableTva } from "./FactureAchat";
+import { BlocTotaux, BoutonImprimer, dateCourte, TableBons, TableLignes, TableRetours, TableTva } from "./FactureAchat";
 import { BANDEAU, BORDEAUX, useApaise } from "./RechercheClients";
 
 type Colonne = { cle: keyof FactureAchatResume; titre: string; filtre?: keyof FiltresFactures; montant?: boolean };
@@ -58,7 +58,8 @@ export function DetailFactureAchat({ id, monnaie, onFerme }: { id: string; monna
               du {dateCourte(f.date_reference)} · entrée le {dateCourte(f.date_entree)} · {f.magasin}
             </Typography>
             <TableBons bons={f.bons} monnaie={monnaie} />
-            <TableLignes lignes={f.lignes} monnaie={monnaie} />
+            {f.retours.length > 0 && <TableRetours retours={f.retours} monnaie={monnaie} />}
+            <TableLignes lignes={f.lignes} retours={f.lignes_retour} monnaie={monnaie} />
             <Stack direction={{ xs: "column", lg: "row" }} spacing={2} sx={{ alignItems: "flex-start" }}>
               <TableTva lignes={f.detail_tva} monnaie={monnaie} />
               <BlocTotaux

@@ -89,9 +89,10 @@ test("reçoit les verres d'un bon de commande, avec un verre non conforme", asyn
   expect(screen.getByText("Le motif est obligatoire pour un article non conforme.")).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Motif Verre progressif gauche"), { target: { value: "Rayé" } });
 
-  // 80 HT + FODEC 0,800 + TVA 19 % de 80,800 = 96,152 ; le verre refusé ne compte pas.
+  // 160 HT + FODEC 1,600 + TVA 19 % de 161,600 = 192,304 : le verre refusé compte aussi (le
+  // fournisseur le facture) ; il n'entre pas en stock et se renvoie par un bon retour.
   const totaux = screen.getByRole("table", { name: "Totaux du bon" });
-  expect(within(totaux).getByText(/96,152/)).toBeInTheDocument();
+  expect(within(totaux).getByText(/192,304/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Valider" }));
 
   expect(await screen.findByText(/Bon de réception T01-R2026-000001 enregistré/)).toBeInTheDocument();

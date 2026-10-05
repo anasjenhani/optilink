@@ -178,6 +178,31 @@ PERMISSIONS_FACTURES_ACHAT = {
     "Opticien": ["achats.view_factureachat"],
 }
 
+# Bons retour fournisseur : préparés au dépôt central par les achats (non conformes,
+# articles renvoyés) ; vus par la finance (déduits de la facture achat).
+BONS_RETOUR = ["achats.view_bonretour", "achats.add_bonretour"]
+PERMISSIONS_BONS_RETOUR = {
+    "Administrateur Global": BONS_RETOUR,
+    "Responsable de magasin": BONS_RETOUR,
+    "Achats & Gestionnaire de Stock": BONS_RETOUR,
+    "Comptabilité & Finance": ["achats.view_bonretour"],
+}
+
+# Transferts de stock : envoyés par le dépôt (achats), réceptionnés par le magasin
+# destinataire (« change » = réceptionner un transfert reçu).
+TRANSFERTS = [
+    "stock.view_transfertstock",
+    "stock.add_transfertstock",
+    "stock.change_transfertstock",
+]
+PERMISSIONS_TRANSFERTS = {
+    "Administrateur Global": TRANSFERTS,
+    "Responsable de magasin": TRANSFERTS,
+    "Achats & Gestionnaire de Stock": TRANSFERTS,
+    "Opticien": ["stock.view_transfertstock", "stock.change_transfertstock"],
+    "Vendeur": ["stock.view_transfertstock", "stock.change_transfertstock"],
+}
+
 # Casses de verres : déclarées par l'atelier, l'opticien et les responsables, qui
 # recommandent ensuite le verre ; vues par les achats et la finance (coût des casses).
 CASSES = ["achats.view_casseverre", "achats.add_casseverre"]
@@ -301,6 +326,8 @@ for _par_role in (
     PERMISSIONS_ACHATS,
     PERMISSIONS_RECEPTIONS,
     PERMISSIONS_FACTURES_ACHAT,
+    PERMISSIONS_BONS_RETOUR,
+    PERMISSIONS_TRANSFERTS,
     PERMISSIONS_TRESORERIE,
     PERMISSIONS_BANQUE,
     PERMISSIONS_RH,
