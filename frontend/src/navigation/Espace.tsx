@@ -90,10 +90,29 @@ function BoutonTuile({ tuile, onOuvrir }: { tuile: Tuile; onOuvrir: () => void }
 }
 
 /** La page d'un module : bandeau, recherche et grille de boutons. */
+function GrilleTuiles({ tuiles, onOuvrir }: { tuiles: Tuile[]; onOuvrir: (tuile: Tuile) => void }) {
+  return (
+    <Box
+      sx={{
+        display: "grid",
+        gap: 1.5,
+        gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+      }}
+    >
+      {tuiles.map((t) => (
+        <BoutonTuile key={t.id} tuile={t} onOuvrir={() => onOuvrir(t)} />
+      ))}
+    </Box>
+  );
+}
+
 function PageModule({ module, onOuvrir }: { module: Module; onOuvrir: (tuile: Tuile) => void }) {
   const [recherche, setRecherche] = useState("");
   const filtre = recherche.trim().toLocaleLowerCase("fr");
   const tuiles = module.tuiles.filter((t) => t.libelle.toLocaleLowerCase("fr").includes(filtre));
+  // Module rangé en catégories (Administration) : un sous-onglet par catégorie, comme dans /admin/.
+  const categories = [...new Set(module.tuiles.flatMap((t) => (t.categorie ? [t.categorie] : [])))];
+  const [categorieChoisie, setCategorie] = useState(categories[0] ?? "");
   return (
     <Stack spacing={2}>
       <Bandeau titre={module.libelle} />
@@ -109,17 +128,35 @@ function PageModule({ module, onOuvrir }: { module: Module; onOuvrir: (tuile: Tu
           sx={{ flexGrow: 1, bgcolor: "background.paper" }}
         />
       </Stack>
-      <Box
-        sx={{
-          display: "grid",
-          gap: 1.5,
-          gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-        }}
-      >
-        {tuiles.map((t) => (
-          <BoutonTuile key={t.id} tuile={t} onOuvrir={() => onOuvrir(t)} />
-        ))}
-      </Box>
+      {categories.length === 0 && <GrilleTuiles tuiles={tuiles} onOuvrir={onOuvrir} />}
+      {categories.length > 0 && !filtre && (
+        <>
+          <Tabs
+            value={categorieChoisie}
+            onChange={(_, valeur: string) => setCategorie(valeur)}
+            variant="scrollable"
+            aria-label={`Catégories ${module.libelle}`}
+            sx={{ borderBottom: 1, borderColor: "divider", minHeight: 40 }}
+          >
+            {categories.map((c) => (
+              <Tab key={c} value={c} label={c} sx={{ minHeight: 40, fontWeight: 600 }} />
+            ))}
+          </Tabs>
+          <GrilleTuiles tuiles={tuiles.filter((t) => t.categorie === categorieChoisie)} onOuvrir={onOuvrir} />
+        </>
+      )}
+      {categories.length > 0 &&
+        filtre &&
+        categories
+          .filter((c) => tuiles.some((t) => t.categorie === c))
+          .map((c) => (
+            <Stack key={c} spacing={1}>
+              <Typography variant="h6" component="h4" sx={{ fontWeight: 600 }}>
+                {c}
+              </Typography>
+              <GrilleTuiles tuiles={tuiles.filter((t) => t.categorie === c)} onOuvrir={onOuvrir} />
+            </Stack>
+          ))}
       {tuiles.length === 0 && <Typography color="text.secondary">Aucune fonction ne correspond.</Typography>}
     </Stack>
   );
