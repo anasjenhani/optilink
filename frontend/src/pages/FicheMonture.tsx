@@ -40,7 +40,9 @@ import {
   venteTTCDepuisHT,
   venteTTCDepuisMarge,
 } from "../api/fiches";
+import { formaterTexte } from "../api/monnaie";
 import { ChoixFournisseur } from "./BonReception";
+import { EtiquetteCodeBarres } from "./EtiquetteCodeBarres";
 import { BORDEAUX } from "./RechercheClients";
 
 const MONTURE_VIDE: Monture = {
@@ -132,50 +134,6 @@ function ChampCalcule({
       }}
       sx={{ width: 190, ...(lectureSeule || !onSaisi ? { bgcolor: "grey.100" } : {}) }}
     />
-  );
-}
-
-/** Barres d'un code EAN-13 (95 modules), ou null si le code n'est pas un EAN-13. */
-export function barresEan13(code: string): string | null {
-  if (!/^\d{13}$/.test(code)) return null;
-  const L = [
-    "0001101",
-    "0011001",
-    "0010011",
-    "0111101",
-    "0100011",
-    "0110001",
-    "0101111",
-    "0111011",
-    "0110111",
-    "0001011",
-  ];
-  const R = L.map((m) => [...m].map((b) => (b === "1" ? "0" : "1")).join(""));
-  const G = R.map((m) => [...m].reverse().join(""));
-  const PARITES = ["LLLLLL", "LLGLGG", "LLGGLG", "LLGGGL", "LGLLGG", "LGGLLG", "LGGGLL", "LGLGLG", "LGLGGL", "LGGLGL"];
-  const chiffres = [...code].map(Number);
-  const parite = PARITES[chiffres[0]];
-  let barres = "101";
-  chiffres.slice(1, 7).forEach((c, i) => (barres += parite[i] === "L" ? L[c] : G[c]));
-  barres += "01010";
-  chiffres.slice(7).forEach((c) => (barres += R[c]));
-  return barres + "101";
-}
-
-function CodeBarres({ code }: { code: string }) {
-  const barres = barresEan13(code);
-  if (!barres)
-    return <Typography color="text.secondary">Code « {code || "—"} » : pas un EAN-13, pas de dessin.</Typography>;
-  return (
-    <Box>
-      <svg width={95 * 2 + 20} height={90} role="img" aria-label={`Code-barres ${code}`}>
-        <rect width="100%" height="100%" fill="white" />
-        {[...barres].map((b, i) => (b === "1" ? <rect key={i} x={10 + i * 2} y={5} width={2} height={65} /> : null))}
-        <text x={105} y={85} textAnchor="middle" fontFamily="monospace" fontSize={14}>
-          {code}
-        </text>
-      </svg>
-    </Box>
   );
 }
 
@@ -559,7 +517,14 @@ export function FicheMonture({
               </Stack>
             )}
             {onglet === 1 && aVenir("Détail prix achat étranger (devise, frais d'approche)")}
-            {onglet === 2 && <CodeBarres code={entete.code_barres} />}
+            {onglet === 2 && (
+              <EtiquetteCodeBarres
+                code={chargee?.code_barres ?? ""}
+                titre={[monture.marque, monture.modele, monture.couleur].filter(Boolean).join(" ")}
+                reference={chargee?.reference ?? ""}
+                prix={chargee?.prix ? formaterTexte(chargee.prix.prix_vente_ttc, monnaie) : ""}
+              />
+            )}
             {onglet === 3 && texte("observation", "Observation", 700, { multiline: true, minRows: 4 })}
             {onglet === 4 &&
               (chargee ? (

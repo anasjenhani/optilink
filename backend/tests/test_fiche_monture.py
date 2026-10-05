@@ -119,7 +119,12 @@ def test_modification_et_controles(api, tunis, cartier):
         fiche(cartier, code_barres=cible.code_barres, monture={"matiere": "plastique"}),
         format="json",
     ).json()
-    assert "Cette référence est déjà celle d'un autre article." in erreurs["reference"]
+    assert erreurs["reference"] == [
+        "Cette référence est déjà celle d'un autre article (CL.S.40235-30N)."
+    ]
+    # Même référence en minuscules : refusée aussi.
+    minuscules = api.post(url(tunis), fiche(cartier, reference="cl.s.40235-30n"), format="json")
+    assert "CL.S.40235-30N" in minuscules.json()["reference"][0]
     assert cible.reference in erreurs["code_barres"][0]
     assert "matiere" in erreurs["monture"]
 
@@ -184,3 +189,16 @@ def test_suggestions_des_valeurs_deja_saisies(api, tunis, cartier):
     suggestions = api.get("/api/v1/fiches-articles/suggestions/").json()
     assert suggestions["marque"] == ["Celine"]
     assert suggestions["forme"] == ["Papillon"]
+
+
+def test_import_refuse_une_reference_en_minuscules(client_de, affecter, tunis, cartier):
+    from .test_imports import fichier, importer
+
+    Article.objects.create(reference="CL.S.1", libelle="Celine", famille="monture")
+    acheteur = client_de(affecter("acheteur", *DROITS, portee="magasin", magasin=tunis))
+    reponse = importer(
+        acheteur,
+        fichier(f"reference;libelle;famille;fournisseur\ncl.s.1;Celine;Monture;{cartier.code}\n"),
+        "catalogue",
+    )
+    assert "déjà celle de CL.S.1" in reponse.json()["erreurs"][0]["message"]

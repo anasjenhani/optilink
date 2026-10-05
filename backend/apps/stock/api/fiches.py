@@ -210,8 +210,12 @@ class FicheArticleSerializer(serializers.ModelSerializer):
 
     def validate_reference(self, valeur):
         valeur = valeur.strip()
-        if valeur and Article.objects.filter(reference=valeur).exclude(pk=self._pk).exists():
-            raise serializers.ValidationError("Cette référence est déjà celle d'un autre article.")
+        # Majuscules et minuscules comptent pour une même référence (CL.S.40235 = cl.s.40235).
+        autre = Article.objects.filter(reference__iexact=valeur).exclude(pk=self._pk).first()
+        if valeur and autre:
+            raise serializers.ValidationError(
+                f"Cette référence est déjà celle d'un autre article ({autre.reference})."
+            )
         return valeur
 
     def validate_code_barres(self, valeur):

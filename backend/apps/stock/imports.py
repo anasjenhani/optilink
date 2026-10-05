@@ -353,6 +353,12 @@ def _importer_article(ligne, pays, fournisseurs, taux, imposee=None):
                 f"code_barres : {code_barres} est déjà celui de {autre.first().reference}."
             )
     article = Article.objects.filter(reference=ligne["reference"]).first()
+    proche = Article.objects.filter(reference__iexact=ligne["reference"]).first()
+    if article is None and proche is not None:
+        raise ValidationError(
+            f"reference : {ligne['reference']} est déjà celle de {proche.reference} "
+            "(majuscules et minuscules comptent pour la même référence)."
+        )
     cree = article is None
     if cree:
         article = Article(reference=ligne["reference"])
