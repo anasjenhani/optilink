@@ -139,13 +139,7 @@ export const lirePresence = (magasin: string, date: string) =>
 export const enregistrerPresence = (
   magasin: string,
   date: string,
-  lignes: {
-    employe: string;
-    statut: StatutPointage;
-    arrivee: string | null;
-    depart: string | null;
-    commentaire: string;
-  }[],
+  lignes: { employe: string; statut: StatutPointage; arrivee: string | null; depart: string | null; commentaire: string }[],
 ) => appeler<LignePresence[]>("/api/v1/rh/presence/", { methode: "POST", corps: { magasin, date, lignes } });
 
 export const listerConges = (statut?: StatutConge) =>
@@ -175,13 +169,8 @@ export const verserAcompte = (id: string, mode: ModeVersement, reference: string
 export const listerPrimes = (statut?: StatutPrime) =>
   appeler<Page<Prime>>(`/api/v1/rh/primes/${statut ? `?statut=${statut}` : ""}`).then((p) => p.results);
 
-export const proposerPrime = (prime: {
-  employe: string;
-  type: TypePrime;
-  montant: string;
-  mois: string;
-  motif: string;
-}) => appeler<Prime>("/api/v1/rh/primes/", { methode: "POST", corps: prime });
+export const proposerPrime = (prime: { employe: string; type: TypePrime; montant: string; mois: string; motif: string }) =>
+  appeler<Prime>("/api/v1/rh/primes/", { methode: "POST", corps: prime });
 
 export const deciderPrime = (id: string, decision: "valider" | "refuser", commentaire: string) =>
   appeler<Prime>(`/api/v1/rh/primes/${id}/${decision}/`, { methode: "POST", corps: { commentaire } });

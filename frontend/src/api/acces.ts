@@ -62,7 +62,8 @@ export const creerProfil = (nom: string) =>
 export const modifierProfil = (id: number, privileges: string[]) =>
   appeler<Profil>(`/api/v1/securite/profils/${id}/`, { methode: "PATCH", corps: { privileges } });
 
-export const supprimerProfil = (id: number) => appeler<void>(`/api/v1/securite/profils/${id}/`, { methode: "DELETE" });
+export const supprimerProfil = (id: number) =>
+  appeler<void>(`/api/v1/securite/profils/${id}/`, { methode: "DELETE" });
 
 export const listerPrivileges = () => appeler<ModulePrivileges[]>("/api/v1/securite/privileges/");
 

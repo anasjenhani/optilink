@@ -57,14 +57,7 @@ export type FicheVisite = Vente & {
   prises_en_charge: { organisme: string; montant: string; numero_dossier: string; statut_libelle: string }[];
   etapes: { etape: string; etape_libelle: string; observation: string; le: string; par: string }[];
   verres_commandes: VerreCommande[];
-  avoirs: {
-    numero: string;
-    cree_le: string;
-    annulation: boolean;
-    motif: string;
-    total_ttc: string;
-    montant_rembourse: string;
-  }[];
+  avoirs: { numero: string; cree_le: string; annulation: boolean; motif: string; total_ttc: string; montant_rembourse: string }[];
 };
 
 export const ficheVisite = (id: string) => appeler<FicheVisite>(`/api/v1/ventes/${id}/fiche/`);
@@ -95,15 +88,7 @@ export type ResteVendeur = {
   nombre: number;
   total_ttc: string;
   reste: string;
-  commandes: {
-    id: string;
-    numero: string;
-    cree_le: string;
-    client: string | null;
-    telephone: string;
-    total_ttc: string;
-    reste: string;
-  }[];
+  commandes: { id: string; numero: string; cree_le: string; client: string | null; telephone: string; total_ttc: string; reste: string }[];
 };
 
 export const resteParVendeur = (magasin: string) =>

@@ -4,9 +4,11 @@
  */
 export type Monnaie = { devise: string; decimales: number };
 
-export const enUnites = (montant: string, decimales: number) => Math.round(Number(montant) * 10 ** decimales);
+export const enUnites = (montant: string, decimales: number) =>
+  Math.round(Number(montant) * 10 ** decimales);
 
-export const versTexte = (unites: number, decimales: number) => (unites / 10 ** decimales).toFixed(decimales);
+export const versTexte = (unites: number, decimales: number) =>
+  (unites / 10 ** decimales).toFixed(decimales);
 
 /** « 289,500 DT », « 149,00 € » : affichage selon la monnaie. */
 export function formater(unites: number, { devise, decimales }: Monnaie) {
