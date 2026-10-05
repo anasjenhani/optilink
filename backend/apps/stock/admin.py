@@ -1,7 +1,9 @@
 from django.contrib import admin
+from django.core.exceptions import PermissionDenied
 
 from core.admin_imports import AvecImport
 
+from .admin_saisie import saisir_inventaire
 from .models import (
     Article,
     Inventaire,
@@ -168,9 +170,12 @@ class InventaireAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return Inventaire.tous.select_related("magasin")
 
-    # Compté et validé dans l'application (la validation corrige le stock).
-    def has_add_permission(self, request):
-        return False
+    # « Ajouter » crée l'inventaire (et de premiers comptages) par le même service que
+    # l'application ; le comptage et la validation finale se poursuivent dans l'application.
+    def add_view(self, request, form_url="", extra_context=None):
+        if not self.has_add_permission(request):
+            raise PermissionDenied
+        return saisir_inventaire(self, request)
 
     def has_change_permission(self, request, obj=None):
         return False

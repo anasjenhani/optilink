@@ -243,7 +243,18 @@ def saisir_facture(model_admin, request):
     )
 
 
-def _page(model_admin, request, *, titre, aide, entete, lignes=None):
+def _page(
+    model_admin,
+    request,
+    *,
+    titre,
+    aide,
+    entete,
+    lignes=None,
+    titre_lignes="Articles reçus",
+    aide_lignes="Les lignes laissées vides sont ignorées. TVA vide : taux de l'article dans le "
+    "pays du magasin.",
+):
     opts = model_admin.model._meta
     contexte = {
         **model_admin.admin_site.each_context(request),
@@ -252,6 +263,8 @@ def _page(model_admin, request, *, titre, aide, entete, lignes=None):
         "aide": aide,
         "entete": entete,
         "lignes": lignes,
+        "titre_lignes": titre_lignes,
+        "aide_lignes": aide_lignes,
         "url_liste": reverse(f"admin:{opts.app_label}_{opts.model_name}_changelist"),
     }
     return TemplateResponse(request, "admin/saisie_achat.html", contexte)

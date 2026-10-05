@@ -181,3 +181,44 @@ def test_api_inventaire(tunis, reseau, monture, etui, affecter, client_de):
     ailleurs = affecter("lille", "stock.view_inventaire", portee="magasin", magasin=reseau["lille"])
     assert client_de(ailleurs).get("/api/v1/inventaires/").json()["count"] == 0
     assert client_de(ailleurs).get(url).status_code == 404
+
+
+def test_ajouter_un_inventaire_dans_l_admin(creer_utilisateur, client_de, tunis, monture, etui):
+    anas = creer_utilisateur("anas")
+    anas.is_staff = anas.is_superuser = True
+    anas.save()
+    navigateur = client_de(anas)
+    liste = navigateur.get("/admin/stock/inventaire/").content.decode()
+    assert 'href="/admin/stock/inventaire/add/"' in liste
+    assert navigateur.get("/admin/stock/inventaire/add/").status_code == 200
+
+    lignes = {
+        "lignes-TOTAL_FORMS": "3",
+        "lignes-INITIAL_FORMS": "0",
+        "lignes-MIN_NUM_FORMS": "0",
+        "lignes-MAX_NUM_FORMS": "1000",
+        "lignes-0-article": "6190000000017",
+        "lignes-0-quantite": "4",
+        "lignes-0-observation": "1 abîmé",
+        "lignes-1-article": "",
+        "lignes-1-quantite": "1",
+        "lignes-2-article": "",
+        "lignes-2-quantite": "1",
+    }
+    entete = {"magasin": tunis.pk, "famille": "divers", "observation": "Fin de mois"}
+    reponse = navigateur.post("/admin/stock/inventaire/add/", {**entete, **lignes})
+    assert reponse.status_code == 302, reponse.context["entete"].errors
+    inventaire = Inventaire.tous.get()
+    assert (inventaire.famille, inventaire.statut) == ("divers", Inventaire.Statut.EN_COURS)
+    ligne = inventaire.lignes.get()
+    assert (ligne.article, ligne.quantite_comptee, ligne.observation) == (etui, 4, "1 abîmé")
+
+    # Un second inventaire du même magasin est refusé avec le message du service.
+    refus = navigateur.post("/admin/stock/inventaire/add/", {**entete, **lignes})
+    assert "déjà en cours" in refus.content.decode()
+    hors = navigateur.post(
+        "/admin/stock/inventaire/add/",
+        {**entete, **lignes, "lignes-0-article": "INCONNU"},
+    )
+    assert "Aucun article" in hors.content.decode()
+    assert Inventaire.tous.count() == 1
