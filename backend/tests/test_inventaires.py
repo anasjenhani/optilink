@@ -8,6 +8,8 @@ from apps.stock.inventaires import (
     compter,
     etat,
     ouvrir_inventaire,
+    reprendre_comptage,
+    terminer_comptage,
     trouver_article,
     valider_inventaire,
 )
@@ -41,14 +43,23 @@ def test_valider_corrige_le_stock_et_compte_zero_les_absents(tunis, monture, etu
     assert (lignes["ETUI"]["quantite_comptee"], lignes["ETUI"]["ecart"]) == (2, -3)
     assert (lignes["MON-T"]["comptee"], lignes["MON-T"]["ecart"]) == (False, -3)
 
-    compter(inventaire, etui, quantite=6, remplacer=True)
-    valider_inventaire(inventaire, auteur=auteur)
+    with pytest.raises(InventaireImpossible, match="Terminez d'abord le comptage"):
+        valider_inventaire(inventaire, auteur=auteur, observation="ok")
+    terminer_comptage(inventaire, auteur=auteur)
+    # Vérification : le responsable recompte l'étui et corrige.
+    compter(inventaire, etui, quantite=6, remplacer=True, observation="6 en réserve")
+    with pytest.raises(InventaireImpossible, match="observation de la validation"):
+        valider_inventaire(inventaire, auteur=auteur, observation=" ")
+    valider_inventaire(inventaire, auteur=auteur, observation="Monture introuvable : perte")
     assert (stock_disponible(tunis, etui), stock_disponible(tunis, monture)) == (6, 0)
     ajustements = MouvementStock.tous.filter(type="ajustement", reference=inventaire.numero)
     assert sorted(ajustements.values_list("quantite", flat=True)) == [-3, 1]
 
     inventaire.refresh_from_db()
-    assert inventaire.statut == Inventaire.Statut.VALIDE
+    assert (inventaire.statut, inventaire.observation_validation) == (
+        Inventaire.Statut.VALIDE,
+        "Monture introuvable : perte",
+    )
     figees = {x.article.reference: (x.stock_theorique, x.ecart) for x in inventaire.lignes.all()}
     assert figees == {"ETUI": (5, 1), "MON-T": (3, -3)}
     with pytest.raises(InventaireImpossible, match="validé"):
@@ -61,7 +72,10 @@ def test_inventaire_d_une_famille(tunis, monture, etui, auteur):
         compter(inventaire, etui, quantite=1)
     assert [x["article"] for x in etat(inventaire)] == [monture]
     compter(inventaire, monture, quantite=3)
-    valider_inventaire(inventaire, auteur=auteur)
+    terminer_comptage(inventaire, auteur=auteur)
+    reprendre_comptage(inventaire)
+    terminer_comptage(inventaire, auteur=auteur)
+    valider_inventaire(inventaire, auteur=auteur, observation="RAS")
     assert not MouvementStock.tous.filter(type="ajustement").exists()
     assert stock_disponible(tunis, etui) == 5
 
@@ -145,9 +159,18 @@ def test_api_inventaire(tunis, reseau, monture, etui, affecter, client_de):
     )
     inconnu = vend.post(url + "compter/", {"code": "XYZ"}, format="json")
     assert inconnu.status_code == 400 and "XYZ" in inconnu.json()["detail"]
-    assert vend.post(url + "valider/").status_code == 403
+    assert vend.post(url + "valider/", {"observation": "x"}, format="json").status_code == 403
+    assert vend.post(url + "terminer/").status_code == 403
 
-    valide = resp.post(url + "valider/")
+    termine = resp.post(url + "terminer/")
+    assert termine.json()["statut"] == "a_verifier"
+    # Comptage terminé : le vendeur ne corrige plus, le responsable si.
+    assert vend.post(url + "compter/", {"code": "ETUI"}, format="json").status_code == 403
+    corrige = resp.post(
+        url + "compter/", {"code": "ETUI", "quantite": 4, "remplacer": True}, format="json"
+    )
+    assert corrige.status_code == 200, corrige.json()
+    valide = resp.post(url + "valider/", {"observation": "1 étui cassé"}, format="json")
     assert valide.status_code == 200 and valide.json()["statut"] == "valide"
     assert stock_disponible(tunis, etui) == 4
     liste = resp.get("/api/v1/inventaires/", {"statut": "valide"}).json()

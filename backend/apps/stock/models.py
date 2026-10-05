@@ -436,13 +436,15 @@ class Inventaire(ModeleDeBase):
     """Comptage physique du stock d'un magasin (ou du dépôt) : tout le stock, ou une partie
     (famille, marque, nature de monture, fournisseur).
 
-    Pendant le comptage, l'inventaire est « en cours » : on saisit les quantités comptées. À la
+    Trois étapes : le comptage (« en cours »), puis la vérification où le responsable contrôle
+    les écarts et corrige les quantités, puis la validation finale avec une observation. À la
     validation, l'écart entre le compté et le stock de l'application devient un mouvement
     d'ajustement ; un article en stock mais non compté est considéré comme absent (0).
     """
 
     class Statut(models.TextChoices):
         EN_COURS = "en_cours", "En cours de comptage"
+        A_VERIFIER = "a_verifier", "En vérification"
         VALIDE = "valide", "Validé"
         ANNULE = "annule", "Annulé"
 
@@ -475,6 +477,13 @@ class Inventaire(ModeleDeBase):
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
     )
     valide_le = models.DateTimeField(null=True, blank=True)
+    comptage_termine_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    comptage_termine_le = models.DateTimeField(null=True, blank=True)
+    observation_validation = models.TextField(
+        blank=True, help_text="Saisie à la validation finale (écarts expliqués, recomptages…)."
+    )
 
     objects = ParMagasinManager()
     tous = models.Manager()  # noqa: DJ012

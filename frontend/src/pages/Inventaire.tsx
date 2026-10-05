@@ -13,6 +13,9 @@ import FormControlLabel from "@mui/material/FormControlLabel";
 import IconButton from "@mui/material/IconButton";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
+import Step from "@mui/material/Step";
+import StepLabel from "@mui/material/StepLabel";
+import Stepper from "@mui/material/Stepper";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
@@ -39,6 +42,8 @@ import {
   type NatureMonture,
   ouvrirInventaire,
   retirerArticle,
+  reprendreComptage,
+  terminerComptage,
   validerInventaire,
 } from "../api/inventaires";
 import { depotDabord, listerMagasins } from "../api/magasins";
@@ -86,6 +91,7 @@ th { background: #eee; text-align: left; }
 <p>${e(inv.magasin)} · ${e(inv.perimetre)} · ${e(inv.statut_libelle)}${inv.valide_le ? ` le ${new Date(inv.valide_le).toLocaleString("fr-FR")} par ${e(inv.valide_par)}` : ""}</p>
 <table><thead><tr><th>Code</th><th>Article</th><th class="n">Ancienne qté</th><th class="n">Quantité</th><th class="n">Écart</th><th>Observation</th></tr></thead><tbody>${lignes}</tbody></table>
 ${inv.observation ? `<p>Observation : ${e(inv.observation)}</p>` : ""}
+${inv.observation_validation ? `<p>Observation de validation : ${e(inv.observation_validation)}</p>` : ""}
 </body></html>`;
 }
 
@@ -156,8 +162,9 @@ function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventai
   const inventaire = useQuery({ queryKey: ["inventaires", id], queryFn: () => lireInventaire(id) });
   const [code, setCode] = useState("");
   const [quantite, setQuantite] = useState("1");
-  const [ecartsSeuls, setEcartsSeuls] = useState(false);
+  const [ecartsChoisi, setEcartsSeuls] = useState<boolean | null>(null);
   const [confirmer, setConfirmer] = useState<"valider" | "annuler" | null>(null);
+  const [observationFinale, setObservationFinale] = useState("");
   const [dernier, setDernier] = useState("");
   const majour = (inv: InventaireComplet) => {
     queryClient.setQueryData(["inventaires", id], inv);
@@ -177,8 +184,14 @@ function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventai
     },
   });
   const retrait = useMutation({ mutationFn: (article: string) => retirerArticle(id, article), onSuccess: majour });
+  const etape = useMutation({
+    mutationFn: (quoi: "terminer" | "reprendre") =>
+      quoi === "terminer" ? terminerComptage(id) : reprendreComptage(id),
+    onSuccess: majour,
+  });
   const fin = useMutation({
-    mutationFn: (quoi: "valider" | "annuler") => (quoi === "valider" ? validerInventaire(id) : annulerInventaire(id)),
+    mutationFn: (quoi: "valider" | "annuler") =>
+      quoi === "valider" ? validerInventaire(id, observationFinale) : annulerInventaire(id),
     onSuccess: (inv) => {
       majour(inv);
       setConfirmer(null);
@@ -190,12 +203,15 @@ function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventai
     return inventaire.isError ? <Alert severity="error">{inventaire.error.message}</Alert> : null;
   }
   const enCours = inv.statut === "en_cours";
-  const peutCompter = enCours && droits.compter;
+  const aVerifier = inv.statut === "a_verifier";
+  // Pendant la vérification, seul le responsable corrige les quantités.
+  const peutCompter = (enCours && droits.compter) || (aVerifier && droits.valider);
+  const ecartsSeuls = ecartsChoisi ?? aVerifier;
   const lignes = ecartsSeuls ? inv.lignes.filter((l) => l.ecart !== 0) : inv.lignes;
   const somme = (f: (l: LigneInventaire) => number) => inv.lignes.reduce((s, l) => s + f(l), 0);
   const avecEcart = inv.lignes.filter((l) => l.ecart !== 0).length;
   const nonComptes = inv.lignes.filter((l) => !l.comptee).length;
-  const erreur = comptage.error ?? retrait.error ?? fin.error;
+  const erreur = comptage.error ?? retrait.error ?? etape.error ?? fin.error;
   const scanner = () => {
     if (code.trim()) comptage.mutate({ code: code.trim(), quantite: Number(quantite) || 1 });
   };
@@ -208,16 +224,32 @@ function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventai
         {inv.cree_par}
         {inv.observation && ` · ${inv.observation}`}
       </Typography>
+      {inv.statut !== "annule" && (
+        <Stepper activeStep={enCours ? 0 : aVerifier ? 1 : 3} sx={{ maxWidth: 760 }}>
+          {["Comptage", "Vérification et correction", "Validation finale"].map((t) => (
+            <Step key={t}>
+              <StepLabel>{t}</StepLabel>
+            </Step>
+          ))}
+        </Stepper>
+      )}
       <Typography
-        color={enCours ? "warning.main" : inv.statut === "valide" ? "success.main" : "text.secondary"}
+        color={enCours || aVerifier ? "warning.main" : inv.statut === "valide" ? "success.main" : "text.secondary"}
         sx={{ fontWeight: 700 }}
       >
         {enCours
-          ? "Comptage en cours : le stock sera corrigé à la validation. Un article non compté sera mis à 0."
-          : inv.statut === "valide"
-            ? `Validé le ${new Date(inv.valide_le!).toLocaleString("fr-FR")} par ${inv.valide_par} : le stock a été corrigé.`
-            : "Inventaire annulé : le stock n'a pas été modifié."}
+          ? "Comptage en cours. Un article en stock non compté sera mis à 0 à la validation."
+          : aVerifier
+            ? `Comptage terminé le ${new Date(inv.comptage_termine_le!).toLocaleString("fr-FR")} par ${inv.comptage_termine_par} : vérifiez les écarts, corrigez les quantités recomptées et notez les observations.`
+            : inv.statut === "valide"
+              ? `Validé le ${new Date(inv.valide_le!).toLocaleString("fr-FR")} par ${inv.valide_par} : le stock a été corrigé.`
+              : "Inventaire annulé : le stock n'a pas été modifié."}
       </Typography>
+      {inv.observation_validation && (
+        <Typography variant="body2">
+          <strong>Observation de validation :</strong> {inv.observation_validation}
+        </Typography>
+      )}
       {peutCompter && (
         <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: "wrap", alignItems: "center" }}>
           <TextField
@@ -366,33 +398,56 @@ function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventai
         <Button startIcon={<Print />} onClick={() => imprimer(pageInventaire(inv))}>
           Imprimer
         </Button>
+        {(enCours || aVerifier) && droits.valider && (
+          <Button color="error" onClick={() => setConfirmer("annuler")}>
+            Annuler l'inventaire
+          </Button>
+        )}
         {enCours && droits.valider && (
+          <Button variant="contained" disabled={etape.isPending} onClick={() => etape.mutate("terminer")}>
+            Terminer le comptage
+          </Button>
+        )}
+        {aVerifier && droits.valider && (
           <>
-            <Button color="error" onClick={() => setConfirmer("annuler")}>
-              Annuler l'inventaire
+            <Button sx={BOUTON} disabled={etape.isPending} onClick={() => etape.mutate("reprendre")}>
+              Reprendre le comptage
             </Button>
             <Button variant="contained" onClick={() => setConfirmer("valider")}>
-              Valider
+              Validation finale
             </Button>
           </>
         )}
       </Stack>
       {confirmer && (
         <Dialog open onClose={() => setConfirmer(null)}>
-          <DialogTitle>{confirmer === "valider" ? "Valider l'inventaire ?" : "Annuler l'inventaire ?"}</DialogTitle>
+          <DialogTitle>{confirmer === "valider" ? "Validation finale" : "Annuler l'inventaire ?"}</DialogTitle>
           <DialogContent>
-            <Typography>
-              {confirmer === "valider"
-                ? `Le stock de ${inv.magasin} sera corrigé pour ${avecEcart} article(s) avec écart${nonComptes ? `, dont ${nonComptes} non compté(s) mis à 0` : ""}. Cette opération est définitive.`
-                : "Le comptage sera abandonné ; le stock ne change pas."}
-            </Typography>
+            <Stack spacing={2}>
+              <Typography>
+                {confirmer === "valider"
+                  ? `Le stock de ${inv.magasin} sera corrigé pour ${avecEcart} article(s) avec écart${nonComptes ? `, dont ${nonComptes} non compté(s) mis à 0` : ""}. Cette opération est définitive.`
+                  : "Le comptage sera abandonné ; le stock ne change pas."}
+              </Typography>
+              {confirmer === "valider" && (
+                <TextField
+                  label="Observation de validation"
+                  required
+                  multiline
+                  minRows={3}
+                  value={observationFinale}
+                  onChange={(e) => setObservationFinale(e.target.value)}
+                  helperText="Obligatoire : explication des écarts, recomptages, articles abîmés…"
+                />
+              )}
+            </Stack>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setConfirmer(null)}>Retour</Button>
             <Button
               variant="contained"
               color={confirmer === "valider" ? "primary" : "error"}
-              disabled={fin.isPending}
+              disabled={fin.isPending || (confirmer === "valider" && !observationFinale.trim())}
               onClick={() => fin.mutate(confirmer)}
             >
               {confirmer === "valider" ? "Valider et corriger le stock" : "Annuler l'inventaire"}
@@ -576,7 +631,11 @@ export function Inventaire({ droits }: { droits: DroitsInventaire }) {
                 <TableCell
                   sx={{
                     color:
-                      i.statut === "en_cours" ? "warning.main" : i.statut === "valide" ? "success.main" : undefined,
+                      i.statut === "en_cours" || i.statut === "a_verifier"
+                        ? "warning.main"
+                        : i.statut === "valide"
+                          ? "success.main"
+                          : undefined,
                     fontWeight: 700,
                   }}
                 >

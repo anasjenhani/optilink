@@ -27,7 +27,8 @@ export type InventaireResume = {
   fournisseur: string;
   /** Ce que couvre l'inventaire : « Monture · Ray-Ban · Lunette Solaire ». */
   perimetre: string;
-  statut: "en_cours" | "valide" | "annule";
+  /** Comptage, puis vérification (contrôle et correction des écarts), puis validation finale. */
+  statut: "en_cours" | "a_verifier" | "valide" | "annule";
   statut_libelle: string;
   articles_comptes: number;
   observation: string;
@@ -35,6 +36,9 @@ export type InventaireResume = {
   cree_le: string;
   valide_par: string;
   valide_le: string | null;
+  comptage_termine_par: string;
+  comptage_termine_le: string | null;
+  observation_validation: string;
 };
 
 export type Inventaire = InventaireResume & { lignes: LigneInventaire[] };
@@ -79,8 +83,14 @@ export const compterArticle = (id: string, comptage: Comptage) =>
 export const retirerArticle = (id: string, article: string) =>
   appeler<Inventaire>(`/api/v1/inventaires/${id}/retirer/`, { methode: "POST", corps: { article } });
 
-export const validerInventaire = (id: string) =>
-  appeler<Inventaire>(`/api/v1/inventaires/${id}/valider/`, { methode: "POST" });
+export const terminerComptage = (id: string) =>
+  appeler<Inventaire>(`/api/v1/inventaires/${id}/terminer/`, { methode: "POST" });
+
+export const reprendreComptage = (id: string) =>
+  appeler<Inventaire>(`/api/v1/inventaires/${id}/reprendre/`, { methode: "POST" });
+
+export const validerInventaire = (id: string, observation: string) =>
+  appeler<Inventaire>(`/api/v1/inventaires/${id}/valider/`, { methode: "POST", corps: { observation } });
 
 export const annulerInventaire = (id: string) =>
   appeler<Inventaire>(`/api/v1/inventaires/${id}/annuler/`, { methode: "POST" });

@@ -84,7 +84,9 @@ PRIVILEGES = {
         "stock.view_inventaire": "Voir les inventaires",
         "stock.add_inventaire": "Ouvrir un inventaire",
         "stock.change_inventaire": "Compter les articles d'un inventaire en cours",
-        "stock.valider_inventaire": "Valider un inventaire (corrige le stock selon le comptage)",
+        "stock.valider_inventaire": (
+            "Vérifier, corriger et valider un inventaire (corrige le stock selon le comptage)"
+        ),
     },
     "Achats": {
         "achats.view_fournisseur": "Voir les fournisseurs",

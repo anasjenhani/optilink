@@ -20,6 +20,10 @@ class InventaireImpossible(Exception):
     pass
 
 
+# Statuts où le stock n'est pas encore corrigé et les quantités se modifient encore.
+OUVERTS = (Inventaire.Statut.EN_COURS, Inventaire.Statut.A_VERIFIER)
+
+
 def _filtre(inventaire, prefixe=""):
     """Q des articles que couvre l'inventaire (``prefixe`` : « article__ » depuis un mouvement)."""
     criteres = {f"{prefixe}sur_commande": False}
@@ -63,7 +67,7 @@ def etat(inventaire):
     Pour un inventaire validé, ce sont les lignes enregistrées à la validation.
     """
     lignes = list(inventaire.lignes.select_related("article").order_by("article__reference"))
-    if inventaire.statut != Inventaire.Statut.EN_COURS:
+    if inventaire.statut not in OUVERTS:
         return [
             {
                 "article": ligne.article,
@@ -118,7 +122,7 @@ def ouvrir_inventaire(
         famille = Article.Famille.MONTURE
     # Un comptage à la fois par magasin : deux inventaires sur les mêmes articles
     # corrigeraient deux fois le stock.
-    deja = Inventaire.tous.filter(magasin=magasin, statut=Inventaire.Statut.EN_COURS).first()
+    deja = Inventaire.tous.filter(magasin=magasin, statut__in=OUVERTS).first()
     if deja:
         raise InventaireImpossible(
             f"L'inventaire {deja.numero} est déjà en cours dans ce magasin : "
@@ -140,8 +144,8 @@ def ouvrir_inventaire(
     )
 
 
-def _exiger_en_cours(inventaire):
-    if inventaire.statut != Inventaire.Statut.EN_COURS:
+def _exiger(inventaire, *statuts):
+    if inventaire.statut not in statuts:
         raise InventaireImpossible(
             f"L'inventaire {inventaire.numero} est {inventaire.get_statut_display().lower()}."
         )
@@ -163,9 +167,12 @@ def trouver_article(code):
 
 @transaction.atomic
 def compter(inventaire, article, *, quantite, remplacer=False, observation=None):
-    """Ajoute ``quantite`` au compté de l'article, ou la met à la place si ``remplacer``."""
+    """Ajoute ``quantite`` au compté de l'article, ou la met à la place si ``remplacer``.
+
+    Pendant la vérification, c'est la correction d'une quantité (recomptage) par le responsable.
+    """
     inventaire = Inventaire.tous.select_for_update().get(pk=inventaire.pk)
-    _exiger_en_cours(inventaire)
+    _exiger(inventaire, *OUVERTS)
     if article.sur_commande:
         raise InventaireImpossible(
             f"{article.libelle} est commandé pour chaque client : il n'est pas tenu en stock."
@@ -190,15 +197,47 @@ def compter(inventaire, article, *, quantite, remplacer=False, observation=None)
 def retirer(inventaire, article):
     """Retire un article compté par erreur (il redevient « non compté »)."""
     inventaire = Inventaire.tous.select_for_update().get(pk=inventaire.pk)
-    _exiger_en_cours(inventaire)
+    _exiger(inventaire, *OUVERTS)
     LigneInventaire.objects.filter(inventaire=inventaire, article=article).delete()
 
 
 @transaction.atomic
-def valider_inventaire(inventaire, *, auteur):
-    """Corrige le stock : un mouvement d'ajustement par article dont le compté diffère."""
+def terminer_comptage(inventaire, *, auteur):
+    """Fin du comptage : l'inventaire passe en vérification (contrôle et correction des écarts)."""
     inventaire = Inventaire.tous.select_for_update().get(pk=inventaire.pk)
-    _exiger_en_cours(inventaire)
+    _exiger(inventaire, Inventaire.Statut.EN_COURS)
+    inventaire.statut = Inventaire.Statut.A_VERIFIER
+    inventaire.comptage_termine_par = auteur
+    inventaire.comptage_termine_le = timezone.now()
+    inventaire.save(
+        update_fields=["statut", "comptage_termine_par", "comptage_termine_le", "modifie_le"]
+    )
+    return inventaire
+
+
+@transaction.atomic
+def reprendre_comptage(inventaire):
+    """Retour au comptage depuis la vérification (une zone à recompter entièrement…)."""
+    inventaire = Inventaire.tous.select_for_update().get(pk=inventaire.pk)
+    _exiger(inventaire, Inventaire.Statut.A_VERIFIER)
+    inventaire.statut = Inventaire.Statut.EN_COURS
+    inventaire.save(update_fields=["statut", "modifie_le"])
+    return inventaire
+
+
+@transaction.atomic
+def valider_inventaire(inventaire, *, auteur, observation):
+    """Validation finale, après vérification : un mouvement d'ajustement par article dont le
+    compté diffère du stock, et l'observation de validation."""
+    inventaire = Inventaire.tous.select_for_update().get(pk=inventaire.pk)
+    if inventaire.statut == Inventaire.Statut.EN_COURS:
+        raise InventaireImpossible(
+            "Terminez d'abord le comptage : les écarts se vérifient avant la validation finale."
+        )
+    _exiger(inventaire, Inventaire.Statut.A_VERIFIER)
+    observation = observation.strip()
+    if not observation:
+        raise InventaireImpossible("Saisissez l'observation de la validation finale.")
     for ligne in etat(inventaire):
         LigneInventaire.objects.update_or_create(
             inventaire=inventaire,
@@ -221,14 +260,23 @@ def valider_inventaire(inventaire, *, auteur):
     inventaire.statut = Inventaire.Statut.VALIDE
     inventaire.valide_par = auteur
     inventaire.valide_le = timezone.now()
-    inventaire.save(update_fields=["statut", "valide_par", "valide_le", "modifie_le"])
+    inventaire.observation_validation = observation
+    inventaire.save(
+        update_fields=[
+            "statut",
+            "valide_par",
+            "valide_le",
+            "observation_validation",
+            "modifie_le",
+        ]
+    )
     return inventaire
 
 
 @transaction.atomic
 def annuler_inventaire(inventaire):
     inventaire = Inventaire.tous.select_for_update().get(pk=inventaire.pk)
-    _exiger_en_cours(inventaire)
+    _exiger(inventaire, *OUVERTS)
     inventaire.statut = Inventaire.Statut.ANNULE
     inventaire.save(update_fields=["statut", "modifie_le"])
     return inventaire

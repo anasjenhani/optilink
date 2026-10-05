@@ -19,7 +19,9 @@ from ..inventaires import (
     etat,
     ouvrir_inventaire,
     perimetre,
+    reprendre_comptage,
     retirer,
+    terminer_comptage,
     trouver_article,
     valider_inventaire,
 )
@@ -58,6 +60,12 @@ class ComptageInventaireSerializer(serializers.Serializer):
     )
 
 
+class ValidationSerializer(serializers.Serializer):
+    observation = serializers.CharField(
+        allow_blank=True, help_text="Observation de la validation finale (obligatoire)."
+    )
+
+
 class RetraitSerializer(serializers.Serializer):
     article = serializers.UUIDField()
 
@@ -92,6 +100,7 @@ class InventaireListeSerializer(serializers.ModelSerializer):
     articles_comptes = serializers.IntegerField(read_only=True)
     cree_par = serializers.SerializerMethodField()
     valide_par = serializers.SerializerMethodField()
+    comptage_termine_par = serializers.SerializerMethodField()
 
     class Meta:
         model = Inventaire
@@ -114,6 +123,9 @@ class InventaireListeSerializer(serializers.ModelSerializer):
             "cree_le",
             "valide_par",
             "valide_le",
+            "comptage_termine_par",
+            "comptage_termine_le",
+            "observation_validation",
         ]
 
     def get_famille_libelle(self, inventaire) -> str:
@@ -127,6 +139,9 @@ class InventaireListeSerializer(serializers.ModelSerializer):
 
     def get_valide_par(self, inventaire) -> str:
         return _nom(inventaire.valide_par)
+
+    def get_comptage_termine_par(self, inventaire) -> str:
+        return _nom(inventaire.comptage_termine_par)
 
 
 class InventaireSerializer(InventaireListeSerializer):
@@ -156,6 +171,8 @@ class InventaireViewSet(
         "choix": "stock.add_inventaire",
         "compter": "stock.change_inventaire",
         "retirer": "stock.change_inventaire",
+        "terminer": "stock.valider_inventaire",
+        "reprendre": "stock.valider_inventaire",
         "valider": "stock.valider_inventaire",
         "annuler": "stock.valider_inventaire",
     }
@@ -172,7 +189,9 @@ class InventaireViewSet(
 
     def get_queryset(self):
         inventaires = (
-            Inventaire.objects.select_related("magasin", "fournisseur", "cree_par", "valide_par")
+            Inventaire.objects.select_related(
+                "magasin", "fournisseur", "cree_par", "valide_par", "comptage_termine_par"
+            )
             .annotate(articles_comptes=Count("lignes", filter=Q(lignes__quantite_comptee__gt=0)))
             .order_by("-cree_le")
         )
@@ -251,6 +270,7 @@ class InventaireViewSet(
     def compter(self, request, public_id=None):
         """Compte un article : scan (``code``) ou choix dans la liste (``article``)."""
         inventaire = self.get_object()
+        self._exiger_correction(request, inventaire)
         saisie = ComptageInventaireSerializer(data=request.data)
         saisie.is_valid(raise_exception=True)
         donnees = saisie.validated_data
@@ -276,6 +296,7 @@ class InventaireViewSet(
     @action(detail=True, methods=["post"])
     def retirer(self, request, public_id=None):
         inventaire = self.get_object()
+        self._exiger_correction(request, inventaire)
         saisie = RetraitSerializer(data=request.data)
         saisie.is_valid(raise_exception=True)
         article = Article.objects.filter(public_id=saisie.validated_data["article"]).first()
@@ -287,13 +308,48 @@ class InventaireViewSet(
             return self._erreur(erreur)
         return self._reponse(inventaire)
 
+    def _exiger_correction(self, request, inventaire):
+        """En vérification, seul le responsable (droit de valider) corrige les quantités."""
+        if inventaire.statut == Inventaire.Statut.A_VERIFIER and not request.user.has_perm(
+            "stock.valider_inventaire", inventaire
+        ):
+            raise PermissionDenied(
+                "Le comptage est terminé : seul le responsable corrige les quantités."
+            )
+
     @extend_schema(request=None, responses={200: InventaireSerializer})
     @action(detail=True, methods=["post"])
-    def valider(self, request, public_id=None):
-        """Corrige le stock du magasin selon le comptage."""
+    def terminer(self, request, public_id=None):
+        """Fin du comptage : passage en vérification des écarts."""
         inventaire = self.get_object()
         try:
-            valider_inventaire(inventaire, auteur=request.user)
+            terminer_comptage(inventaire, auteur=request.user)
+        except InventaireImpossible as erreur:
+            return self._erreur(erreur)
+        return self._reponse(inventaire)
+
+    @extend_schema(request=None, responses={200: InventaireSerializer})
+    @action(detail=True, methods=["post"])
+    def reprendre(self, request, public_id=None):
+        """Retour au comptage depuis la vérification."""
+        inventaire = self.get_object()
+        try:
+            reprendre_comptage(inventaire)
+        except InventaireImpossible as erreur:
+            return self._erreur(erreur)
+        return self._reponse(inventaire)
+
+    @extend_schema(request=ValidationSerializer, responses={200: InventaireSerializer})
+    @action(detail=True, methods=["post"])
+    def valider(self, request, public_id=None):
+        """Validation finale : corrige le stock du magasin selon les quantités vérifiées."""
+        inventaire = self.get_object()
+        saisie = ValidationSerializer(data=request.data)
+        saisie.is_valid(raise_exception=True)
+        try:
+            valider_inventaire(
+                inventaire, auteur=request.user, observation=saisie.validated_data["observation"]
+            )
         except InventaireImpossible as erreur:
             return self._erreur(erreur)
         return self._reponse(inventaire)

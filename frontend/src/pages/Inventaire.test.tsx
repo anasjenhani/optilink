@@ -45,6 +45,9 @@ const INVENTAIRE = {
   cree_le: "2026-10-05T10:00:00Z",
   valide_par: "",
   valide_le: null,
+  comptage_termine_par: "",
+  comptage_termine_le: null,
+  observation_validation: "",
   lignes: [ETUI],
 };
 const COMPTE = {
@@ -64,6 +67,14 @@ function afficher(droits = { ouvrir: true, compter: true, valider: true }) {
       if (url === "/api/v1/inventaires/choix/")
         return json({ marques: ["Ray-Ban"], fournisseurs: [{ id: "f1", nom: "Luxottica" }] });
       if (url.endsWith("/compter/")) return json(COMPTE);
+      if (url.endsWith("/terminer/"))
+        return json({
+          ...COMPTE,
+          statut: "a_verifier",
+          statut_libelle: "En vérification",
+          comptage_termine_par: "resp",
+          comptage_termine_le: "2026-10-05T11:00:00Z",
+        });
       if (url.endsWith("/valider/"))
         return json({
           ...COMPTE,
@@ -113,10 +124,17 @@ test("ouvrir un inventaire au dépôt, scanner, voir l'écart puis valider", asy
   expect(appels.find((a) => a.url.endsWith("/compter/"))?.corps).toEqual({ code: "6190000000017", quantite: 4 });
   expect(screen.getByText("Étui : 4 compté(s)")).toBeInTheDocument();
 
-  fireEvent.click(screen.getByRole("button", { name: "Valider" }));
+  fireEvent.click(screen.getByRole("button", { name: "Terminer le comptage" }));
+  expect(await screen.findByText(/vérifiez les écarts/)).toBeInTheDocument();
+  expect(screen.getByRole("checkbox", { name: "Afficher seulement les écarts" })).toBeChecked();
+  fireEvent.click(screen.getByRole("button", { name: "Validation finale" }));
   expect(screen.getByText(/corrigé pour 1 article\(s\) avec écart/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Valider et corriger le stock" }));
+  const valider = screen.getByRole("button", { name: "Valider et corriger le stock" });
+  expect(valider).toBeDisabled();
+  fireEvent.change(screen.getByLabelText(/Observation de validation/), { target: { value: "1 étui cassé" } });
+  fireEvent.click(valider);
   expect(await screen.findByText(/le stock a été corrigé/)).toBeInTheDocument();
+  expect(appels.find((a) => a.url.endsWith("/valider/"))?.corps).toEqual({ observation: "1 étui cassé" });
   expect(screen.queryByLabelText("Code barre ou référence")).not.toBeInTheDocument();
 });
 
@@ -124,6 +142,6 @@ test("un vendeur compte mais ne peut ni ouvrir ni valider", async () => {
   afficher({ ouvrir: false, compter: true, valider: false });
   fireEvent.click(await screen.findByText("DEP-IN2026-000001"));
   expect(await screen.findByLabelText("Code barre ou référence")).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Valider" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Terminer le comptage" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Créer un inventaire" })).not.toBeInTheDocument();
 });
