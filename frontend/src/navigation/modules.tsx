@@ -526,7 +526,9 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Remboursement Client",
           icone: Undo,
           couleur: COULEURS.vert,
-          ecran: si(a("ventes.add_avoir"), () => <Avoirs />),
+          ecran: si(a("ventes.add_avoir") || a("ventes.view_avoir"), () => (
+            <Avoirs emettre={a("ventes.add_avoir")} consulter={a("ventes.view_avoir")} />
+          )),
         },
         {
           id: "avance-personnel",
@@ -637,14 +639,18 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Facture",
           icone: Description,
           couleur: COULEURS.violet,
-          ecran: si(a("ventes.add_facture"), () => <Factures />),
+          ecran: si(a("ventes.add_facture") || a("ventes.view_facture"), () => (
+            <Factures generer={a("ventes.add_facture")} consulter={a("ventes.view_facture")} />
+          )),
         },
         {
           id: "avoir",
           libelle: "Avoir",
           icone: Undo,
           couleur: COULEURS.rouge,
-          ecran: si(a("ventes.add_avoir"), () => <Avoirs />),
+          ecran: si(a("ventes.add_avoir") || a("ventes.view_avoir"), () => (
+            <Avoirs emettre={a("ventes.add_avoir")} consulter={a("ventes.view_avoir")} />
+          )),
         },
         aVenir("ca-previsionnel", "CA Prévisionnel", TableChart, COULEURS.bleu),
         aVenir("cloture-mois", "Clôture Mois", Lock, COULEURS.brun),
