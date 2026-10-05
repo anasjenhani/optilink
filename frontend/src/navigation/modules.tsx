@@ -81,6 +81,7 @@ import { Magasins } from "../pages/Magasins";
 import { RessourcesHumaines } from "../pages/RessourcesHumaines";
 import { Suivi } from "../pages/Suivi";
 import { ListeTransferts, TransfertStock } from "../pages/Transferts";
+import { Inventaire } from "../pages/Inventaire";
 import { ConsulterVisite, HistoriqueVisites, Visites } from "../pages/Visites";
 import { Tresorerie } from "../pages/Tresorerie";
 import { VenteComptoir } from "../pages/VenteComptoir";
@@ -479,7 +480,21 @@ export function modulesPour(session: EtatSession): Module[] {
             <Fournisseurs droits={{ creer: a("achats.add_fournisseur"), modifier: a("achats.change_fournisseur") }} />
           )),
         },
-        aVenir("inventaire", "Inventaire", Sync, COULEURS.bleu),
+        {
+          id: "inventaire",
+          libelle: "Inventaire",
+          icone: Sync,
+          couleur: COULEURS.bleu,
+          ecran: si(a("stock.view_inventaire"), () => (
+            <Inventaire
+              droits={{
+                ouvrir: a("stock.add_inventaire"),
+                compter: a("stock.change_inventaire"),
+                valider: a("stock.valider_inventaire"),
+              }}
+            />
+          )),
+        },
         aVenir("stock-date", "Stock à la Date", CalendarMonth, COULEURS.vert),
         aVenir("config-stock", "Config Stock", Widgets, COULEURS.brun),
         aVenir("stock-depense", "Stock Article Dépense", Inventory2, COULEURS.jaune),

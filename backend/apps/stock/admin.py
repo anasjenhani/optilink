@@ -4,7 +4,9 @@ from core.admin_imports import AvecImport
 
 from .models import (
     Article,
+    Inventaire,
     Lentille,
+    LigneInventaire,
     LigneTransfert,
     Monture,
     MouvementStock,
@@ -140,6 +142,33 @@ class TransfertStockAdmin(admin.ModelAdmin):
         return TransfertStock.tous.select_related("magasin", "destination")
 
     # Envoyé par le dépôt et réceptionné par le magasin dans l'application (stock des deux).
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class LigneInventaireInline(admin.TabularInline):
+    model = LigneInventaire
+    extra = 0
+    can_delete = False
+
+
+@admin.register(Inventaire)
+class InventaireAdmin(admin.ModelAdmin):
+    list_display = ("numero", "cree_le", "magasin", "famille", "statut", "valide_le")
+    list_filter = ("statut", "magasin", "famille")
+    search_fields = ("numero",)
+    inlines = [LigneInventaireInline]
+
+    def get_queryset(self, request):
+        return Inventaire.tous.select_related("magasin")
+
+    # Compté et validé dans l'application (la validation corrige le stock).
     def has_add_permission(self, request):
         return False
 

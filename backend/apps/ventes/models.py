@@ -18,6 +18,7 @@ class TypeDocument(models.TextChoices):
     FACTURE_ACHAT = "fac_achat", "Facture achat"
     BON_RETOUR = "bon_retour", "Bon retour fournisseur"
     TRANSFERT = "transfert", "Transfert de stock"
+    INVENTAIRE = "inventaire", "Inventaire"
 
 
 # Préfixe du numéro : M01-T2026-000001 pour un ticket, M01-F2026-000001 pour une facture,
@@ -35,6 +36,7 @@ PREFIXES = {
     TypeDocument.FACTURE_ACHAT: "FA",
     TypeDocument.BON_RETOUR: "BR",
     TypeDocument.TRANSFERT: "TR",
+    TypeDocument.INVENTAIRE: "IN",
 }
 
 
