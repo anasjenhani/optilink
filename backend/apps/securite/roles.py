@@ -155,6 +155,19 @@ PERMISSIONS_ACHATS = {
     "Commande": COMMANDES_FOURNISSEURS,
 }
 
+# Bons de réception : saisis à l'arrivée de la marchandise par ceux qui réceptionnent les
+# commandes fournisseurs ; vus par la finance (factures fournisseurs à rapprocher).
+RECEPTIONS = ["achats.view_bonreception", "achats.add_bonreception"]
+PERMISSIONS_RECEPTIONS = {
+    "Administrateur Global": RECEPTIONS,
+    "Responsable de magasin": RECEPTIONS,
+    "Opticien": RECEPTIONS,
+    "Achats & Gestionnaire de Stock": RECEPTIONS,
+    "Atelier": RECEPTIONS,
+    "Commande": RECEPTIONS,
+    "Comptabilité & Finance": ["achats.view_bonreception"],
+}
+
 # Casses de verres : déclarées par l'atelier, l'opticien et les responsables, qui
 # recommandent ensuite le verre ; vues par les achats et la finance (coût des casses).
 CASSES = ["achats.view_casseverre", "achats.add_casseverre"]
@@ -276,6 +289,7 @@ for _par_role in (
     PERMISSIONS_DEVIS,
     PERMISSIONS_AVOIRS,
     PERMISSIONS_ACHATS,
+    PERMISSIONS_RECEPTIONS,
     PERMISSIONS_TRESORERIE,
     PERMISSIONS_BANQUE,
     PERMISSIONS_RH,

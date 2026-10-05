@@ -5,14 +5,66 @@ from core.managers import ParMagasinManager
 from core.models import ModeleDeBase
 
 
-class Fournisseur(ModeleDeBase):
-    """Fournisseur (laboratoire de verres…), commun à tout le réseau."""
+def _code_fournisseur_suivant():
+    dernier = Fournisseur.objects.aggregate(dernier=models.Max("code"))["dernier"]
+    return (dernier or 0) + 1
 
-    nom = models.CharField(max_length=200, unique=True)
+
+class Fournisseur(ModeleDeBase):
+    """Fournisseur (laboratoire de verres, marque de montures…), commun à tout le réseau."""
+
+    class FormeJuridique(models.TextChoices):
+        SARL = "SARL", "SARL"
+        SUARL = "SUARL", "SUARL"
+        SA = "SA", "SA"
+        SNC = "SNC", "SNC"
+        PERSONNE_PHYSIQUE = "PP", "Personne physique"
+
+    class RegimeTva(models.TextChoices):
+        ASSUJETTI = "assujetti", "Payer la TVA"
+        EXPORT = "export", "Export"
+        EXONERATION = "exoneration", "Exonération"
+
+    code = models.PositiveIntegerField(
+        unique=True, null=True, editable=False, help_text="Numéro attribué à la création : 1, 2, 3…"
+    )
+    nom = models.CharField("raison sociale", max_length=200, unique=True)
+    notre_code = models.CharField("notre code chez le fournisseur", max_length=40, blank=True)
+    responsable = models.CharField(max_length=100, blank=True)
+    fournisseur_verres = models.BooleanField(
+        "fournisseur de verres", default=False, help_text="Laboratoire : verres commandés."
+    )
     pays = models.ForeignKey("reseau.Pays", on_delete=models.PROTECT, related_name="+")
-    telephone = models.CharField(max_length=30, blank=True)
-    email = models.EmailField(blank=True)
+    # Information financière
+    matricule_fiscal = models.CharField(max_length=30, blank=True)
+    registre_commerce = models.CharField("registre de commerce", max_length=30, blank=True)
+    code_douane = models.CharField(max_length=30, blank=True)
+    forme_juridique = models.CharField(max_length=5, choices=FormeJuridique.choices, blank=True)
+    capital_social = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    timbre_fiscal = models.BooleanField(default=True)
+    assujetti = models.BooleanField("assujetti à la TVA", default=True)
+    fodec = models.BooleanField(
+        "FODEC", default=False, help_text="Ajoute 1 % du montant net HT, soumis à la TVA."
+    )
+    regime_tva = models.CharField(
+        "régime de TVA", max_length=12, choices=RegimeTva.choices, default=RegimeTva.ASSUJETTI
+    )
+    numero_exoneration = models.CharField("n° d'exonération", max_length=40, blank=True)
+    exoneration_du = models.DateField(null=True, blank=True)
+    exoneration_au = models.DateField(null=True, blank=True)
+    # Adresse et contacts
     adresse = models.TextField(blank=True)
+    code_postal = models.CharField(max_length=10, blank=True)
+    ville = models.CharField(max_length=100, blank=True)
+    telephone = models.CharField("téléphone", max_length=30, blank=True)
+    telephone_2 = models.CharField("téléphone 2", max_length=30, blank=True)
+    fax = models.CharField(max_length=30, blank=True)
+    email = models.EmailField("e-mail", blank=True)
+    site_web = models.URLField("site web", blank=True)
+    # Identité bancaire
+    banque = models.CharField(max_length=100, blank=True)
+    rib = models.CharField("RIB", max_length=34, blank=True)
+    observation = models.TextField(blank=True)
     est_actif = models.BooleanField(default=True)
 
     class Meta:
@@ -21,6 +73,11 @@ class Fournisseur(ModeleDeBase):
 
     def __str__(self):
         return self.nom
+
+    def save(self, *args, **kwargs):
+        if self.code is None:
+            self.code = _code_fournisseur_suivant()
+        super().save(*args, **kwargs)
 
 
 class CommandeFournisseur(ModeleDeBase):
@@ -127,3 +184,100 @@ class CasseVerre(ModeleDeBase):
     @property
     def magasin_id(self):
         return self.vente.magasin_id
+
+
+class BonReception(ModeleDeBase):
+    """Bon de réception achat : la marchandise livrée par un fournisseur, avec son BL.
+
+    À l'enregistrement, les articles de stock conformes entrent en stock du magasin et les
+    verres commandés pour des clients sont marqués reçus. Un bon enregistré ne se modifie plus.
+    """
+
+    class Etat(models.TextChoices):
+        NON_FACTURE = "non_facture", "Non facturé"
+        FACTURE = "facture", "Facturé"
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    fournisseur = models.ForeignKey(
+        Fournisseur, on_delete=models.PROTECT, related_name="receptions"
+    )
+    date_saisie = models.DateField("date de saisie")
+    numero_bl = models.CharField("n° BL fournisseur", max_length=60)
+    date_bl = models.DateField("date BL fournisseur")
+    observation = models.TextField(blank=True)
+    taux_remise_ex = models.DecimalField(
+        "remise exceptionnelle (%)", max_digits=5, decimal_places=2, default=0
+    )
+    etat = models.CharField(max_length=12, choices=Etat.choices, default=Etat.NON_FACTURE)
+    numero_facture = models.CharField("n° facture fournisseur", max_length=60, blank=True)
+    total_ht = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    total_remise = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    remise_ex = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    total_net_ht = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    total_fodec = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    total_tva = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    total_ttc = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    cree_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-annee", "-sequence"]
+        verbose_name = "bon de réception"
+        verbose_name_plural = "bons de réception"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="bon_reception_sans_doublon"
+            ),
+            models.UniqueConstraint(
+                fields=["fournisseur", "numero_bl"], name="bl_fournisseur_une_fois"
+            ),
+        ]
+
+    def __str__(self):
+        return self.numero
+
+
+class LigneReception(models.Model):
+    """Article reçu. Une ligne non conforme (verre faux, monture abîmée…) n'entre pas."""
+
+    class Oeil(models.TextChoices):
+        DROIT = "D", "Œil droit"
+        GAUCHE = "G", "Œil gauche"
+
+    bon = models.ForeignKey(BonReception, on_delete=models.CASCADE, related_name="lignes")
+    article = models.ForeignKey("stock.Article", on_delete=models.PROTECT, related_name="+")
+    ligne_commande = models.ForeignKey(
+        LigneCommandeFournisseur,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="receptions",
+        help_text="Verre commandé pour un client.",
+    )
+    oeil = models.CharField("œil", max_length=1, choices=Oeil.choices, blank=True)
+    designation = models.CharField("désignation", max_length=300)
+    quantite = models.PositiveIntegerField("quantité")
+    prix_achat_ht = models.DecimalField("prix d'achat HT", max_digits=12, decimal_places=3)
+    taux_remise = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    taux_tva = models.DecimalField(max_digits=5, decimal_places=2)
+    net_ht = models.DecimalField(max_digits=14, decimal_places=3)
+    montant_ttc = models.DecimalField(max_digits=14, decimal_places=3)
+    non_conforme = models.BooleanField(default=False)
+    motif = models.CharField(max_length=200, blank=True)
+    numero_serie = models.CharField("n° de série", max_length=60, blank=True)
+    numero_lot = models.CharField("n° de lot", max_length=60, blank=True)
+    date_peremption = models.DateField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "ligne de réception"
+        verbose_name_plural = "lignes de réception"
+
+    def __str__(self):
+        return f"{self.quantite} × {self.designation}"
