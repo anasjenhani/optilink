@@ -25,18 +25,14 @@ export type SaisieDevis = {
 };
 
 export const listerDevis = (client: string) =>
-  appeler<{ results: Devis[] }>(`/api/v1/devis/?${new URLSearchParams({ client })}`).then(
-    (page) => page.results,
-  );
+  appeler<{ results: Devis[] }>(`/api/v1/devis/?${new URLSearchParams({ client })}`).then((page) => page.results);
 
 export const etablirDevis = (saisie: SaisieDevis) =>
   appeler<Devis>("/api/v1/devis/", { methode: "POST", corps: saisie });
 
-export const accepterDevis = (id: string) =>
-  appeler<Devis>(`/api/v1/devis/${id}/accepter/`, { methode: "POST" });
+export const accepterDevis = (id: string) => appeler<Devis>(`/api/v1/devis/${id}/accepter/`, { methode: "POST" });
 
-export const refuserDevis = (id: string) =>
-  appeler<Devis>(`/api/v1/devis/${id}/refuser/`, { methode: "POST" });
+export const refuserDevis = (id: string) => appeler<Devis>(`/api/v1/devis/${id}/refuser/`, { methode: "POST" });
 
 /** Encaisse au prix du devis ; renvoie le ticket. En commande, le paiement est l'acompte. */
 export const encaisserDevis = (

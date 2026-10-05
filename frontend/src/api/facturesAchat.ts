@@ -1,5 +1,6 @@
 import type { BonReceptionResume } from "./achats";
 import { appeler } from "./client";
+import type { BonRetourResume } from "./retours";
 
 export type BonFacture = BonReceptionResume & {
   total_remise: string;
@@ -24,6 +25,25 @@ export type LigneFacture = {
   taux_tva: string;
   montant_ttc: string;
   numero_serie: string;
+  non_conforme: boolean;
+};
+
+/** Ligne d'un bon retour : elle se déduit de la facture. */
+export type LigneRetourFacture = {
+  bon: string;
+  article: string;
+  famille: string;
+  code: string;
+  designation: string;
+  quantite: number;
+  prix_achat_ht: string;
+  montant_ht: string;
+  taux_remise: string;
+  montant_remise: string;
+  net_ht: string;
+  taux_tva: string;
+  montant_ttc: string;
+  motif: string;
 };
 
 export type LigneTva = { taux: string; base_ht: string; montant_tva: string };
@@ -66,7 +86,9 @@ export type FactureAchat = FactureAchatResume &
     ajustement: string;
     observation: string;
     bons: BonFacture[];
+    retours: BonRetourResume[];
     lignes: LigneFacture[];
+    lignes_retour: LigneRetourFacture[];
     detail_tva: LigneTva[];
   };
 
@@ -76,6 +98,7 @@ export type SaisieFactureAchat = {
   reference_fournisseur: string;
   date_reference: string;
   bons: string[];
+  retours: string[];
   taux_remise_ex: string;
   frais_supplementaires: string;
   timbre_fiscal: string | null;
@@ -83,14 +106,18 @@ export type SaisieFactureAchat = {
   observation: string;
 };
 
-export type Apercu = Totaux & { detail_tva: LigneTva[]; lignes: LigneFacture[] };
+export type Apercu = Totaux & {
+  detail_tva: LigneTva[];
+  lignes: LigneFacture[];
+  lignes_retour: LigneRetourFacture[];
+};
 
 export type FiltresFactures = Partial<
   Record<"numero" | "fournisseur" | "reference_fournisseur" | "paiement" | "du" | "au", string>
 >;
 
 export const bonsAFacturer = (magasin: string, fournisseur: string) =>
-  appeler<{ timbre_fiscal: string; bons: BonFacture[] }>(
+  appeler<{ timbre_fiscal: string; bons: BonFacture[]; retours: BonRetourResume[] }>(
     `/api/v1/factures-achat/a-facturer/?${new URLSearchParams({ magasin, fournisseur })}`,
   );
 

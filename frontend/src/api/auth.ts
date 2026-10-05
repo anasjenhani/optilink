@@ -21,14 +21,13 @@ export const connecter = (identifiant: string, mot_de_passe: string) =>
 export const verifierCode = (code: string) =>
   appeler<EtatSession>("/api/v1/auth/mfa/verification/", { methode: "POST", corps: { code } });
 
-export const demarrerActivation = () =>
-  appeler<ActivationMfa>("/api/v1/auth/mfa/activation/", { methode: "POST" });
+export const demarrerActivation = () => appeler<ActivationMfa>("/api/v1/auth/mfa/activation/", { methode: "POST" });
 
 export const confirmerActivation = (code: string) =>
-  appeler<{ codes_secours: string[]; session: EtatSession }>(
-    "/api/v1/auth/mfa/activation/confirmation/",
-    { methode: "POST", corps: { code } },
-  );
+  appeler<{ codes_secours: string[]; session: EtatSession }>("/api/v1/auth/mfa/activation/confirmation/", {
+    methode: "POST",
+    corps: { code },
+  });
 
 export const deconnecter = () => appeler<void>("/api/v1/auth/deconnexion/", { methode: "POST" });
 

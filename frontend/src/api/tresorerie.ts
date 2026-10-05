@@ -172,9 +172,7 @@ export const creerCompte = (compte: {
 }) => appeler<Compte>("/api/v1/tresorerie/comptes/", { methode: "POST", corps: compte });
 
 export const listerOperations = (statut?: StatutOperation) =>
-  appeler<Page<Operation>>(`/api/v1/tresorerie/operations/${statut ? `?statut=${statut}` : ""}`).then(
-    (p) => p.results,
-  );
+  appeler<Page<Operation>>(`/api/v1/tresorerie/operations/${statut ? `?statut=${statut}` : ""}`).then((p) => p.results);
 
 export const listerARemettre = () => appeler<ARemettre[]>("/api/v1/tresorerie/operations/a-remettre/");
 

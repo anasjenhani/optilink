@@ -58,9 +58,7 @@ export type SaisiePrescription = Omit<Prescription, "id" | "saisie_par"> & {
 };
 
 export const chercherClients = (recherche: string) =>
-  appeler<{ results: Client[] }>(`/api/v1/clients/?${new URLSearchParams({ recherche })}`).then(
-    (page) => page.results,
-  );
+  appeler<{ results: Client[] }>(`/api/v1/clients/?${new URLSearchParams({ recherche })}`).then((page) => page.results);
 
 /** Filtres par colonne du tableau « Recherche Clients ». */
 export type FiltresClients = {
@@ -88,9 +86,9 @@ export const modifierClient = (id: string, saisie: Partial<SaisieClient>) =>
 
 /** Chaque appel est journalisé côté serveur comme une consultation du dossier. */
 export const listerPrescriptions = (client: string) =>
-  appeler<{ results: Prescription[] }>(
-    `/api/v1/prescriptions/?${new URLSearchParams({ client })}`,
-  ).then((page) => page.results);
+  appeler<{ results: Prescription[] }>(`/api/v1/prescriptions/?${new URLSearchParams({ client })}`).then(
+    (page) => page.results,
+  );
 
 export const saisirPrescription = (saisie: SaisiePrescription) =>
   appeler<Prescription>("/api/v1/prescriptions/", { methode: "POST", corps: saisie });

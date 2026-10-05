@@ -1,13 +1,6 @@
 import { appeler } from "./client";
 
-export type Etat =
-  | "a_commander"
-  | "commandee"
-  | "montage"
-  | "controle"
-  | "contact_client"
-  | "livree"
-  | "instance";
+export type Etat = "a_commander" | "commandee" | "montage" | "controle" | "contact_client" | "livree" | "instance";
 
 /** Étapes du suivi qualité, dans l'ordre de l'atelier. */
 export const ETATS: { valeur: Etat; libelle: string }[] = [
