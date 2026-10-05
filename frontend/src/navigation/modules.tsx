@@ -178,7 +178,11 @@ export function modulesPour(session: EtatSession): Module[] {
     />
   ));
   const stock = (famille: "monture" | "verre" | "lentille" | "divers") =>
-    si(voirCatalogue, () => <Catalogue familleInitiale={famille} importer={imports.catalogue} />);
+    si(voirCatalogue, () => <Catalogue familleInitiale={famille} importer={imports.catalogue} fiche={droitsFiche} />);
+  const droitsFiche = {
+    creer: a("stock.add_article") && a("stock.add_prixarticle"),
+    modifier: a("stock.change_article") && a("stock.add_prixarticle") && a("stock.change_prixarticle"),
+  };
   const imports = {
     catalogue: a("stock.add_article") && a("stock.change_prixarticle"),
     stock: a("stock.add_mouvementstock"),

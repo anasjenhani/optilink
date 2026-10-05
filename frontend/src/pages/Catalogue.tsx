@@ -16,17 +16,26 @@ import { useState } from "react";
 import { chercherArticles, FAMILLES, type Famille } from "../api/caisse";
 import { listerMagasins } from "../api/magasins";
 import { formaterTexte } from "../api/monnaie";
+import Button from "@mui/material/Button";
+import { FicheMonture } from "./FicheMonture";
 import { BoutonImport } from "./Imports";
 
-/** Catalogue par famille, avec prix et stock du magasin. Les articles se créent dans l'administration. */
+/**
+ * Catalogue par famille, avec prix et stock du magasin. Les montures s'ouvrent sur leur fiche (création et
+ * modification) ; les autres articles se créent dans l'administration ou par import.
+ */
 export function Catalogue({
   familleInitiale = "monture",
   importer = false,
+  fiche = { creer: false, modifier: false },
 }: {
   familleInitiale?: Famille | "";
   /** Bouton d'import : des verres sur la liste des verres, du catalogue sinon. */
   importer?: boolean;
+  /** Droits sur la fiche monture. */
+  fiche?: { creer: boolean; modifier: boolean };
 }) {
+  const [ouverte, setOuverte] = useState<string | null | undefined>(undefined);
   const [magasinChoisi, setMagasin] = useState("");
   const [famille, setFamille] = useState<Famille | "">(familleInitiale);
   const [recherche, setRecherche] = useState("");
@@ -78,6 +87,11 @@ export function Catalogue({
               onChange={(e) => setRecherche(e.target.value)}
               sx={{ flexGrow: 1 }}
             />
+            {fiche.creer && famille === "monture" && (
+              <Button variant="contained" onClick={() => setOuverte(null)} sx={{ whiteSpace: "nowrap" }}>
+                Nouvelle monture
+              </Button>
+            )}
             {importer && (
               <BoutonImport
                 type={famille === "verre" ? "verres" : "catalogue"}
@@ -99,7 +113,12 @@ export function Catalogue({
               </TableHead>
               <TableBody>
                 {articles.data?.map((article) => (
-                  <TableRow key={article.id}>
+                  <TableRow
+                    key={article.id}
+                    hover={article.famille === "monture"}
+                    onClick={article.famille === "monture" ? () => setOuverte(article.id) : undefined}
+                    sx={article.famille === "monture" ? { cursor: "pointer" } : undefined}
+                  >
                     <TableCell>{article.reference}</TableCell>
                     <TableCell>
                       {article.libelle}
@@ -117,6 +136,16 @@ export function Catalogue({
             </Table>
           )}
         </Stack>
+        {ouverte !== undefined && magasin && (
+          <FicheMonture
+            article={ouverte}
+            magasin={magasin}
+            monnaie={monnaie}
+            tauxTva={pays?.taux_tva ?? []}
+            lectureSeule={ouverte !== null && !fiche.modifier}
+            onFerme={() => setOuverte(undefined)}
+          />
+        )}
       </CardContent>
     </Card>
   );

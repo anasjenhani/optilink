@@ -4,6 +4,10 @@ from ..models import Magasin, Pays, Societe
 
 
 class PaysSerializer(serializers.ModelSerializer):
+    taux_tva = serializers.SlugRelatedField(
+        slug_field="taux", many=True, read_only=True, help_text="Taux de TVA du pays."
+    )
+
     class Meta:
         model = Pays
         fields = [
@@ -15,6 +19,7 @@ class PaysSerializer(serializers.ModelSerializer):
             "indicatif_telephonique",
             "timbre_fiscal",
             "libelle_identifiant_prescripteur",
+            "taux_tva",
         ]
 
 

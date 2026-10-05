@@ -26,8 +26,9 @@ def decrire(fiche):
         morceaux += [
             fiche.couleur,
             mesures,
+            fiche.get_matiere_display() if fiche.matiere else "",
             fiche.get_type_display() if fiche.type else "",
-            "solaire" if fiche.solaire else "",
+            "" if fiche.categorie == Monture.Categorie.OPTIQUE else fiche.get_categorie_display(),
         ]
     elif isinstance(fiche, Verre):
         morceaux = [

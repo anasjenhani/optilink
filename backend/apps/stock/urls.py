@@ -1,11 +1,13 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
+from .api.fiches import FicheArticleViewSet
 from .api.imports import ImportCatalogueView, ImportStockView, ImportVerresView, ModeleImportView
 from .api.views import ArticleViewSet, MouvementStockViewSet
 
 router = DefaultRouter()
 router.register("articles", ArticleViewSet, basename="article")
+router.register("fiches-articles", FicheArticleViewSet, basename="fiche-article")
 router.register("mouvements-stock", MouvementStockViewSet, basename="mouvement-stock")
 
 urlpatterns = [
