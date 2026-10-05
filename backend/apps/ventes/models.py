@@ -14,17 +14,20 @@ class TypeDocument(models.TextChoices):
     DEVIS = "devis", "Devis"
     AVOIR = "avoir", "Avoir"
     ACHAT = "achat", "Commande fournisseur"
+    RECEPTION = "reception", "Bon de réception"
 
 
 # Préfixe du numéro : M01-T2026-000001 pour un ticket, M01-F2026-000001 pour une facture,
 # M01-D2026-000001 pour un devis, M01-A2026-000001 pour un avoir, M01-C2026-000001 pour une
-# commande fournisseur. Chaque type de document a sa propre suite de numéros.
+# commande fournisseur, M01-R2026-000001 pour un bon de réception. Chaque type de document a
+# sa propre suite de numéros.
 PREFIXES = {
     TypeDocument.TICKET: "T",
     TypeDocument.FACTURE: "F",
     TypeDocument.DEVIS: "D",
     TypeDocument.AVOIR: "A",
     TypeDocument.ACHAT: "C",
+    TypeDocument.RECEPTION: "R",
 }
 
 

@@ -35,9 +35,9 @@ const COLONNES: Colonne[] = [
   { cle: "observation", titre: "Observation" },
 ];
 
-const BORDEAUX = "#8b1414";
-const BANDEAU = "linear-gradient(180deg, #c45a5a 0%, #9b1c1c 45%, #7a1010 100%)";
-const BOUTON = {
+export const BORDEAUX = "#8b1414";
+export const BANDEAU = "linear-gradient(180deg, #c45a5a 0%, #9b1c1c 45%, #7a1010 100%)";
+export const BOUTON = {
   color: "text.primary",
   textTransform: "none",
   border: 1,
@@ -47,7 +47,7 @@ const BOUTON = {
 } as const;
 
 /** Attend que la saisie se calme avant d'interroger le serveur. */
-function useApaise<T>(valeur: T, delai = 300) {
+export function useApaise<T>(valeur: T, delai = 300) {
   const [apaisee, setApaisee] = useState(valeur);
   useEffect(() => {
     const minuterie = setTimeout(() => setApaisee(valeur), delai);
