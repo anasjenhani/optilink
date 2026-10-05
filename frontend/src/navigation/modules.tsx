@@ -178,7 +178,7 @@ export function modulesPour(session: EtatSession): Module[] {
     />
   ));
   const stock = (famille: "monture" | "verre" | "lentille" | "divers") =>
-    si(voirCatalogue, () => <Catalogue familleInitiale={famille} />);
+    si(voirCatalogue, () => <Catalogue familleInitiale={famille} importer={imports.catalogue} />);
   const imports = {
     catalogue: a("stock.add_article") && a("stock.change_prixarticle"),
     stock: a("stock.add_mouvementstock"),
@@ -261,7 +261,7 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Import Clients",
           icone: UploadFile,
           couleur: COULEURS.bleu,
-          ecran: si(imports.clients, () => <Imports droits={{ catalogue: false, stock: false, clients: true }} />),
+          ecran: si(imports.clients, () => <Imports types={["clients"]} />),
         },
         {
           id: "commandes",
@@ -385,14 +385,14 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Bon Entrée",
           icone: ArrowDownward,
           couleur: COULEURS.rouge,
-          ecran: si(imports.stock, () => <Imports droits={{ catalogue: false, stock: true }} />),
+          ecran: si(imports.stock, () => <Imports types={["stock"]} />),
         },
         {
           id: "import-catalogue",
           libelle: "Import Catalogue",
           icone: UploadFile,
           couleur: COULEURS.bleu,
-          ecran: si(imports.catalogue, () => <Imports droits={{ catalogue: true, stock: false }} />),
+          ecran: si(imports.catalogue, () => <Imports types={["catalogue"]} />),
         },
         {
           id: "commande-verres",
@@ -415,7 +415,7 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Liste des Bons de Réception",
           icone: ListAlt,
           couleur: COULEURS.brun,
-          ecran: si(a("achats.view_bonreception"), () => <ListeReceptions />),
+          ecran: si(a("achats.view_bonreception"), () => <ListeReceptions importer={a("achats.add_bonreception")} />),
         },
         {
           id: "fournisseurs",

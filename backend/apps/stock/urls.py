@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from .api.imports import ImportCatalogueView, ImportStockView
+from .api.imports import ImportCatalogueView, ImportStockView, ImportVerresView, ModeleImportView
 from .api.views import ArticleViewSet, MouvementStockViewSet
 
 router = DefaultRouter()
@@ -11,5 +11,11 @@ router.register("mouvements-stock", MouvementStockViewSet, basename="mouvement-s
 urlpatterns = [
     path("imports/catalogue/", ImportCatalogueView.as_view(), name="import-catalogue"),
     path("imports/stock/", ImportStockView.as_view(), name="import-stock"),
+    path("imports/verres/", ImportVerresView.as_view(), name="import-verres"),
+    path(
+        "imports/modeles/<str:modele>.<str:extension>",
+        ModeleImportView.as_view(),
+        name="modele-import",
+    ),
     *router.urls,
 ]

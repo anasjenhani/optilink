@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from core.admin_imports import AvecImport
+
 from .models import (
     BonReception,
     CommandeFournisseur,
@@ -10,7 +12,8 @@ from .models import (
 
 
 @admin.register(Fournisseur)
-class FournisseurAdmin(admin.ModelAdmin):
+class FournisseurAdmin(AvecImport, admin.ModelAdmin):
+    imports = ("fournisseurs",)
     list_display = ("code", "nom", "ville", "telephone", "fournisseur_verres", "est_actif")
     list_filter = ("pays", "fournisseur_verres", "est_actif")
     search_fields = ("nom", "=code", "matricule_fiscal")
@@ -23,7 +26,8 @@ class LigneReceptionInline(admin.TabularInline):
 
 
 @admin.register(BonReception)
-class BonReceptionAdmin(admin.ModelAdmin):
+class BonReceptionAdmin(AvecImport, admin.ModelAdmin):
+    imports = ("receptions",)
     list_display = ("numero", "date_saisie", "fournisseur", "numero_bl", "etat", "total_ttc")
     list_filter = ("magasin", "etat", "fournisseur")
     search_fields = ("numero", "numero_bl", "numero_facture")

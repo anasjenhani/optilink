@@ -21,6 +21,7 @@ import { useState } from "react";
 import { lireReception, listerReceptions, type BonReceptionResume, type FiltresReceptions } from "../api/achats";
 import { listerMagasins } from "../api/magasins";
 import { formaterTexte, type Monnaie } from "../api/monnaie";
+import { BoutonImport } from "./Imports";
 import { BANDEAU, BORDEAUX, useApaise } from "./RechercheClients";
 
 const dateCourte = (iso: string) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString("fr-FR") : "");
@@ -108,7 +109,7 @@ function DetailReception({ id, monnaie, onFerme }: { id: string; monnaie: Monnai
 }
 
 /** « Liste des Bons de Réceptions » : filtres sous les colonnes, totaux en pied de tableau. */
-export function ListeReceptions() {
+export function ListeReceptions({ importer = false }: { importer?: boolean }) {
   const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
   const pays = magasins.data?.[0]?.pays;
   const monnaie: Monnaie = pays ? { devise: pays.devise, decimales: pays.decimales } : { devise: "TND", decimales: 3 };
@@ -141,7 +142,7 @@ export function ListeReceptions() {
           Liste des Bons de Réceptions
         </Typography>
       </Box>
-      <Stack direction="row" spacing={2}>
+      <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
         <TextField
           size="small"
           type="date"
@@ -158,6 +159,7 @@ export function ListeReceptions() {
           onChange={(e) => filtrer("au", e.target.value)}
           slotProps={{ inputLabel: { shrink: true } }}
         />
+        {importer && <BoutonImport type="receptions" libelle="Importer des bons" />}
       </Stack>
       {bons.isError && <Alert severity="error">{bons.error.message}</Alert>}
       <TableContainer sx={{ maxHeight: 520, border: 1, borderColor: "grey.400", borderRadius: 1 }}>

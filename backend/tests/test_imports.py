@@ -162,7 +162,7 @@ def test_erreurs_signalees_par_ligne_et_rien_enregistre(logisticien, fournisseur
     assert reponse.status_code == 400
     erreurs = {e["ligne"]: e["message"] for e in reponse.json()["erreurs"]}
     assert set(erreurs) == {3, 4, 6, 7}
-    assert "Inconnu SA" in erreurs[3] and "administration" in erreurs[3]
+    assert "Inconnu SA" in erreurs[3] and "écran Fournisseurs" in erreurs[3]
     assert "tva" in erreurs[4] and "19" in erreurs[4]
     assert "déjà en ligne 2" in erreurs[6]
     assert "Accessoire" in erreurs[7]
