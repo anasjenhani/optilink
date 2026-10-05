@@ -203,6 +203,22 @@ PERMISSIONS_TRANSFERTS = {
     "Vendeur": ["stock.view_transfertstock", "stock.change_transfertstock"],
 }
 
+# Inventaires : ouverts et validés par les responsables et le stock ; tout le personnel du
+# magasin peut compter (« change » = saisir le comptage).
+INVENTAIRES = [
+    "stock.view_inventaire",
+    "stock.add_inventaire",
+    "stock.change_inventaire",
+    "stock.valider_inventaire",
+]
+PERMISSIONS_INVENTAIRES = {
+    "Administrateur Global": INVENTAIRES,
+    "Responsable de magasin": INVENTAIRES,
+    "Achats & Gestionnaire de Stock": INVENTAIRES,
+    "Opticien": ["stock.view_inventaire", "stock.change_inventaire"],
+    "Vendeur": ["stock.view_inventaire", "stock.change_inventaire"],
+}
+
 # Casses de verres : déclarées par l'atelier, l'opticien et les responsables, qui
 # recommandent ensuite le verre ; vues par les achats et la finance (coût des casses).
 CASSES = ["achats.view_casseverre", "achats.add_casseverre"]
@@ -328,6 +344,7 @@ for _par_role in (
     PERMISSIONS_FACTURES_ACHAT,
     PERMISSIONS_BONS_RETOUR,
     PERMISSIONS_TRANSFERTS,
+    PERMISSIONS_INVENTAIRES,
     PERMISSIONS_TRESORERIE,
     PERMISSIONS_BANQUE,
     PERMISSIONS_RH,

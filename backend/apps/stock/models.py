@@ -432,6 +432,99 @@ class LigneTransfert(models.Model):
         return f"{self.quantite} × {self.article}"
 
 
+class Inventaire(ModeleDeBase):
+    """Comptage physique du stock d'un magasin (ou du dépôt) : tout le stock, ou une partie
+    (famille, marque, nature de monture, fournisseur).
+
+    Trois étapes : le comptage (« en cours »), puis la vérification où le responsable contrôle
+    les écarts et corrige les quantités, puis la validation finale avec une observation. À la
+    validation, l'écart entre le compté et le stock de l'application devient un mouvement
+    d'ajustement ; un article en stock mais non compté est considéré comme absent (0).
+    """
+
+    class Statut(models.TextChoices):
+        EN_COURS = "en_cours", "En cours de comptage"
+        A_VERIFIER = "a_verifier", "En vérification"
+        VALIDE = "valide", "Validé"
+        ANNULE = "annule", "Annulé"
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    famille = models.CharField(
+        max_length=20,
+        choices=Article.Famille.choices,
+        blank=True,
+        help_text="Vide : tout le stock du magasin.",
+    )
+    marque = models.CharField(max_length=100, blank=True, help_text="Montures de cette marque.")
+    nature = models.CharField(
+        max_length=10,
+        choices=Monture.Categorie.choices,
+        blank=True,
+        help_text="Montures optiques, solaires ou appliques.",
+    )
+    fournisseur = models.ForeignKey(
+        "achats.Fournisseur", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    statut = models.CharField(max_length=10, choices=Statut.choices, default=Statut.EN_COURS)
+    observation = models.TextField(blank=True)
+    cree_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+    valide_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    valide_le = models.DateTimeField(null=True, blank=True)
+    comptage_termine_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    comptage_termine_le = models.DateTimeField(null=True, blank=True)
+    observation_validation = models.TextField(
+        blank=True, help_text="Saisie à la validation finale (écarts expliqués, recomptages…)."
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()  # noqa: DJ012
+
+    class Meta:
+        ordering = ["-annee", "-sequence"]
+        verbose_name = "inventaire"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="inventaire_sans_doublon"
+            )
+        ]
+        permissions = [("valider_inventaire", "Peut valider un inventaire (corrige le stock)")]
+
+    def __str__(self):
+        return self.numero
+
+
+class LigneInventaire(models.Model):
+    """Article compté ; ``stock_theorique`` et ``ecart`` sont figés à la validation."""
+
+    inventaire = models.ForeignKey(Inventaire, on_delete=models.CASCADE, related_name="lignes")
+    article = models.ForeignKey(Article, on_delete=models.PROTECT, related_name="+")
+    quantite_comptee = models.PositiveIntegerField("quantité comptée", default=0)
+    stock_theorique = models.IntegerField("stock de l'application", null=True, blank=True)
+    ecart = models.IntegerField(null=True, blank=True)
+    observation = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = "ligne d'inventaire"
+        verbose_name_plural = "lignes d'inventaire"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["inventaire", "article"], name="inventaire_article_unique"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.quantite_comptee} × {self.article}"
+
+
 def stock_disponible(magasin, article):
     total = MouvementStock.tous.filter(magasin=magasin, article=article).aggregate(
         total=Sum("quantite")
