@@ -13,6 +13,7 @@ import CreditCard from "@mui/icons-material/CreditCard";
 import Description from "@mui/icons-material/Description";
 import EditNote from "@mui/icons-material/EditNote";
 import EventRepeat from "@mui/icons-material/EventRepeat";
+import Factory from "@mui/icons-material/Factory";
 import FactCheck from "@mui/icons-material/FactCheck";
 import FilterAlt from "@mui/icons-material/FilterAlt";
 import FindInPage from "@mui/icons-material/FindInPage";
@@ -26,6 +27,7 @@ import Lock from "@mui/icons-material/Lock";
 import LockOpen from "@mui/icons-material/LockOpen";
 import MonitorHeart from "@mui/icons-material/MonitorHeart";
 import MoveDown from "@mui/icons-material/MoveDown";
+import MoveToInbox from "@mui/icons-material/MoveToInbox";
 import Payments from "@mui/icons-material/Payments";
 import People from "@mui/icons-material/People";
 import PersonAddAlt from "@mui/icons-material/PersonAddAlt";
@@ -56,6 +58,7 @@ import { peut, type EtatSession } from "../api/auth";
 import { AccesSecurite } from "../pages/AccesSecurite";
 import { Accueil } from "../pages/Accueil";
 import { Avoirs } from "../pages/Avoirs";
+import { BonReception } from "../pages/BonReception";
 import { Caisse } from "../pages/Caisse";
 import { Catalogue } from "../pages/Catalogue";
 import { Clients } from "../pages/Clients";
@@ -66,8 +69,10 @@ import { Recus } from "../pages/Recus";
 import { ResteVendeur } from "../pages/ResteVendeur";
 import { Devis } from "../pages/Devis";
 import { Factures } from "../pages/Factures";
+import { Fournisseurs } from "../pages/Fournisseurs";
 import { Imports } from "../pages/Imports";
 import { Journee } from "../pages/Journee";
+import { ListeReceptions } from "../pages/ListeReceptions";
 import { Magasins } from "../pages/Magasins";
 import { RessourcesHumaines } from "../pages/RessourcesHumaines";
 import { Suivi } from "../pages/Suivi";
@@ -144,7 +149,9 @@ export function modulesPour(session: EtatSession): Module[] {
     gererComptes: a("tresorerie.add_comptetresorerie"),
   };
   const tresorerie = (onglet: keyof typeof droitsTresorerie) =>
-    si(droitsTresorerie[onglet], () => <Tresorerie droits={droitsTresorerie} ongletInitial={ONGLETS_TRESORERIE[onglet]} />);
+    si(droitsTresorerie[onglet], () => (
+      <Tresorerie droits={droitsTresorerie} ongletInitial={ONGLETS_TRESORERIE[onglet]} />
+    ));
   const droitsRh = {
     voirEmployes: a("rh.view_employe"),
     creerEmploye: a("rh.add_employe"),
@@ -179,26 +186,32 @@ export function modulesPour(session: EtatSession): Module[] {
   };
 
   const comptoir = si(vendre, () =>
-            voirClients ? (
-              <VenteComptoir
-                creerClient={a("crm.add_client")}
-                droits={{
-                  remise: a("ventes.appliquer_remise"),
-                  voirOrdonnances: a("optique.view_prescription"),
-                  saisirOrdonnance: a("optique.add_prescription"),
-                }}
-              />
-            ) : (
-              <Caisse />
-            ),
-          );
+    voirClients ? (
+      <VenteComptoir
+        creerClient={a("crm.add_client")}
+        droits={{
+          remise: a("ventes.appliquer_remise"),
+          voirOrdonnances: a("optique.view_prescription"),
+          saisirOrdonnance: a("optique.add_prescription"),
+        }}
+      />
+    ) : (
+      <Caisse />
+    ),
+  );
 
   const modules: Module[] = [
     {
       id: "vente",
       libelle: "Vente",
       tuiles: [
-        { id: "recherche-verre", libelle: "Recherche Verre", icone: Visibility, couleur: COULEURS.violet, ecran: stock("verre") },
+        {
+          id: "recherche-verre",
+          libelle: "Recherche Verre",
+          icone: Visibility,
+          couleur: COULEURS.violet,
+          ecran: stock("verre"),
+        },
         {
           id: "recherche-monture",
           libelle: "Recherche Monture",
@@ -236,7 +249,13 @@ export function modulesPour(session: EtatSession): Module[] {
             />
           )),
         },
-        { id: "clients", libelle: "Clients et ordonnances", icone: People, couleur: COULEURS.turquoise, ecran: clients },
+        {
+          id: "clients",
+          libelle: "Clients et ordonnances",
+          icone: People,
+          couleur: COULEURS.turquoise,
+          ecran: clients,
+        },
         {
           id: "import-clients",
           libelle: "Import Clients",
@@ -258,7 +277,13 @@ export function modulesPour(session: EtatSession): Module[] {
           couleur: COULEURS.turquoise,
           ecran: comptoir,
         },
-        { id: "journee", libelle: "Journée de Vente", icone: Today, couleur: COULEURS.vert, ecran: si(voirVentes, () => <Journee />) },
+        {
+          id: "journee",
+          libelle: "Journée de Vente",
+          icone: Today,
+          couleur: COULEURS.vert,
+          ecran: si(voirVentes, () => <Journee />),
+        },
         {
           id: "liste-visites",
           libelle: "Liste Visites",
@@ -288,7 +313,13 @@ export function modulesPour(session: EtatSession): Module[] {
           ecran: si(voirVentes, () => <ConsulterVisite casse={declarerCasse} />),
         },
         aVenir("lunettes-vendues", "Lunettes Vendues", Sell, COULEURS.turquoise),
-        { id: "liste-recus", libelle: "Liste Reçus", icone: ReceiptLong, couleur: COULEURS.jaune, ecran: si(voirVentes, () => <Recus />) },
+        {
+          id: "liste-recus",
+          libelle: "Liste Reçus",
+          icone: ReceiptLong,
+          couleur: COULEURS.jaune,
+          ecran: si(voirVentes, () => <Recus />),
+        },
         aVenir("creation-produit", "Demande Création Produit", AddBox, COULEURS.bleu),
         aVenir("prospect", "Prospect Client", PersonSearch, COULEURS.rouge),
         aVenir("code-barre", "Code à barres", QrCode2, COULEURS.bleu),
@@ -308,17 +339,47 @@ export function modulesPour(session: EtatSession): Module[] {
         },
         aVenir("code-barre-marque", "Code à barres Marque", QrCodeScanner, COULEURS.bleu),
         aVenir("visites-stock", "Visites de Stock", Inventory, COULEURS.brun),
-        { id: "reste-vendeur", libelle: "Reste par Vendeur", icone: Payments, couleur: COULEURS.vert, ecran: si(voirVentes, () => <ResteVendeur />) },
+        {
+          id: "reste-vendeur",
+          libelle: "Reste par Vendeur",
+          icone: Payments,
+          couleur: COULEURS.vert,
+          ecran: si(voirVentes, () => <ResteVendeur />),
+        },
       ],
     },
     {
       id: "stock",
       libelle: "Stock",
       tuiles: [
-        { id: "stock-monture", libelle: "Stock Monture", icone: Inventory2, couleur: COULEURS.jaune, ecran: stock("monture") },
-        { id: "stock-lentille", libelle: "Stock Lentille", icone: Inventory2, couleur: COULEURS.jaune, ecran: stock("lentille") },
-        { id: "stock-article", libelle: "Stock Article", icone: Inventory2, couleur: COULEURS.jaune, ecran: stock("divers") },
-        { id: "stock-verre", libelle: "Stock Verre", icone: Inventory2, couleur: COULEURS.jaune, ecran: stock("verre") },
+        {
+          id: "stock-monture",
+          libelle: "Stock Monture",
+          icone: Inventory2,
+          couleur: COULEURS.jaune,
+          ecran: stock("monture"),
+        },
+        {
+          id: "stock-lentille",
+          libelle: "Stock Lentille",
+          icone: Inventory2,
+          couleur: COULEURS.jaune,
+          ecran: stock("lentille"),
+        },
+        {
+          id: "stock-article",
+          libelle: "Stock Article",
+          icone: Inventory2,
+          couleur: COULEURS.jaune,
+          ecran: stock("divers"),
+        },
+        {
+          id: "stock-verre",
+          libelle: "Stock Verre",
+          icone: Inventory2,
+          couleur: COULEURS.jaune,
+          ecran: stock("verre"),
+        },
         {
           id: "bon-entree",
           libelle: "Bon Entrée",
@@ -339,6 +400,31 @@ export function modulesPour(session: EtatSession): Module[] {
           icone: LocalShipping,
           couleur: COULEURS.violet,
           ecran: si(a("achats.add_commandefournisseur"), () => <Verres />),
+        },
+        {
+          id: "bon-reception",
+          libelle: "Bon de Réception",
+          icone: MoveToInbox,
+          couleur: COULEURS.vert,
+          ecran: si(a("achats.add_bonreception") && a("achats.view_fournisseur"), () => (
+            <BonReception droitsFournisseurs={{ creer: a("achats.add_fournisseur"), modifier: false }} />
+          )),
+        },
+        {
+          id: "liste-receptions",
+          libelle: "Liste des Bons de Réception",
+          icone: ListAlt,
+          couleur: COULEURS.brun,
+          ecran: si(a("achats.view_bonreception"), () => <ListeReceptions />),
+        },
+        {
+          id: "fournisseurs",
+          libelle: "Fournisseurs",
+          icone: Factory,
+          couleur: COULEURS.bleu,
+          ecran: si(a("achats.view_fournisseur"), () => (
+            <Fournisseurs droits={{ creer: a("achats.add_fournisseur"), modifier: a("achats.change_fournisseur") }} />
+          )),
         },
         aVenir("inventaire", "Inventaire", Sync, COULEURS.bleu),
         aVenir("stock-date", "Stock à la Date", CalendarMonth, COULEURS.vert),
@@ -381,7 +467,13 @@ export function modulesPour(session: EtatSession): Module[] {
           ecran: si(droitsRh.voirAcomptes, () => <RessourcesHumaines droits={droitsRh} ongletInitial="acomptes" />),
         },
         aVenir("vente-credit", "Liste Vente à Crédit", ListAlt, COULEURS.brun),
-        { id: "liste-reglements", libelle: "Liste Règlements", icone: ReceiptLong, couleur: COULEURS.gris, ecran: si(voirVentes, () => <Recus />) },
+        {
+          id: "liste-reglements",
+          libelle: "Liste Règlements",
+          icone: ReceiptLong,
+          couleur: COULEURS.gris,
+          ecran: si(voirVentes, () => <Recus />),
+        },
         aVenir("changement-cheques", "Changement Chèques", SwapHoriz, COULEURS.brun),
         {
           id: "prises-en-charge",
@@ -402,13 +494,55 @@ export function modulesPour(session: EtatSession): Module[] {
       id: "caisse",
       libelle: "Caisse",
       tuiles: [
-        { id: "session-en-cours", libelle: "Session en Cours", icone: LockOpen, couleur: COULEURS.jaune, ecran: tresorerie("cloturer") },
-        { id: "sessions-cloturees", libelle: "Sessions Clôturées", icone: Lock, couleur: COULEURS.jaune, ecran: tresorerie("voirClotures") },
-        { id: "validation", libelle: "Validation Clôtures", icone: CheckCircle, couleur: COULEURS.vert, ecran: tresorerie("verifier") },
-        { id: "operations-diverses", libelle: "Opérations Diverses", icone: Payments, couleur: COULEURS.orange, ecran: tresorerie("depenses") },
-        { id: "versement", libelle: "Versement Espèces", icone: Savings, couleur: COULEURS.vert, ecran: tresorerie("versements") },
-        { id: "bordereau", libelle: "Bordereau de Versement", icone: EditNote, couleur: COULEURS.gris, ecran: tresorerie("versements") },
-        { id: "coffre", libelle: "Coffre et Banque", icone: AccountBalance, couleur: COULEURS.brun, ecran: tresorerie("banque") },
+        {
+          id: "session-en-cours",
+          libelle: "Session en Cours",
+          icone: LockOpen,
+          couleur: COULEURS.jaune,
+          ecran: tresorerie("cloturer"),
+        },
+        {
+          id: "sessions-cloturees",
+          libelle: "Sessions Clôturées",
+          icone: Lock,
+          couleur: COULEURS.jaune,
+          ecran: tresorerie("voirClotures"),
+        },
+        {
+          id: "validation",
+          libelle: "Validation Clôtures",
+          icone: CheckCircle,
+          couleur: COULEURS.vert,
+          ecran: tresorerie("verifier"),
+        },
+        {
+          id: "operations-diverses",
+          libelle: "Opérations Diverses",
+          icone: Payments,
+          couleur: COULEURS.orange,
+          ecran: tresorerie("depenses"),
+        },
+        {
+          id: "versement",
+          libelle: "Versement Espèces",
+          icone: Savings,
+          couleur: COULEURS.vert,
+          ecran: tresorerie("versements"),
+        },
+        {
+          id: "bordereau",
+          libelle: "Bordereau de Versement",
+          icone: EditNote,
+          couleur: COULEURS.gris,
+          ecran: tresorerie("versements"),
+        },
+        {
+          id: "coffre",
+          libelle: "Coffre et Banque",
+          icone: AccountBalance,
+          couleur: COULEURS.brun,
+          ecran: tresorerie("banque"),
+        },
         aVenir("echeancier", "Échéancier Client", CalendarMonth, COULEURS.vert),
         aVenir("export-reglements", "Exportation Règlements", UploadFile, COULEURS.gris),
         aVenir("transfert-reglements", "Transfert Règlements Clients", SwapHoriz, COULEURS.vert),
@@ -436,7 +570,13 @@ export function modulesPour(session: EtatSession): Module[] {
           couleur: COULEURS.violet,
           ecran: si(a("ventes.add_facture"), () => <Factures />),
         },
-        { id: "avoir", libelle: "Avoir", icone: Undo, couleur: COULEURS.rouge, ecran: si(a("ventes.add_avoir"), () => <Avoirs />) },
+        {
+          id: "avoir",
+          libelle: "Avoir",
+          icone: Undo,
+          couleur: COULEURS.rouge,
+          ecran: si(a("ventes.add_avoir"), () => <Avoirs />),
+        },
         aVenir("ca-previsionnel", "CA Prévisionnel", TableChart, COULEURS.bleu),
         aVenir("cloture-mois", "Clôture Mois", Lock, COULEURS.brun),
         aVenir("facturation-vc", "Facturation Vente Comptoir", FactCheck, COULEURS.vert),
@@ -473,7 +613,13 @@ export function modulesPour(session: EtatSession): Module[] {
           couleur: COULEURS.bleu,
           ecran: () => <RessourcesHumaines droits={droitsRh} />,
         },
-        { id: "magasins", libelle: "Magasins", icone: Store, couleur: COULEURS.brun, ecran: si(a("reseau.view_magasin"), () => <Magasins />) },
+        {
+          id: "magasins",
+          libelle: "Magasins",
+          icone: Store,
+          couleur: COULEURS.brun,
+          ecran: si(a("reseau.view_magasin"), () => <Magasins />),
+        },
         {
           id: "acces",
           libelle: "Accès et Sécurité",
@@ -493,7 +639,13 @@ export function modulesPour(session: EtatSession): Module[] {
             />
           )),
         },
-        { id: "plateforme", libelle: "État de la Plateforme", icone: MonitorHeart, couleur: COULEURS.vert, ecran: () => <Accueil /> },
+        {
+          id: "plateforme",
+          libelle: "État de la Plateforme",
+          icone: MonitorHeart,
+          couleur: COULEURS.vert,
+          ecran: () => <Accueil />,
+        },
       ],
     },
   ];
