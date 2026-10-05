@@ -1,4 +1,4 @@
-"""Saisie manuelle d'un inventaire dans l'administration du serveur (/admin/).
+"""Saisie manuelle dans l'administration du serveur (/admin/) : inventaire, transfert de stock.
 
 Le bouton « Ajouter » de la liste des inventaires crée l'inventaire (magasin, périmètre) et peut
 enregistrer de premiers comptages. Tout passe par les mêmes services que l'application ; le
@@ -18,6 +18,7 @@ from apps.reseau.models import Magasin
 
 from .inventaires import InventaireImpossible, compter, ouvrir_inventaire, trouver_article
 from .models import Article, Monture
+from .transferts import TransfertImpossible, envoyer_transfert
 
 
 class InventaireForm(forms.Form):
@@ -110,4 +111,72 @@ def saisir_inventaire(model_admin, request):
         lignes=lignes,
         titre_lignes="Premiers comptages (facultatif)",
         aide_lignes="Les lignes laissées vides sont ignorées.",
+    )
+
+
+class TransfertForm(forms.Form):
+    magasin = ChoixMagasin(label="Magasin de départ", queryset=Magasin.tous.none())
+    destination = ChoixMagasin(queryset=Magasin.tous.none())
+    observation = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}), required=False)
+
+    def __init__(self, *args, magasins, **kwargs):
+        super().__init__(*args, **kwargs)
+        ordre = sorted(magasins, key=lambda m: (not m.est_depot, m.nom))
+        self.fields["magasin"].queryset = Magasin.tous.filter(pk__in=[m.pk for m in ordre])
+        self.fields["magasin"].initial = ordre[0].pk if ordre else None
+        societes = {m.societe_id for m in ordre}
+        self.fields["destination"].queryset = Magasin.tous.filter(
+            societe_id__in=societes, est_actif=True
+        ).order_by("nom")
+
+
+class LigneTransfertForm(forms.Form):
+    article = forms.CharField(label="Code-barres ou référence", max_length=60)
+    quantite = forms.IntegerField(label="Quantité", min_value=1, initial=1)
+
+    def clean_article(self):
+        try:
+            return trouver_article(self.cleaned_data["article"])
+        except InventaireImpossible as erreur:
+            raise forms.ValidationError(str(erreur)) from None
+
+
+LignesTransfert = forms.formset_factory(LigneTransfertForm, extra=5, min_num=1, validate_min=True)
+
+
+def saisir_transfert(model_admin, request):
+    """Page « Ajouter un transfert de stock » : l'envoi (réception dans l'application)."""
+    magasins = magasins_autorises(request.user, "stock.add_transfertstock")
+    if not magasins:
+        raise PermissionDenied
+    entete = TransfertForm(request.POST or None, magasins=magasins)
+    lignes = LignesTransfert(request.POST or None, prefix="lignes")
+    if request.method == "POST" and entete.is_valid() and lignes.is_valid():
+        donnees = entete.cleaned_data
+        try:
+            transfert = envoyer_transfert(
+                magasin=donnees["magasin"],
+                destination=donnees["destination"],
+                lignes=[ligne for ligne in lignes.cleaned_data if ligne],
+                auteur=request.user,
+                observation=donnees["observation"],
+            )
+        except TransfertImpossible as erreur:
+            entete.add_error(None, str(erreur))
+        else:
+            messages.success(
+                request,
+                f"Transfert {transfert.numero} envoyé à {transfert.destination.nom} : les articles "
+                "sont sortis du stock de départ. Le magasin les réceptionne dans l'application.",
+            )
+            return redirect(reverse("admin:stock_transfertstock_change", args=[transfert.pk]))
+    return _page(
+        model_admin,
+        request,
+        titre="Ajouter un transfert de stock",
+        aide="Le transfert est envoyé dès l'enregistrement. Le magasin de destination le "
+        "réceptionne dans l'application, Stock › Liste des Transferts.",
+        entete=entete,
+        lignes=lignes,
+        titre_lignes="Articles envoyés",
     )

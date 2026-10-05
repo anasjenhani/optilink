@@ -3,10 +3,11 @@ from django.core.exceptions import PermissionDenied
 
 from core.admin_imports import AvecImport
 
-from .admin_saisie import saisir_facture, saisir_reception
+from .admin_saisie import saisir_facture, saisir_reception, saisir_retour
 from .models import (
     BonReception,
     BonRetour,
+    CasseVerre,
     CommandeFournisseur,
     FactureAchat,
     Fournisseur,
@@ -137,7 +138,30 @@ class BonRetourAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return BonRetour.tous.select_related("magasin", "fournisseur")
 
-    # Un bon retour se saisit dans l'application (stock et non conformes renvoyés).
+    # « Ajouter » renvoie des articles du stock par le même service que l'application ; les
+    # non conformes d'un bon de réception se renvoient dans l'application.
+    def add_view(self, request, form_url="", extra_context=None):
+        if not self.has_add_permission(request):
+            raise PermissionDenied
+        return saisir_retour(self, request)
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(CasseVerre)
+class CasseVerreAdmin(admin.ModelAdmin):
+    list_display = ("cree_le", "vente", "ligne_commande", "cause", "declaree_par")
+    list_filter = ("cause",)
+    search_fields = ("vente__numero",)
+
+    def get_queryset(self, request):
+        return CasseVerre.objects.select_related("vente", "ligne_commande__article", "declaree_par")
+
+    # Une casse se déclare depuis la visite, dans l'application (le verre repasse à commander).
     def has_add_permission(self, request):
         return False
 

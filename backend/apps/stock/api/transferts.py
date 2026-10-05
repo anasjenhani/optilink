@@ -13,7 +13,12 @@ from apps.reseau.models import Magasin
 from core.perimetre import perimetre_actuel
 
 from ..models import Article, LigneTransfert, TransfertStock
-from ..transferts import TransfertImpossible, envoyer_transfert, recevoir_transfert
+from ..transferts import (
+    TransfertImpossible,
+    annuler_transfert,
+    envoyer_transfert,
+    recevoir_transfert,
+)
 
 
 class LigneTransfertSaisieSerializer(serializers.Serializer):
@@ -56,6 +61,7 @@ class TransfertListeSerializer(serializers.ModelSerializer):
     total_articles = serializers.IntegerField(read_only=True)
     envoye_par = serializers.SerializerMethodField()
     recu_par = serializers.SerializerMethodField()
+    annule_par = serializers.SerializerMethodField()
 
     class Meta:
         model = TransfertStock
@@ -74,6 +80,8 @@ class TransfertListeSerializer(serializers.ModelSerializer):
             "cree_le",
             "recu_par",
             "recu_le",
+            "annule_par",
+            "annule_le",
         ]
 
     def get_envoye_par(self, transfert) -> str:
@@ -81,6 +89,9 @@ class TransfertListeSerializer(serializers.ModelSerializer):
 
     def get_recu_par(self, transfert) -> str:
         return _nom(transfert.recu_par)
+
+    def get_annule_par(self, transfert) -> str:
+        return _nom(transfert.annule_par)
 
 
 class TransfertSerializer(TransfertListeSerializer):
@@ -104,6 +115,7 @@ class TransfertViewSet(
         "retrieve": "stock.view_transfertstock",
         "create": "stock.add_transfertstock",
         "recevoir": "stock.change_transfertstock",
+        "annuler": "stock.add_transfertstock",
     }
     FILTRES = {
         "numero": "numero__icontains",
@@ -117,7 +129,9 @@ class TransfertViewSet(
 
     def get_queryset(self):
         transferts = (
-            TransfertStock.tous.select_related("magasin", "destination", "envoye_par", "recu_par")
+            TransfertStock.tous.select_related(
+                "magasin", "destination", "envoye_par", "recu_par", "annule_par"
+            )
             .prefetch_related(
                 Prefetch("lignes", queryset=LigneTransfert.objects.select_related("article"))
             )
@@ -208,6 +222,19 @@ class TransfertViewSet(
             raise PermissionDenied("Seul le magasin destinataire réceptionne ce transfert.")
         try:
             recevoir_transfert(transfert, auteur=request.user)
+        except TransfertImpossible as erreur:
+            return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(TransfertSerializer(self.get_queryset().get(pk=transfert.pk)).data)
+
+    @extend_schema(request=None, responses={200: TransfertSerializer})
+    @action(detail=True, methods=["post"])
+    def annuler(self, request, public_id=None):
+        """Annule un transfert pas encore réceptionné : les articles reviennent au départ."""
+        transfert = self._transfert(public_id)
+        if not request.user.has_perm("stock.add_transfertstock", transfert.magasin):
+            raise PermissionDenied("Seul le magasin de départ annule ce transfert.")
+        try:
+            annuler_transfert(transfert, auteur=request.user)
         except TransfertImpossible as erreur:
             return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(TransfertSerializer(self.get_queryset().get(pk=transfert.pk)).data)

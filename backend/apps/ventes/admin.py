@@ -1,6 +1,17 @@
 from django.contrib import admin
 
-from .models import Avoir, Devis, Facture, LigneAvoir, LigneDevis, LigneVente, Paiement, Vente
+from .models import (
+    Avoir,
+    Devis,
+    EtapeCommande,
+    Facture,
+    LigneAvoir,
+    LigneDevis,
+    LigneVente,
+    Paiement,
+    PriseEnCharge,
+    Vente,
+)
 
 
 class LigneVenteInline(admin.TabularInline):
@@ -112,3 +123,36 @@ class AvoirAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+class Consultation(admin.ModelAdmin):
+    """Consultation seule : ces données se saisissent dans l'application, avec ses contrôles."""
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PriseEnCharge)
+class PriseEnChargeAdmin(Consultation):
+    list_display = ("vente", "organisme", "montant", "numero_dossier", "statut", "cree_le")
+    list_filter = ("statut", "organisme")
+    search_fields = ("vente__numero", "numero_dossier")
+
+    def get_queryset(self, request):
+        return PriseEnCharge.objects.select_related("vente", "organisme")
+
+
+@admin.register(EtapeCommande)
+class EtapeCommandeAdmin(Consultation):
+    list_display = ("vente", "etape", "le", "par", "observation")
+    list_filter = ("etape",)
+    search_fields = ("vente__numero",)
+
+    def get_queryset(self, request):
+        return EtapeCommande.objects.select_related("vente", "par")

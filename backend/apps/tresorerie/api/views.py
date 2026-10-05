@@ -143,14 +143,28 @@ class ClotureViewSet(
         return self._verifier(request, valider=False)
 
 
-class DepenseViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
-    """Dépenses payées en espèces depuis la caisse du magasin."""
+class DepenseViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Dépenses payées en espèces depuis la caisse du magasin.
+
+    Une dépense se corrige ou se supprime tant que la caisse n'est pas clôturée ; ensuite elle
+    fait partie de la clôture (pièce comptable).
+    """
 
     serializer_class = DepenseSerializer
+    lookup_field = "public_id"
+    http_method_names = ["get", "post", "patch", "delete"]
     filterset_fields = {"magasin__public_id": ["exact"], "cloture": ["isnull"]}
     permissions_requises = {
         "list": "tresorerie.view_depensecaisse",
         "create": "tresorerie.add_depensecaisse",
+        "partial_update": "tresorerie.add_depensecaisse",
+        "destroy": "tresorerie.add_depensecaisse",
     }
 
     def get_queryset(self):
@@ -163,6 +177,19 @@ class DepenseViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, viewsets.Ge
             "tresorerie.add_depensecaisse",
         )
         serializer.save(magasin=magasin, saisie_par=self.request.user, payee_le=timezone.now())
+
+    def get_object(self):
+        depense = super().get_object()
+        if depense.cloture_id:
+            raise ValidationError(
+                {"detail": f"Dépense déjà comprise dans la clôture {depense.cloture.numero}."}
+            )
+        return depense
+
+    def perform_update(self, serializer):
+        # Le magasin d'une dépense ne change pas.
+        serializer.validated_data.pop("magasin_id", None)
+        serializer.save()
 
 
 def societes_couvertes(utilisateur, permission):

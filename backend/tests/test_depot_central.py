@@ -271,3 +271,44 @@ def test_api_transfert_et_bon_retour(affecter, client_de, tunis, depot, monture,
         {"magasin": str(tunis.public_id), "fournisseur": str(optique.public_id)},
     )
     assert "dépôt central" in refus.json()["detail"]
+
+
+def test_annuler_un_transfert_non_recu(affecter, client_de, tunis, depot, monture, optique, achats):
+    recevoir(depot, optique, achats, [ligne(monture, 4, "100")])
+    gestionnaire = affecter(
+        "gestionnaire",
+        "stock.view_transfertstock",
+        "stock.add_transfertstock",
+        portee="societe",
+        societe=tunis.societe,
+    )
+    vendeur = affecter(
+        "vendeur",
+        "stock.view_transfertstock",
+        "stock.change_transfertstock",
+        portee="magasin",
+        magasin=tunis,
+    )
+    api, magasin = client_de(gestionnaire), client_de(vendeur)
+    corps = {
+        "magasin": str(depot.public_id),
+        "destination": str(tunis.public_id),
+        "lignes": [{"article": str(monture.public_id), "quantite": 3}],
+    }
+    transfert = api.post("/api/v1/transferts/", corps, format="json").json()
+    assert stock_disponible(depot, monture) == 1
+    url = f"/api/v1/transferts/{transfert['id']}/"
+    # Le magasin destinataire ne l'annule pas ; le dépôt, oui, et le stock revient.
+    assert magasin.post(url + "annuler/").status_code == 403
+    annule = api.post(url + "annuler/")
+    assert annule.status_code == 200, annule.json()
+    assert (annule.json()["statut"], annule.json()["annule_par"]) == ("annule", "gestionnaire")
+    assert stock_disponible(depot, monture) == 4
+    assert magasin.post(url + "recevoir/").status_code == 400
+    assert api.post(url + "annuler/").status_code == 400
+
+    # Un transfert déjà reçu ne s'annule plus.
+    recu = api.post("/api/v1/transferts/", corps, format="json").json()
+    magasin.post(f"/api/v1/transferts/{recu['id']}/recevoir/")
+    refus = api.post(f"/api/v1/transferts/{recu['id']}/annuler/")
+    assert refus.status_code == 400 and "ne s'annule plus" in refus.json()["detail"]
