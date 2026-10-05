@@ -213,6 +213,14 @@ class BonReception(ModeleDeBase):
     )
     etat = models.CharField(max_length=12, choices=Etat.choices, default=Etat.NON_FACTURE)
     numero_facture = models.CharField("n° facture fournisseur", max_length=60, blank=True)
+    facture = models.ForeignKey(
+        "FactureAchat",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="bons",
+        verbose_name="facture achat",
+    )
     total_ht = models.DecimalField(max_digits=14, decimal_places=3, default=0)
     total_remise = models.DecimalField(max_digits=14, decimal_places=3, default=0)
     remise_ex = models.DecimalField(max_digits=14, decimal_places=3, default=0)
@@ -281,3 +289,76 @@ class LigneReception(models.Model):
 
     def __str__(self):
         return f"{self.quantite} × {self.designation}"
+
+
+class FactureAchat(ModeleDeBase):
+    """Facture d'un fournisseur : elle regroupe ses bons de réception (BL) d'un magasin.
+
+    Les totaux reprennent ceux des bons ; la facture peut ajouter une remise exceptionnelle,
+    des frais, le timbre fiscal et un ajustement (écart d'arrondi avec la facture papier).
+    Une facture enregistrée ne se modifie plus.
+    """
+
+    class Paiement(models.TextChoices):
+        NON_PAYE = "non_paye", "Non payé"
+        PARTIEL = "partiel", "Payé en partie"
+        PAYE = "paye", "Payé"
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    fournisseur = models.ForeignKey(
+        Fournisseur, on_delete=models.PROTECT, related_name="factures_achat"
+    )
+    date_entree = models.DateField("date d'entrée")
+    reference_fournisseur = models.CharField(
+        "référence fournisseur", max_length=60, help_text="N° de la facture chez le fournisseur."
+    )
+    date_reference = models.DateField("date de la facture fournisseur")
+    taux_remise_ex = models.DecimalField(
+        "remise exceptionnelle (%)", max_digits=5, decimal_places=2, default=0
+    )
+    frais_supplementaires = models.DecimalField(
+        max_digits=14, decimal_places=3, default=0, help_text="Transport, port… (TTC)."
+    )
+    timbre_fiscal = models.DecimalField(max_digits=10, decimal_places=3, default=0)
+    ajustement = models.DecimalField(
+        "ajustement des totaux",
+        max_digits=10,
+        decimal_places=3,
+        default=0,
+        help_text="Écart d'arrondi pour retrouver le total TTC de la facture papier.",
+    )
+    observation = models.TextField(blank=True)
+    paiement = models.CharField(max_length=10, choices=Paiement.choices, default=Paiement.NON_PAYE)
+    total_ht = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    total_remise = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    remise_ex = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    total_net_ht = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    total_fodec = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    total_tva = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    total_ttc = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    cree_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-annee", "-sequence"]
+        verbose_name = "facture achat"
+        verbose_name_plural = "factures achat"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="facture_achat_sans_doublon"
+            ),
+            models.UniqueConstraint(
+                fields=["fournisseur", "reference_fournisseur"],
+                name="facture_fournisseur_une_fois",
+            ),
+        ]
+
+    def __str__(self):
+        return self.numero

@@ -168,6 +168,16 @@ PERMISSIONS_RECEPTIONS = {
     "Comptabilité & Finance": ["achats.view_bonreception"],
 }
 
+# Factures achat : saisies par les achats et la finance à l'arrivée de la facture fournisseur.
+FACTURES_ACHAT = ["achats.view_factureachat", "achats.add_factureachat"]
+PERMISSIONS_FACTURES_ACHAT = {
+    "Administrateur Global": FACTURES_ACHAT,
+    "Responsable de magasin": FACTURES_ACHAT,
+    "Achats & Gestionnaire de Stock": FACTURES_ACHAT,
+    "Comptabilité & Finance": FACTURES_ACHAT,
+    "Opticien": ["achats.view_factureachat"],
+}
+
 # Casses de verres : déclarées par l'atelier, l'opticien et les responsables, qui
 # recommandent ensuite le verre ; vues par les achats et la finance (coût des casses).
 CASSES = ["achats.view_casseverre", "achats.add_casseverre"]
@@ -290,6 +300,7 @@ for _par_role in (
     PERMISSIONS_AVOIRS,
     PERMISSIONS_ACHATS,
     PERMISSIONS_RECEPTIONS,
+    PERMISSIONS_FACTURES_ACHAT,
     PERMISSIONS_TRESORERIE,
     PERMISSIONS_BANQUE,
     PERMISSIONS_RH,
