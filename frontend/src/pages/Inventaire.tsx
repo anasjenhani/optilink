@@ -26,7 +26,7 @@ import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { type Famille, FAMILLES } from "../api/caisse";
 import {
@@ -170,19 +170,42 @@ function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventai
     queryClient.setQueryData(["inventaires", id], inv);
     void queryClient.invalidateQueries({ queryKey: ["inventaires", "liste"] });
   };
-  const comptage = useMutation({
-    mutationFn: (c: Comptage) => compterArticle(id, c),
-    onSuccess: (inv, c) => {
-      majour(inv);
-      setCode("");
-      setQuantite("1");
-      const ligne = inv.lignes.find(
-        (l) =>
-          l.article === c.article || l.code_barres === c.code || l.reference.toLowerCase() === c.code?.toLowerCase(),
-      );
-      setDernier(ligne ? `${ligne.libelle} : ${ligne.quantite_comptee} compté(s)` : "");
-    },
-  });
+  // Une douchette enchaîne les scans plus vite que le serveur ne répond : chaque scan est mis
+  // en file et envoyé dans l'ordre, la case est vidée tout de suite pour le scan suivant.
+  const champScan = useRef<HTMLInputElement>(null);
+  const file = useRef<Comptage[]>([]);
+  const envoiEnCours = useRef(false);
+  const [enAttente, setEnAttente] = useState(0);
+  const [erreurComptage, setErreurComptage] = useState<Error | null>(null);
+  const reprendreScan = () => champScan.current?.focus();
+  async function viderFile() {
+    if (envoiEnCours.current) return;
+    envoiEnCours.current = true;
+    for (let c = file.current.shift(); c; c = file.current.shift()) {
+      try {
+        const inv = await compterArticle(id, c);
+        majour(inv);
+        setErreurComptage(null);
+        const ligne = inv.lignes.find(
+          (l) =>
+            l.article === c!.article ||
+            l.code_barres === c!.code ||
+            l.reference.toLowerCase() === c!.code?.toLowerCase(),
+        );
+        setDernier(ligne ? `${ligne.libelle} : ${ligne.quantite_comptee} compté(s)` : "");
+      } catch (e) {
+        setErreurComptage(e instanceof Error ? e : new Error(String(e)));
+      } finally {
+        setEnAttente((n) => n - 1);
+      }
+    }
+    envoiEnCours.current = false;
+  }
+  const compterEnFile = (c: Comptage) => {
+    file.current.push(c);
+    setEnAttente((n) => n + 1);
+    void viderFile();
+  };
   const retrait = useMutation({ mutationFn: (article: string) => retirerArticle(id, article), onSuccess: majour });
   const etape = useMutation({
     mutationFn: (quoi: "terminer" | "reprendre") =>
@@ -211,9 +234,13 @@ function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventai
   const somme = (f: (l: LigneInventaire) => number) => inv.lignes.reduce((s, l) => s + f(l), 0);
   const avecEcart = inv.lignes.filter((l) => l.ecart !== 0).length;
   const nonComptes = inv.lignes.filter((l) => !l.comptee).length;
-  const erreur = comptage.error ?? retrait.error ?? etape.error ?? fin.error;
+  const erreur = erreurComptage ?? retrait.error ?? etape.error ?? fin.error;
   const scanner = () => {
-    if (code.trim()) comptage.mutate({ code: code.trim(), quantite: Number(quantite) || 1 });
+    if (!code.trim()) return;
+    compterEnFile({ code: code.trim(), quantite: Number(quantite) || 1 });
+    setCode("");
+    setQuantite("1");
+    reprendreScan();
   };
 
   return (
@@ -255,6 +282,7 @@ function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventai
           <TextField
             size="small"
             autoFocus
+            inputRef={champScan}
             label="Code barre ou référence"
             value={code}
             onChange={(e) => setCode(e.target.value)}
@@ -274,7 +302,7 @@ function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventai
             slotProps={{ htmlInput: { inputMode: "numeric" } }}
             sx={{ width: 90 }}
           />
-          <Button variant="contained" disabled={!code.trim() || comptage.isPending} onClick={scanner}>
+          <Button variant="contained" disabled={!code.trim()} onClick={scanner}>
             Compter
           </Button>
           <Box sx={{ flex: 1, minWidth: 300 }}>
@@ -282,14 +310,19 @@ function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventai
               magasin={inv.magasin_id}
               famille={inv.famille}
               avecStock
-              onAjoute={(a) => comptage.mutate({ article: a.id, quantite: Number(quantite) || 1 })}
+              onAjoute={(a) => {
+                compterEnFile({ article: a.id, quantite: Number(quantite) || 1 });
+                setQuantite("1");
+                reprendreScan();
+              }}
             />
           </Box>
         </Stack>
       )}
-      {dernier && peutCompter && !comptage.isError && (
+      {dernier && peutCompter && !erreurComptage && (
         <Typography variant="body2" color="success.main">
           {dernier}
+          {enAttente > 0 && ` · ${enAttente} scan(s) en cours d'enregistrement`}
         </Typography>
       )}
       {erreur && <Alert severity="error">{erreur.message}</Alert>}
@@ -333,7 +366,7 @@ function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventai
                   <CaseComptee
                     ligne={l}
                     actif={peutCompter}
-                    onCorrige={(q) => comptage.mutate({ article: l.article, quantite: q, remplacer: true })}
+                    onCorrige={(q) => compterEnFile({ article: l.article, quantite: q, remplacer: true })}
                   />
                 </TableCell>
                 <TableCell align="right" sx={{ color: couleurEcart(l.ecart), fontWeight: 700 }}>
@@ -344,7 +377,7 @@ function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventai
                     ligne={l}
                     actif={peutCompter}
                     onCorrige={(observation) =>
-                      comptage.mutate({
+                      compterEnFile({
                         article: l.article,
                         quantite: l.quantite_comptee,
                         remplacer: true,

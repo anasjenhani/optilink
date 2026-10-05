@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import { Inventaire } from "./Inventaire";
 
@@ -144,4 +144,24 @@ test("un vendeur compte mais ne peut ni ouvrir ni valider", async () => {
   expect(await screen.findByLabelText("Code barre ou référence")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Terminer le comptage" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Créer un inventaire" })).not.toBeInTheDocument();
+});
+
+test("deux scans rapides sont comptés tous les deux, dans l'ordre", async () => {
+  const appels = afficher();
+  fireEvent.click(await screen.findByText("DEP-IN2026-000001"));
+  const scan = await screen.findByLabelText("Code barre ou référence");
+  for (const code of ["6190000000017", "ETUI"]) {
+    fireEvent.change(scan, { target: { value: code } });
+    fireEvent.keyDown(scan, { key: "Enter" });
+    // La case est vidée aussitôt, sans attendre la réponse du serveur.
+    expect(scan).toHaveValue("");
+  }
+  expect(document.activeElement).toBe(scan);
+  expect(await screen.findByText("Étui : 4 compté(s)")).toBeInTheDocument();
+  await waitFor(() =>
+    expect(appels.filter((a) => a.url.endsWith("/compter/")).map((a) => a.corps)).toEqual([
+      { code: "6190000000017", quantite: 1 },
+      { code: "ETUI", quantite: 1 },
+    ]),
+  );
 });

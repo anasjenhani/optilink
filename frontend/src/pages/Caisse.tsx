@@ -196,14 +196,15 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
   });
 
   // Une douchette tape le code-barres puis Entrée : l'article va directement au panier.
+  // La case est vidée tout de suite : deux scans rapprochés ne se collent pas l'un à l'autre.
+  // Un code qui n'est pas un code-barres en stock reste dans la case comme une recherche.
   async function scanner(code: string) {
     if (!magasin || !code) return;
+    setRecherche("");
     const trouves = await chercherArticles(magasin, code);
     const article = trouves.find((a) => a.code_barres === code);
-    if (article && (article.sur_commande || article.stock)) {
-      ajouter(article);
-      setRecherche("");
-    }
+    if (article && (article.sur_commande || article.stock)) ajouter(article);
+    else setRecherche((r) => r || code);
   }
 
   function ajouter(article: Article) {
