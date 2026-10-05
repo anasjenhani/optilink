@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .api.factures import FactureAchatViewSet
 from .api.imports import ImportFournisseursView, ImportReceptionsView
+from .api.retours import BonRetourViewSet
 from .api.views import (
     BonReceptionViewSet,
     CasseVerreViewSet,
@@ -18,6 +19,7 @@ router.register(
 router.register("casses-verres", CasseVerreViewSet, basename="casse-verre")
 router.register("bons-reception", BonReceptionViewSet, basename="bon-reception")
 router.register("factures-achat", FactureAchatViewSet, basename="facture-achat")
+router.register("bons-retour", BonRetourViewSet, basename="bon-retour")
 
 urlpatterns = [
     path("imports/fournisseurs/", ImportFournisseursView.as_view(), name="import-fournisseurs"),

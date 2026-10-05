@@ -329,6 +329,9 @@ class MouvementStock(models.Model):
         VENTE = "vente", "Vente"
         RETOUR = "retour", "Retour client"
         AJUSTEMENT = "ajustement", "Ajustement d'inventaire"
+        RETOUR_FOURNISSEUR = "retour_fournisseur", "Retour au fournisseur"
+        TRANSFERT_SORTIE = "transfert_sortie", "Transfert envoyé"
+        TRANSFERT_ENTREE = "transfert_entree", "Transfert reçu"
 
     magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
     article = models.ForeignKey(Article, on_delete=models.PROTECT, related_name="mouvements")
@@ -355,6 +358,78 @@ class MouvementStock(models.Model):
 
     def __str__(self):
         return f"{self.get_type_display()} {self.quantite:+d} {self.article}"
+
+
+class TransfertStock(ModeleDeBase):
+    """Envoi d'articles d'un magasin (le dépôt central en général) vers un autre.
+
+    À l'envoi, les articles sortent du stock de départ ; ils entrent dans le stock du magasin
+    destinataire quand il le réceptionne. Entre les deux, ils sont « en route ».
+    """
+
+    class Statut(models.TextChoices):
+        ENVOYE = "envoye", "Envoyé (en route)"
+        RECU = "recu", "Reçu"
+
+    magasin = models.ForeignKey(
+        "reseau.Magasin",
+        on_delete=models.PROTECT,
+        related_name="+",
+        verbose_name="magasin de départ",
+    )
+    destination = models.ForeignKey(
+        "reseau.Magasin",
+        on_delete=models.PROTECT,
+        related_name="+",
+        verbose_name="magasin destinataire",
+    )
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    statut = models.CharField(max_length=10, choices=Statut.choices, default=Statut.ENVOYE)
+    observation = models.TextField(blank=True)
+    envoye_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+    recu_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    recu_le = models.DateTimeField(null=True, blank=True)
+
+    # Deux magasins par transfert : le périmètre est filtré par l'API (départ ou destination)
+    # et par la RLS de la base.
+    objects = models.Manager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-annee", "-sequence"]
+        verbose_name = "transfert de stock"
+        verbose_name_plural = "transferts de stock"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="transfert_sans_doublon"
+            ),
+            models.CheckConstraint(
+                name="transfert_vers_un_autre_magasin",
+                condition=~models.Q(destination=models.F("magasin")),
+            ),
+        ]
+
+    def __str__(self):
+        return self.numero
+
+
+class LigneTransfert(models.Model):
+    transfert = models.ForeignKey(TransfertStock, on_delete=models.CASCADE, related_name="lignes")
+    article = models.ForeignKey(Article, on_delete=models.PROTECT, related_name="+")
+    quantite = models.PositiveIntegerField("quantité")
+
+    class Meta:
+        verbose_name = "ligne de transfert"
+        verbose_name_plural = "lignes de transfert"
+
+    def __str__(self):
+        return f"{self.quantite} × {self.article}"
 
 
 def stock_disponible(magasin, article):

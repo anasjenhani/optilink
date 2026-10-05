@@ -97,7 +97,8 @@ def test_verre_non_conforme_reste_a_recevoir(tunis, verre, labo, commande_verres
     bon = enregistrer_reception(
         magasin=tunis, fournisseur=labo, numero_bl="A", date_bl=BL, lignes=lignes, auteur=opticien
     )
-    assert bon.total_ttc == Decimal("0.000")
+    # Le BL compte le verre livré (le fournisseur le facture) ; un bon retour le déduira.
+    assert bon.total_ttc == Decimal("119.000")
     commande.refresh_from_db()
     assert commande.statut == CommandeFournisseur.Statut.ENVOYEE
     assert list(lignes_a_recevoir(tunis, labo)) == [a_recevoir]
@@ -120,13 +121,14 @@ def test_montures_en_stock_fodec_et_remise_exceptionnelle(tunis, monture, creer_
         auteur=auteur,
     )
     assert stock_disponible(tunis, monture) == avant + 3
-    # Net 300 − remise ex. 30 = 270 ; FODEC 1 % = 2,700 ; TVA 19 % de 272,700 = 51,813.
+    # Tout le livré compte, non conforme compris (il se renvoie par un bon retour) :
+    # net 400 − remise ex. 40 = 360 ; FODEC 1 % = 3,600 ; TVA 19 % de 363,600 = 69,084.
     assert (bon.remise_ex, bon.total_net_ht, bon.total_fodec) == (
-        Decimal("30.000"),
-        Decimal("270.000"),
-        Decimal("2.700"),
+        Decimal("40.000"),
+        Decimal("360.000"),
+        Decimal("3.600"),
     )
-    assert (bon.total_tva, bon.total_ttc) == (Decimal("51.813"), Decimal("324.513"))
+    assert (bon.total_tva, bon.total_ttc) == (Decimal("69.084"), Decimal("432.684"))
     with pytest.raises(ReceptionImpossible, match="déjà enregistré"):
         enregistrer_reception(
             magasin=tunis,

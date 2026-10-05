@@ -362,3 +362,88 @@ class FactureAchat(ModeleDeBase):
 
     def __str__(self):
         return self.numero
+
+
+class BonRetour(ModeleDeBase):
+    """Bon retour fournisseur : marchandise renvoyée (non conforme à la réception, ou sortie
+    du stock). Sa valeur se déduit de la facture achat du fournisseur qui l'importe.
+    Un bon retour enregistré ne se modifie plus.
+    """
+
+    class Etat(models.TextChoices):
+        NON_FACTURE = "non_facture", "Non déduit"
+        FACTURE = "facture", "Déduit d'une facture"
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    fournisseur = models.ForeignKey(Fournisseur, on_delete=models.PROTECT, related_name="retours")
+    date_retour = models.DateField("date du retour")
+    motif = models.CharField(max_length=200, blank=True)
+    observation = models.TextField(blank=True)
+    etat = models.CharField(max_length=12, choices=Etat.choices, default=Etat.NON_FACTURE)
+    facture = models.ForeignKey(
+        FactureAchat,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="retours",
+        verbose_name="facture achat",
+    )
+    total_ht = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    total_remise = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    remise_ex = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    total_net_ht = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    total_fodec = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    total_tva = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    total_ttc = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    cree_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-annee", "-sequence"]
+        verbose_name = "bon retour fournisseur"
+        verbose_name_plural = "bons retour fournisseur"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="bon_retour_sans_doublon"
+            ),
+        ]
+
+    def __str__(self):
+        return self.numero
+
+
+class LigneRetour(models.Model):
+    """Article renvoyé : une ligne non conforme d'un bon de réception, ou un article du stock."""
+
+    bon = models.ForeignKey(BonRetour, on_delete=models.CASCADE, related_name="lignes")
+    article = models.ForeignKey("stock.Article", on_delete=models.PROTECT, related_name="+")
+    ligne_reception = models.OneToOneField(
+        LigneReception,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="retour",
+        help_text="Ligne non conforme du bon de réception renvoyée.",
+    )
+    designation = models.CharField("désignation", max_length=300)
+    quantite = models.PositiveIntegerField("quantité")
+    prix_achat_ht = models.DecimalField("prix d'achat HT", max_digits=12, decimal_places=3)
+    taux_remise = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    taux_tva = models.DecimalField(max_digits=5, decimal_places=2)
+    net_ht = models.DecimalField(max_digits=14, decimal_places=3)
+    montant_ttc = models.DecimalField(max_digits=14, decimal_places=3)
+    motif = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = "ligne de retour"
+        verbose_name_plural = "lignes de retour"
+
+    def __str__(self):
+        return f"{self.quantite} × {self.designation}"

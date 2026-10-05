@@ -2,7 +2,16 @@ from django.contrib import admin
 
 from core.admin_imports import AvecImport
 
-from .models import Article, Lentille, Monture, MouvementStock, PrixArticle, Verre
+from .models import (
+    Article,
+    Lentille,
+    LigneTransfert,
+    Monture,
+    MouvementStock,
+    PrixArticle,
+    TransfertStock,
+    Verre,
+)
 
 
 class PrixArticleInline(admin.TabularInline):
@@ -107,6 +116,33 @@ class MouvementStockAdmin(AvecImport, admin.ModelAdmin):
         return MouvementStock.tous.select_related("magasin", "article")
 
     # Le stock ne se corrige que par un nouveau mouvement, jamais en modifiant l'historique.
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class LigneTransfertInline(admin.TabularInline):
+    model = LigneTransfert
+    extra = 0
+    can_delete = False
+
+
+@admin.register(TransfertStock)
+class TransfertStockAdmin(admin.ModelAdmin):
+    list_display = ("numero", "cree_le", "magasin", "destination", "statut", "recu_le")
+    list_filter = ("statut", "magasin", "destination")
+    search_fields = ("numero",)
+    inlines = [LigneTransfertInline]
+
+    def get_queryset(self, request):
+        return TransfertStock.tous.select_related("magasin", "destination")
+
+    # Envoyé par le dépôt et réceptionné par le magasin dans l'application (stock des deux).
+    def has_add_permission(self, request):
+        return False
+
     def has_change_permission(self, request, obj=None):
         return False
 

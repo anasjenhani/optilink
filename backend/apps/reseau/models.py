@@ -144,6 +144,10 @@ class Societe(ModeleDeBase):
 
 
 class Magasin(ModeleDeBase):
+    class Type(models.TextChoices):
+        MAGASIN = "magasin", "Magasin"
+        DEPOT = "depot", "Dépôt central"
+
     code = models.CharField(max_length=20, unique=True)
     nom = models.CharField(max_length=100)
     societe = models.ForeignKey(
@@ -154,6 +158,13 @@ class Magasin(ModeleDeBase):
     code_postal = models.CharField(max_length=10, blank=True)
     ville = models.CharField(max_length=100, blank=True)
     telephone = models.CharField(max_length=20, blank=True)
+    type = models.CharField(
+        max_length=10,
+        choices=Type.choices,
+        default=Type.MAGASIN,
+        help_text="Dépôt central : la marchandise des fournisseurs y est reçue et contrôlée "
+        "(BL, factures achat, bons retour), puis envoyée aux magasins par transfert.",
+    )
     nombre_peniches = models.PositiveSmallIntegerField(
         "nombre de péniches",
         default=200,
@@ -170,3 +181,7 @@ class Magasin(ModeleDeBase):
 
     def __str__(self):
         return f"{self.code} {self.nom}"
+
+    @property
+    def est_depot(self):
+        return self.type == self.Type.DEPOT
