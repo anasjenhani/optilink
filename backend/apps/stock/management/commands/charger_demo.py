@@ -66,7 +66,7 @@ FICHES = {
             "marque": "Ray-Ban",
             "modele": "RB5154",
             "couleur": "écaille",
-            "matiere": "acétate",
+            "matiere": "acetate",
             "type": "cerclee",
             "genre": "mixte",
             "calibre": 51,
@@ -99,7 +99,7 @@ FICHES = {
             "calibre": 55,
             "pont": 17,
             "branche": 145,
-            "solaire": True,
+            "categorie": "solaire",
         },
     ),
     "LEN-MJ-004": (
