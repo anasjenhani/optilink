@@ -16,9 +16,17 @@ import { useState } from "react";
 import { chercherArticles, FAMILLES, type Famille } from "../api/caisse";
 import { listerMagasins } from "../api/magasins";
 import { formaterTexte } from "../api/monnaie";
+import { BoutonImport } from "./Imports";
 
 /** Catalogue par famille, avec prix et stock du magasin. Les articles se créent dans l'administration. */
-export function Catalogue({ familleInitiale = "monture" }: { familleInitiale?: Famille | "" }) {
+export function Catalogue({
+  familleInitiale = "monture",
+  importer = false,
+}: {
+  familleInitiale?: Famille | "";
+  /** Bouton d'import : des verres sur la liste des verres, du catalogue sinon. */
+  importer?: boolean;
+}) {
   const [magasinChoisi, setMagasin] = useState("");
   const [famille, setFamille] = useState<Famille | "">(familleInitiale);
   const [recherche, setRecherche] = useState("");
@@ -70,6 +78,12 @@ export function Catalogue({ familleInitiale = "monture" }: { familleInitiale?: F
               onChange={(e) => setRecherche(e.target.value)}
               sx={{ flexGrow: 1 }}
             />
+            {importer && (
+              <BoutonImport
+                type={famille === "verre" ? "verres" : "catalogue"}
+                libelle={famille === "verre" ? "Importer des verres" : "Importer des articles"}
+              />
+            )}
           </Stack>
           {articles.isError && <Alert severity="error">{articles.error.message}</Alert>}
           {articles.data?.length === 0 && <Typography color="text.secondary">Aucun article.</Typography>}

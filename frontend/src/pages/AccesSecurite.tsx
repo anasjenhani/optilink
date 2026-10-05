@@ -45,6 +45,7 @@ import {
   type Utilisateur,
 } from "../api/acces";
 import { listerMagasins } from "../api/magasins";
+import { BoutonImport } from "./Imports";
 
 export type DroitsAcces = {
   voirUtilisateurs: boolean;
@@ -90,9 +91,12 @@ function Utilisateurs({ droits }: { droits: DroitsAcces }) {
   return (
     <Stack spacing={2}>
       {droits.creerUtilisateur && (
-        <Button variant="contained" onClick={() => setEdite("nouveau")} sx={{ alignSelf: "flex-start" }}>
-          Nouvel utilisateur
-        </Button>
+        <Stack direction="row" spacing={2}>
+          <Button variant="contained" onClick={() => setEdite("nouveau")}>
+            Nouvel utilisateur
+          </Button>
+          <BoutonImport type="utilisateurs" libelle="Importer des utilisateurs" />
+        </Stack>
       )}
       {utilisateurs.isError && <Alert severity="error">{utilisateurs.error.message}</Alert>}
       <Table size="small" aria-label="Utilisateurs">
@@ -134,12 +138,7 @@ function Utilisateurs({ droits }: { droits: DroitsAcces }) {
           ))}
         </TableBody>
       </Table>
-      {edite && (
-        <FicheUtilisateur
-          utilisateur={edite === "nouveau" ? null : edite}
-          onFermer={() => setEdite(null)}
-        />
-      )}
+      {edite && <FicheUtilisateur utilisateur={edite === "nouveau" ? null : edite} onFermer={() => setEdite(null)} />}
     </Stack>
   );
 }
@@ -235,7 +234,12 @@ function FicheUtilisateur({ utilisateur, onFermer }: { utilisateur: Utilisateur 
             <Typography color="text.secondary">Aucun profil : cet utilisateur n'aura accès à rien.</Typography>
           )}
           {affectations.map((a, index) => (
-            <Stack key={a.id ?? `n${index}`} direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: "center" }}>
+            <Stack
+              key={a.id ?? `n${index}`}
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1}
+              sx={{ alignItems: "center" }}
+            >
               <TextField
                 select
                 size="small"
@@ -368,7 +372,12 @@ function Profils({ droits }: { droits: DroitsAcces }) {
         </List>
         {droits.creerProfil && (
           <Stack direction="row" spacing={1}>
-            <TextField size="small" label="Nouveau profil" value={nouveau} onChange={(e) => setNouveau(e.target.value)} />
+            <TextField
+              size="small"
+              label="Nouveau profil"
+              value={nouveau}
+              onChange={(e) => setNouveau(e.target.value)}
+            />
             <Button onClick={() => creation.mutate()} disabled={!nouveau.trim() || creation.isPending}>
               Créer
             </Button>

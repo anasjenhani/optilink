@@ -221,6 +221,25 @@ COLONNES_CATALOGUE = [
     "lentilles_par_boite",
 ]
 COLONNES_STOCK = ["code_barres", "reference", "quantite"]
+# Modèle « verres » : les colonnes du catalogue utiles aux verres, famille implicite.
+COLONNES_VERRES = [
+    "reference",
+    "libelle",
+    "fournisseur",
+    "reference_fournisseur",
+    "code_barres",
+    "sur_commande",
+    "prix_ttc",
+    "tva",
+    "gamme",
+    "geometrie",
+    "indice",
+    "matiere",
+    "traitements",
+    "photochromique",
+    "teinte",
+    "diametre",
+]
 
 
 def _valeurs_fiche(modele, ligne):
@@ -253,16 +272,21 @@ def _message(erreur):
     return " ".join(erreur.messages)
 
 
-def importer_catalogue(lignes, *, pays, apercu=False):
-    """Crée ou met à jour les articles (par référence), leur fiche et leur prix dans ``pays``."""
+def importer_catalogue(lignes, *, pays, apercu=False, famille=None):
+    """Crée ou met à jour les articles (par référence), leur fiche et leur prix dans ``pays``.
+
+    Avec ``famille`` (import des verres…), la colonne famille est facultative et toute autre
+    famille est refusée.
+    """
     rapport = Rapport(apercu=apercu, lignes=len(lignes))
-    manquantes = {"reference", "libelle", "famille", "fournisseur"} - set(
-        lignes[0][1] if lignes else {}
-    )
+    obligatoires = {"reference", "libelle", "fournisseur"} | (set() if famille else {"famille"})
+    manquantes = obligatoires - set(lignes[0][1] if lignes else {})
     if manquantes:
         rapport.erreur(1, f"Colonnes obligatoires absentes : {', '.join(sorted(manquantes))}.")
         return rapport
-    fournisseurs = {normaliser(f.nom): f for f in Fournisseur.objects.all()}
+    fournisseurs = {normaliser(f.nom): f for f in Fournisseur.objects.all()} | {
+        str(f.code): f for f in Fournisseur.objects.exclude(code=None)
+    }
     taux = {t.taux: t for t in TauxTva.objects.filter(pays=pays)}
     vues = {}
     try:
@@ -278,7 +302,7 @@ def importer_catalogue(lignes, *, pays, apercu=False):
                 existant = Article.objects.filter(reference=reference).first()
                 try:
                     with transaction.atomic():
-                        cree = _importer_article(ligne, pays, fournisseurs, taux)
+                        cree = _importer_article(ligne, pays, fournisseurs, taux, famille)
                 except ValidationError as erreur:
                     rapport.erreur(numero, _message(erreur))
                     continue
@@ -299,16 +323,29 @@ def importer_catalogue(lignes, *, pays, apercu=False):
     return rapport
 
 
-def _importer_article(ligne, pays, fournisseurs, taux):
-    famille = _choix(ligne["famille"], Article.Famille.choices, "famille")
+def _importer_article(ligne, pays, fournisseurs, taux, imposee=None):
+    famille = _choix(ligne.get("famille", ""), Article.Famille.choices, "famille") or imposee
     if not famille:
         raise ValidationError("famille : obligatoire.")
-    fournisseur = fournisseurs.get(normaliser(ligne["fournisseur"]))
+    if imposee and famille != imposee:
+        raise ValidationError(f"famille : ce fichier n'importe que des {imposee}s.")
+    fournisseur = fournisseurs.get(normaliser(ligne["fournisseur"])) or fournisseurs.get(
+        ligne["fournisseur"].strip()
+    )
     if fournisseur is None:
         raise ValidationError(
-            f"fournisseur : « {ligne['fournisseur']} » inconnu ; le créer d'abord dans "
-            "l'administration."
+            f"fournisseur : « {ligne['fournisseur']} » inconnu (code ou raison sociale) ; le "
+            "créer d'abord (écran Fournisseurs ou import des fournisseurs)."
         )
+    code_barres = ligne.get("code_barres", "")
+    if code_barres:
+        autre = Article.objects.filter(code_barres=code_barres).exclude(
+            reference=ligne["reference"]
+        )
+        if autre.exists():
+            raise ValidationError(
+                f"code_barres : {code_barres} est déjà celui de {autre.first().reference}."
+            )
     article = Article.objects.filter(reference=ligne["reference"]).first()
     cree = article is None
     if cree:

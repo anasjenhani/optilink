@@ -36,6 +36,7 @@ import {
   type Fournisseur,
   type SaisieFournisseur,
 } from "../api/achats";
+import { BoutonImport } from "./Imports";
 import { BANDEAU, BORDEAUX, BOUTON, useApaise } from "./RechercheClients";
 
 const COLONNES: { cle: keyof FiltresFournisseurs; titre: string; largeur?: number }[] = [
@@ -394,6 +395,7 @@ export function Fournisseurs({
             Consulter
           </Button>
         )}
+        {!onChoisi && droits.creer && droits.modifier && <BoutonImport type="fournisseurs" />}
         <Typography variant="body2" color="text.secondary" sx={{ flex: 1, textAlign: "right" }}>
           {fournisseurs.data ? `${fournisseurs.data.count} fournisseur${fournisseurs.data.count > 1 ? "s" : ""}` : ""}
         </Typography>
