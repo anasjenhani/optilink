@@ -3,6 +3,7 @@ import AddBox from "@mui/icons-material/AddBox";
 import AdminPanelSettings from "@mui/icons-material/AdminPanelSettings";
 import ArrowDownward from "@mui/icons-material/ArrowDownward";
 import ArrowUpward from "@mui/icons-material/ArrowUpward";
+import AssignmentReturn from "@mui/icons-material/AssignmentReturn";
 import Badge from "@mui/icons-material/Badge";
 import BeachAccess from "@mui/icons-material/BeachAccess";
 import Build from "@mui/icons-material/Build";
@@ -59,6 +60,7 @@ import { AccesSecurite } from "../pages/AccesSecurite";
 import { Accueil } from "../pages/Accueil";
 import { Avoirs } from "../pages/Avoirs";
 import { BonReception } from "../pages/BonReception";
+import { BonRetour, ListeBonsRetour } from "../pages/BonRetour";
 import { Caisse } from "../pages/Caisse";
 import { Catalogue } from "../pages/Catalogue";
 import { Clients } from "../pages/Clients";
@@ -78,6 +80,7 @@ import { ListeReceptions } from "../pages/ListeReceptions";
 import { Magasins } from "../pages/Magasins";
 import { RessourcesHumaines } from "../pages/RessourcesHumaines";
 import { Suivi } from "../pages/Suivi";
+import { ListeTransferts, TransfertStock } from "../pages/Transferts";
 import { ConsulterVisite, HistoriqueVisites, Visites } from "../pages/Visites";
 import { Tresorerie } from "../pages/Tresorerie";
 import { VenteComptoir } from "../pages/VenteComptoir";
@@ -438,6 +441,36 @@ export function modulesPour(session: EtatSession): Module[] {
           ecran: si(a("achats.view_factureachat"), () => <ListeFacturesAchat />),
         },
         {
+          id: "bon-retour",
+          libelle: "Bon Retour Fournisseur",
+          icone: AssignmentReturn,
+          couleur: COULEURS.rouge,
+          ecran: si(a("achats.add_bonretour") && a("achats.view_fournisseur"), () => <BonRetour />),
+        },
+        {
+          id: "liste-bons-retour",
+          libelle: "Liste des Bons Retour",
+          icone: ListAlt,
+          couleur: COULEURS.brun,
+          ecran: si(a("achats.view_bonretour"), () => <ListeBonsRetour />),
+        },
+        {
+          id: "bon-transfert",
+          libelle: "Bon Transfert",
+          icone: SwapHoriz,
+          couleur: COULEURS.bleu,
+          ecran: si(a("stock.add_transfertstock"), () => <TransfertStock />),
+        },
+        {
+          id: "liste-transferts",
+          libelle: "Liste des Transferts",
+          icone: CompareArrows,
+          couleur: COULEURS.bleu,
+          ecran: si(a("stock.view_transfertstock"), () => (
+            <ListeTransferts recevoir={a("stock.change_transfertstock")} />
+          )),
+        },
+        {
           id: "fournisseurs",
           libelle: "Fournisseurs",
           icone: Factory,
@@ -452,7 +485,6 @@ export function modulesPour(session: EtatSession): Module[] {
         aVenir("stock-depense", "Stock Article Dépense", Inventory2, COULEURS.jaune),
         aVenir("mouvements", "Mouvements de Stock", TableChart, COULEURS.brun),
         aVenir("stock-total", "Stock Total", Widgets, COULEURS.orange),
-        aVenir("bon-transfert", "Bon Transfert", SwapHoriz, COULEURS.bleu),
         aVenir("bon-sortie", "Bon Sortie", ArrowUpward, COULEURS.vert),
         aVenir("demande-transfert", "Demande Transfert", CompareArrows, COULEURS.bleu),
         aVenir("demande-alimentation", "Demande Alimentation", MoveDown, COULEURS.bleu),

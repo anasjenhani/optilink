@@ -78,6 +78,9 @@ PRIVILEGES = {
         "stock.view_prixarticle": "Voir les prix de vente",
         "stock.add_prixarticle": "Fixer un prix de vente",
         "stock.change_prixarticle": "Modifier un prix de vente",
+        "stock.view_transfertstock": "Voir les transferts de stock",
+        "stock.add_transfertstock": "Envoyer un transfert de stock (du dépôt vers un magasin)",
+        "stock.change_transfertstock": "Réceptionner un transfert de stock arrivé au magasin",
     },
     "Achats": {
         "achats.view_fournisseur": "Voir les fournisseurs",
@@ -90,6 +93,8 @@ PRIVILEGES = {
         "achats.add_bonreception": "Saisir un bon de réception (entrée de la marchandise)",
         "achats.view_factureachat": "Voir les factures achat (factures fournisseurs)",
         "achats.add_factureachat": "Saisir une facture achat (regroupe les bons de réception)",
+        "achats.view_bonretour": "Voir les bons retour fournisseur",
+        "achats.add_bonretour": "Saisir un bon retour fournisseur (marchandise renvoyée)",
         "achats.view_casseverre": "Voir les casses de verres",
         "achats.add_casseverre": "Déclarer une casse de verre (verre à recommander)",
     },

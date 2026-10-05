@@ -217,6 +217,6 @@ class SocieteAdmin(admin.ModelAdmin):
 
 @admin.register(Magasin)
 class MagasinAdmin(admin.ModelAdmin):
-    list_display = ("code", "nom", "pays", "societe", "ville", "est_actif")
-    list_filter = ("pays", "societe", "est_actif")
+    list_display = ("code", "nom", "type", "pays", "societe", "ville", "est_actif")
+    list_filter = ("type", "pays", "societe", "est_actif")
     search_fields = ("code", "nom", "ville")

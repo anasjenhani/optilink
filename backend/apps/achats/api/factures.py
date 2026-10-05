@@ -18,10 +18,14 @@ from ..factures import (
     bons_a_facturer,
     calculer_facture,
     controler,
+    controler_retours,
     enregistrer_facture,
+    exiger_depot,
+    retours_a_deduire,
     timbre_par_defaut,
 )
-from ..models import BonReception, FactureAchat, Fournisseur, LigneReception
+from ..models import BonReception, BonRetour, FactureAchat, Fournisseur, LigneReception, LigneRetour
+from .retours import BonRetourListeSerializer
 from .serializers import BonReceptionListeSerializer
 
 DECIMAL = {"max_digits": 14, "decimal_places": 3}
@@ -34,6 +38,9 @@ class FactureAchatSaisieSerializer(serializers.Serializer):
     date_reference = serializers.DateField(required=False)
     date_entree = serializers.DateField(required=False)
     bons = serializers.ListField(child=serializers.UUIDField(), allow_empty=True)
+    retours = serializers.ListField(
+        child=serializers.UUIDField(), required=False, default=list, help_text="Bons retour."
+    )
     taux_remise_ex = serializers.DecimalField(
         max_digits=5, decimal_places=2, min_value=0, max_value=100, default=0
     )
@@ -82,6 +89,46 @@ class LigneFactureSerializer(serializers.ModelSerializer):
             "taux_tva",
             "montant_ttc",
             "numero_serie",
+            "non_conforme",
+        ]
+
+    def get_code(self, ligne) -> str:
+        return ligne.article.code_barres or ligne.article.reference
+
+    def get_montant_ht(self, ligne) -> str:
+        return str(ligne.prix_achat_ht * ligne.quantite)
+
+    def get_montant_remise(self, ligne) -> str:
+        return str(ligne.prix_achat_ht * ligne.quantite - ligne.net_ht)
+
+
+class LigneRetourFactureSerializer(serializers.ModelSerializer):
+    """Ligne d'un bon retour, en négatif sur la facture."""
+
+    bon = serializers.CharField(source="bon.numero")
+    article = serializers.UUIDField(source="article.public_id")
+    famille = serializers.CharField(source="article.famille")
+    code = serializers.SerializerMethodField()
+    montant_ht = serializers.SerializerMethodField()
+    montant_remise = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LigneRetour
+        fields = [
+            "bon",
+            "article",
+            "famille",
+            "code",
+            "designation",
+            "quantite",
+            "prix_achat_ht",
+            "montant_ht",
+            "taux_remise",
+            "montant_remise",
+            "net_ht",
+            "taux_tva",
+            "montant_ttc",
+            "motif",
         ]
 
     def get_code(self, ligne) -> str:
@@ -134,7 +181,9 @@ class FactureAchatListeSerializer(serializers.ModelSerializer):
 class FactureAchatSerializer(FactureAchatListeSerializer):
     devise = serializers.CharField(source="magasin.pays.devise", read_only=True)
     bons = BonFactureSerializer(many=True, read_only=True)
+    retours = BonRetourListeSerializer(many=True, read_only=True)
     lignes = serializers.SerializerMethodField()
+    lignes_retour = serializers.SerializerMethodField()
     detail_tva = serializers.SerializerMethodField()
 
     class Meta(FactureAchatListeSerializer.Meta):
@@ -150,23 +199,25 @@ class FactureAchatSerializer(FactureAchatListeSerializer):
             "ajustement",
             "observation",
             "bons",
+            "retours",
             "lignes",
+            "lignes_retour",
             "detail_tva",
         ]
 
     def get_lignes(self, facture) -> list[dict]:
-        lignes = [
-            ligne
-            for bon in facture.bons.all()
-            for ligne in bon.lignes.all()
-            if not ligne.non_conforme
-        ]
+        lignes = [ligne for bon in facture.bons.all() for ligne in bon.lignes.all()]
         return LigneFactureSerializer(lignes, many=True).data
+
+    def get_lignes_retour(self, facture) -> list[dict]:
+        lignes = [ligne for retour in facture.retours.all() for ligne in retour.lignes.all()]
+        return LigneRetourFactureSerializer(lignes, many=True).data
 
     def get_detail_tva(self, facture) -> list[dict]:
         _, tva = calculer_facture(
             facture.bons.all(),
             pays=facture.magasin.pays,
+            retours=facture.retours.all(),
             taux_remise_ex=facture.taux_remise_ex,
         )
         return [{k: str(v) for k, v in t.items()} for t in tva]
@@ -220,7 +271,18 @@ class FactureAchatViewSet(
                         total_articles=Sum("lignes__quantite", filter=Q(lignes__non_conforme=False))
                     )
                     .order_by("date_bl", "sequence"),
-                )
+                ),
+                Prefetch(
+                    "retours",
+                    queryset=BonRetour.objects.select_related(
+                        "magasin__pays", "fournisseur", "cree_par", "facture"
+                    )
+                    .prefetch_related(
+                        Prefetch("lignes", queryset=LigneRetour.objects.select_related("article"))
+                    )
+                    .annotate(total_articles=Sum("lignes__quantite"))
+                    .order_by("date_retour", "sequence"),
+                ),
             )
             .order_by("-annee", "-sequence")
         )
@@ -267,9 +329,21 @@ class FactureAchatViewSet(
     )
     @action(detail=False, methods=["get"], url_path="a-facturer")
     def a_facturer(self, request):
-        """BL de ce fournisseur dans ce magasin pas encore facturés (« Importer BL »)."""
+        """BL non facturés et bons retour non déduits de ce fournisseur (« Importer BL / BR »).
+
+        Pour un dépôt central : les BL de tous les magasins de sa société.
+        """
         magasin = self._magasin(request.query_params.get("magasin", ""))
         fournisseur = self._fournisseur(request.query_params.get("fournisseur", ""))
+        try:
+            exiger_depot(magasin)
+        except FactureImpossible as erreur:
+            return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)
+        retours = (
+            retours_a_deduire(magasin, fournisseur)
+            .select_related("magasin", "fournisseur", "cree_par", "facture")
+            .annotate(total_articles=Sum("lignes__quantite"))
+        )
         bons = (
             bons_a_facturer(magasin, fournisseur)
             .select_related("magasin", "fournisseur", "cree_par")
@@ -280,6 +354,7 @@ class FactureAchatViewSet(
             {
                 "timbre_fiscal": str(timbre_par_defaut(fournisseur, magasin.pays)),
                 "bons": BonFactureSerializer(bons, many=True).data,
+                "retours": BonRetourListeSerializer(retours, many=True).data,
             }
         )
 
@@ -292,23 +367,27 @@ class FactureAchatViewSet(
         fournisseur = self._fournisseur(donnees["fournisseur"])
         try:
             bons = controler(magasin, fournisseur, donnees["bons"]) if donnees["bons"] else []
+            retours = controler_retours(magasin, fournisseur, donnees["retours"])
         except FactureImpossible as erreur:
             return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)
         timbre = donnees.get("timbre_fiscal")
         totaux, tva = calculer_facture(
             bons,
             pays=magasin.pays,
+            retours=retours,
             taux_remise_ex=donnees["taux_remise_ex"],
             frais=donnees["frais_supplementaires"],
             timbre=timbre_par_defaut(fournisseur, magasin.pays) if timbre is None else timbre,
             ajustement=donnees["ajustement"],
         )
-        lignes = [ligne for bon in bons for ligne in bon.lignes.all() if not ligne.non_conforme]
+        lignes = [ligne for bon in bons for ligne in bon.lignes.all()]
+        lignes_retour = LigneRetour.objects.filter(bon__in=retours).select_related("article", "bon")
         return Response(
             {
                 **_texte(totaux),
                 "detail_tva": [_texte(t) for t in tva],
                 "lignes": LigneFactureSerializer(lignes, many=True).data,
+                "lignes_retour": LigneRetourFactureSerializer(lignes_retour, many=True).data,
             }
         )
 
@@ -332,6 +411,7 @@ class FactureAchatViewSet(
                 date_reference=donnees["date_reference"],
                 date_entree=donnees.get("date_entree"),
                 bons=donnees["bons"],
+                retours=donnees["retours"],
                 taux_remise_ex=donnees["taux_remise_ex"],
                 frais=donnees["frais_supplementaires"],
                 timbre=donnees.get("timbre_fiscal"),

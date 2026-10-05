@@ -10,6 +10,7 @@ from apps.stock.models import MouvementStock, PrixArticle
 from apps.ventes.models import TypeDocument
 from apps.ventes.services import _aujourd_hui, _numero, _prochain_numero, arrondir
 
+from .depot import autre_depot
 from .models import BonReception, CommandeFournisseur, LigneCommandeFournisseur, LigneReception
 
 TAUX_FODEC = Decimal("1")
@@ -64,7 +65,9 @@ def taux_tva_par_defaut(articles, pays):
 
 
 def calculer(lignes, *, taux_remise_ex, fodec, decimales):
-    """Totaux d'un bon. Les lignes non conformes ne comptent pas (marchandise refusée).
+    """Totaux d'un bon : tout ce que le fournisseur a livré, comme sur son BL. Les lignes non
+    conformes comptent aussi (le fournisseur les facture) ; elles n'entrent pas en stock et se
+    renvoient par un bon retour, déduit de la facture achat.
 
     La remise exceptionnelle s'applique au net HT ; le FODEC (1 %) au net HT après remise ;
     la TVA, taux par taux, au net HT après remise plus le FODEC.
@@ -77,8 +80,6 @@ def calculer(lignes, *, taux_remise_ex, fodec, decimales):
         net = brut - remise
         ligne["net_ht"] = arrondir(net, decimales)
         ligne["montant_ttc"] = arrondir(net * (1 + ligne["taux_tva"] / CENT), decimales)
-        if ligne["non_conforme"]:
-            continue
         total_ht += brut
         total_remise += remise
         total_net += net
@@ -110,8 +111,7 @@ def detail_tva(bon):
     )
     bases = defaultdict(Decimal)
     for ligne in bon.lignes.all():
-        if not ligne.non_conforme:
-            bases[ligne.taux_tva] += ligne.net_ht
+        bases[ligne.taux_tva] += ligne.net_ht
     return [
         {
             "taux": taux,
@@ -179,6 +179,12 @@ def enregistrer_reception(
     """
     if not fournisseur.est_actif:
         raise ReceptionImpossible(f"Le fournisseur {fournisseur} n'est plus actif.")
+    depot = autre_depot(magasin)
+    if depot is not None and any(not ligne.get("ligne_commande") for ligne in lignes):
+        raise ReceptionImpossible(
+            f"Les montures, lentilles et produits se reçoivent au dépôt central ({depot.nom}). "
+            "Le magasin reçoit seulement les verres commandés pour ses clients."
+        )
     numero_bl = numero_bl.strip()
     if BonReception.tous.filter(fournisseur=fournisseur, numero_bl=numero_bl).exists():
         raise ReceptionImpossible(f"Le BL {numero_bl} de {fournisseur} est déjà enregistré.")

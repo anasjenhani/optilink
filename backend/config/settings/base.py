@@ -198,6 +198,9 @@ SPECTACULAR_SETTINGS = {
         "StatutVenteEnum": "apps.ventes.models.Vente.Statut",
         "OeilReceptionEnum": "apps.achats.models.LigneReception.Oeil",
         "OeilDevisEnum": "apps.ventes.models.LigneDevis.Oeil",
+        "EtatReceptionEnum": "apps.achats.models.BonReception.Etat",
+        "EtatRetourEnum": "apps.achats.models.BonRetour.Etat",
+        "StatutTransfertEnum": "apps.stock.models.TransfertStock.Statut",
     },
 }
 

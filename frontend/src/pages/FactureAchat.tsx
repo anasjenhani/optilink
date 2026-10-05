@@ -32,11 +32,13 @@ import {
   enregistrerFacture,
   type FactureAchat as Facture,
   type LigneFacture,
+  type LigneRetourFacture,
   type LigneTva,
   type SaisieFactureAchat,
   type Totaux,
 } from "../api/facturesAchat";
-import { listerMagasins } from "../api/magasins";
+import { depotDabord, listerMagasins } from "../api/magasins";
+import type { BonRetourResume } from "../api/retours";
 import { formaterTexte, type Monnaie } from "../api/monnaie";
 import { ChoixFournisseur } from "./BonReception";
 import { BANDEAU, BORDEAUX, BOUTON, useApaise } from "./RechercheClients";
@@ -153,6 +155,172 @@ function ImportBl({
   );
 }
 
+/** Bons retour du fournisseur pas encore déduits, à cocher (« Importer BR »). */
+function ImportBr({
+  magasin,
+  fournisseur,
+  deja,
+  monnaie,
+  onImporte,
+  onFerme,
+}: {
+  magasin: string;
+  fournisseur: Fournisseur;
+  deja: Set<string>;
+  monnaie: Monnaie;
+  onImporte: (retours: BonRetourResume[]) => void;
+  onFerme: () => void;
+}) {
+  const liste = useQuery({
+    queryKey: ["factures-achat", "a-facturer", magasin, fournisseur.id],
+    queryFn: () => bonsAFacturer(magasin, fournisseur.id),
+  });
+  const disponibles = (liste.data?.retours ?? []).filter((r) => !deja.has(r.id));
+  const [choisis, setChoisis] = useState<Set<string>>(new Set());
+  return (
+    <Dialog open onClose={onFerme} maxWidth="md" fullWidth>
+      <DialogTitle>Bons retour à {fournisseur.nom} à déduire</DialogTitle>
+      <DialogContent>
+        {liste.isError && <Alert severity="error">{liste.error.message}</Alert>}
+        {liste.data && disponibles.length === 0 && (
+          <Typography color="text.secondary">Aucun bon retour de ce fournisseur à déduire.</Typography>
+        )}
+        {disponibles.length > 0 && (
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    size="small"
+                    slotProps={{ input: { "aria-label": "Tout choisir" } }}
+                    checked={choisis.size === disponibles.length}
+                    onChange={(e) => setChoisis(new Set(e.target.checked ? disponibles.map((r) => r.id) : []))}
+                  />
+                </TableCell>
+                <TableCell>Bon retour</TableCell>
+                <TableCell>Date</TableCell>
+                <TableCell>Motif</TableCell>
+                <TableCell align="right">Net HT</TableCell>
+                <TableCell align="right">TTC</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {disponibles.map((r) => (
+                <TableRow
+                  key={r.id}
+                  hover
+                  sx={{ cursor: "pointer" }}
+                  onClick={() =>
+                    setChoisis((c) => {
+                      const suite = new Set(c);
+                      if (suite.has(r.id)) suite.delete(r.id);
+                      else suite.add(r.id);
+                      return suite;
+                    })
+                  }
+                >
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      size="small"
+                      checked={choisis.has(r.id)}
+                      slotProps={{ input: { "aria-label": `Bon retour ${r.numero}` } }}
+                    />
+                  </TableCell>
+                  <TableCell>{r.numero}</TableCell>
+                  <TableCell>{dateCourte(r.date_retour)}</TableCell>
+                  <TableCell>{r.motif}</TableCell>
+                  <TableCell align="right">{formaterTexte(r.total_net_ht, monnaie)}</TableCell>
+                  <TableCell align="right">{formaterTexte(r.total_ttc, monnaie)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onFerme}>Fermer</Button>
+        <Button
+          variant="contained"
+          disabled={choisis.size === 0}
+          onClick={() => {
+            onImporte(disponibles.filter((r) => choisis.has(r.id)));
+            onFerme();
+          }}
+        >
+          Importer
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+/** Bons retour de la facture : leur valeur se déduit du total. */
+export function TableRetours({
+  retours,
+  monnaie,
+  onRetirer,
+}: {
+  retours: BonRetourResume[];
+  monnaie: Monnaie;
+  onRetirer?: (id: string) => void;
+}) {
+  const m = (v: string) => (Number(v) ? `−${formaterTexte(v, monnaie)}` : formaterTexte(v, monnaie));
+  const somme = (cle: "total_fodec" | "total_net_ht" | "total_tva" | "total_ttc") =>
+    retours.reduce((s, r) => s + Number(r[cle]), 0).toFixed(monnaie.decimales);
+  if (retours.length === 0)
+    return (
+      <Typography color="text.secondary" sx={{ p: 1 }}>
+        Aucun bon retour. « Importer BR » déduit de la facture la marchandise renvoyée au fournisseur.
+      </Typography>
+    );
+  return (
+    <TableContainer sx={{ border: 1, borderColor: "grey.400", borderRadius: 1, maxHeight: 220 }}>
+      <Table size="small" stickyHeader aria-label="Bons retour">
+        <TableHead>
+          <TableRow>
+            {["Bon Retour", "Date", "Motif", "Total Fodec", "Total Net HT", "Total TVA", "Total TTC"].map((t, i) => (
+              <TableCell key={t} sx={ENTETE} align={i >= 3 ? "right" : "left"}>
+                {t}
+              </TableCell>
+            ))}
+            {onRetirer && <TableCell sx={ENTETE} />}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {retours.map((r) => (
+            <TableRow key={r.id} sx={{ "& td": { color: "error.main" } }}>
+              <TableCell>{r.numero}</TableCell>
+              <TableCell>{dateCourte(r.date_retour)}</TableCell>
+              <TableCell>{r.motif}</TableCell>
+              <TableCell align="right">{m(r.total_fodec)}</TableCell>
+              <TableCell align="right">{m(r.total_net_ht)}</TableCell>
+              <TableCell align="right">{m(r.total_tva)}</TableCell>
+              <TableCell align="right">{m(r.total_ttc)}</TableCell>
+              {onRetirer && (
+                <TableCell>
+                  <Button size="small" onClick={() => onRetirer(r.id)}>
+                    Retirer
+                  </Button>
+                </TableCell>
+              )}
+            </TableRow>
+          ))}
+        </TableBody>
+        <TableFooter>
+          <TableRow sx={{ "& td": { fontWeight: 700, color: "error.main", bgcolor: "grey.100" } }}>
+            <TableCell colSpan={3}>{retours.length} BR</TableCell>
+            <TableCell align="right">{m(somme("total_fodec"))}</TableCell>
+            <TableCell align="right">{m(somme("total_net_ht"))}</TableCell>
+            <TableCell align="right">{m(somme("total_tva"))}</TableCell>
+            <TableCell align="right">{m(somme("total_ttc"))}</TableCell>
+            {onRetirer && <TableCell />}
+          </TableRow>
+        </TableFooter>
+      </Table>
+    </TableContainer>
+  );
+}
+
 export function TableBons({
   bons,
   monnaie,
@@ -231,10 +399,12 @@ export function TableBons({
 
 export function TableLignes({
   lignes,
+  retours = [],
   monnaie,
   magasin,
 }: {
   lignes: LigneFacture[];
+  retours?: LigneRetourFacture[];
   monnaie: Monnaie;
   magasin?: string;
 }) {
@@ -247,6 +417,7 @@ export function TableLignes({
   const [choisie, setChoisie] = useState<number | null>(null);
   const famille = ONGLETS[onglet].famille;
   const visibles = lignes.filter((l) => l.famille === famille);
+  const retournees = retours.filter((l) => l.famille === famille);
   const ligne = choisie === null ? undefined : visibles[choisie];
   const prix = useQuery({
     queryKey: ["derniers-prix", magasin, ligne?.article],
@@ -266,7 +437,7 @@ export function TableLignes({
         variant="scrollable"
       >
         {ONGLETS.map((o) => {
-          const n = lignes.filter((l) => l.famille === o.famille).length;
+          const n = [...lignes, ...retours].filter((l) => l.famille === o.famille).length;
           return <Tab key={o.famille} label={n ? `${o.libelle} (${n})` : o.libelle} />;
         })}
       </Tabs>
@@ -304,7 +475,14 @@ export function TableLignes({
                 sx={{ cursor: "pointer" }}
               >
                 <TableCell>{l.code}</TableCell>
-                <TableCell>{l.designation}</TableCell>
+                <TableCell>
+                  {l.designation}
+                  {l.non_conforme && (
+                    <Box component="span" sx={{ color: "error.main", ml: 1 }}>
+                      (non conforme)
+                    </Box>
+                  )}
+                </TableCell>
                 <TableCell>{l.etui ? "Oui" : ""}</TableCell>
                 <TableCell align="right">{l.quantite}</TableCell>
                 <TableCell align="right">{m(l.prix_achat_ht)}</TableCell>
@@ -317,18 +495,38 @@ export function TableLignes({
                 <TableCell>{l.numero_serie}</TableCell>
               </TableRow>
             ))}
+            {retournees.map((l, i) => (
+              <TableRow key={`retour-${l.bon}-${i}`} sx={{ "& td": { color: "error.main" } }}>
+                <TableCell>{l.code}</TableCell>
+                <TableCell>
+                  {l.designation} (retour {l.bon})
+                </TableCell>
+                <TableCell />
+                <TableCell align="right">−{l.quantite}</TableCell>
+                <TableCell align="right">{m(l.prix_achat_ht)}</TableCell>
+                <TableCell align="right">−{m(l.montant_ht)}</TableCell>
+                <TableCell align="right">{Number(l.taux_remise).toFixed(2)}</TableCell>
+                <TableCell align="right">−{m(l.montant_remise)}</TableCell>
+                <TableCell align="right">−{m(l.net_ht)}</TableCell>
+                <TableCell align="right">{Number(l.taux_tva).toFixed(2)}</TableCell>
+                <TableCell align="right">−{m(l.montant_ttc)}</TableCell>
+                <TableCell>{l.motif}</TableCell>
+              </TableRow>
+            ))}
           </TableBody>
           {visibles.length > 0 && (
             <TableFooter>
               <TableRow sx={{ "& td": { fontWeight: 700, color: "text.primary", bgcolor: "grey.100" } }}>
                 <TableCell colSpan={3} />
-                <TableCell align="right">{visibles.reduce((s, l) => s + l.quantite, 0)}</TableCell>
+                <TableCell align="right">
+                  {visibles.reduce((s, l) => s + l.quantite, 0) - retournees.reduce((s, l) => s + l.quantite, 0)}
+                </TableCell>
                 <TableCell colSpan={8} />
               </TableRow>
             </TableFooter>
           )}
         </Table>
-        {visibles.length === 0 && (
+        {visibles.length + retournees.length === 0 && (
           <Box sx={{ p: 2 }}>
             <Typography color="text.secondary">Aucun article dans cet onglet.</Typography>
           </Box>
@@ -435,12 +633,14 @@ export function FactureAchat() {
   const queryClient = useQueryClient();
   const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
   const [magasinChoisi, setMagasin] = useState("");
-  const magasin = magasins.data?.find((m) => m.id === magasinChoisi) ?? magasins.data?.[0];
+  const liste = magasins.data ? depotDabord(magasins.data) : undefined;
+  const magasin = liste?.find((m) => m.id === magasinChoisi) ?? liste?.[0];
   const monnaie: Monnaie = { devise: magasin?.pays.devise ?? "TND", decimales: magasin?.pays.decimales ?? 3 };
   const [fournisseur, setFournisseur] = useState<Fournisseur | null>(null);
   const [reference, setReference] = useState("");
   const [dateReference, setDateReference] = useState("");
   const [bons, setBons] = useState<BonFacture[]>([]);
+  const [retours, setRetours] = useState<BonRetourResume[]>([]);
   const [tauxRemiseEx, setTauxRemiseEx] = useState("0");
   const [frais, setFrais] = useState("0");
   const [timbre, setTimbre] = useState("0");
@@ -449,7 +649,7 @@ export function FactureAchat() {
   const [observation, setObservation] = useState("");
   const [ongletBas, setOngletBas] = useState(0);
   const [ongletHaut, setOngletHaut] = useState(0);
-  const [importer, setImporter] = useState(false);
+  const [importer, setImporter] = useState<"bl" | "br" | null>(null);
   const [message, setMessage] = useState("");
 
   const saisie: SaisieFactureAchat | null =
@@ -460,6 +660,7 @@ export function FactureAchat() {
           reference_fournisseur: reference,
           date_reference: dateReference,
           bons: bons.map((b) => b.id),
+          retours: retours.map((r) => r.id),
           taux_remise_ex: nombre(tauxRemiseEx) || "0",
           frais_supplementaires: nombre(frais) || "0",
           timbre_fiscal: nombre(timbre) || "0",
@@ -482,6 +683,7 @@ export function FactureAchat() {
     setReference("");
     setDateReference("");
     setBons([]);
+    setRetours([]);
     setTauxRemiseEx("0");
     setFrais("0");
     setTimbre("0");
@@ -493,10 +695,11 @@ export function FactureAchat() {
     mutationFn: () => enregistrerFacture(saisie!),
     onSuccess: (facture) => {
       setMessage(
-        `Facture achat ${facture.numero} enregistrée (${facture.reference_fournisseur}, ${formaterTexte(facture.total_ttc, monnaie)} TTC, ${facture.bons.length} BL).`,
+        `Facture achat ${facture.numero} enregistrée (${facture.reference_fournisseur}, ${formaterTexte(facture.total_ttc, monnaie)} TTC, ${facture.bons.length} BL${facture.retours.length ? `, ${facture.retours.length} BR déduit(s)` : ""}).`,
       );
       vider();
-      for (const cle of ["factures-achat", "bons-reception"]) void queryClient.invalidateQueries({ queryKey: [cle] });
+      for (const cle of ["factures-achat", "bons-reception", "bons-retour"])
+        void queryClient.invalidateQueries({ queryKey: [cle] });
     },
   });
   const manque = !fournisseur
@@ -540,6 +743,7 @@ export function FactureAchat() {
             onChange={(f) => {
               setFournisseur(f);
               setBons([]);
+              setRetours([]);
             }}
             libelle="Code Fournisseur / Raison sociale"
           />
@@ -560,19 +764,20 @@ export function FactureAchat() {
               onChange={(e) => setDateReference(e.target.value)}
               slotProps={{ inputLabel: { shrink: true } }}
             />
-            {magasins.data && (
+            {liste && (
               <TextField
                 select
                 size="small"
-                label="Magasin"
+                label="Dépôt / Magasin"
                 value={magasin?.id ?? ""}
                 onChange={(e) => {
                   setMagasin(e.target.value);
                   setBons([]);
+                  setRetours([]);
                 }}
                 sx={{ width: 200 }}
               >
-                {magasins.data.map((m) => (
+                {liste.map((m) => (
                   <MenuItem key={m.id} value={m.id}>
                     {m.nom}
                   </MenuItem>
@@ -586,17 +791,25 @@ export function FactureAchat() {
           <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
             <Tabs value={ongletHaut} onChange={(_, o: number) => setOngletHaut(o)} sx={{ flex: 1 }}>
               <Tab label={`Bon Livraison${bons.length ? ` (${bons.length})` : ""}`} />
-              <Tab label="Bon Retour" />
+              <Tab label={`Bon Retour${retours.length ? ` (${retours.length})` : ""}`} />
             </Tabs>
             <Button
               startIcon={<Download sx={{ color: "success.main" }} />}
               sx={BOUTON}
               disabled={!fournisseur || !magasin}
-              onClick={() => setImporter(true)}
+              onClick={() => setImporter("bl")}
             >
               Importer BL
             </Button>
-            <Button sx={BOUTON} disabled title="À venir">
+            <Button
+              startIcon={<Download sx={{ color: "error.main" }} />}
+              sx={BOUTON}
+              disabled={!fournisseur || !magasin}
+              onClick={() => {
+                setImporter("br");
+                setOngletHaut(1);
+              }}
+            >
               Importer BR
             </Button>
           </Stack>
@@ -607,7 +820,11 @@ export function FactureAchat() {
               onRetirer={(id) => setBons((bs) => bs.filter((b) => b.id !== id))}
             />
           ) : (
-            <Typography color="text.secondary">Bons de retour fournisseur : à venir.</Typography>
+            <TableRetours
+              retours={retours}
+              monnaie={monnaie}
+              onRetirer={(id) => setRetours((rs) => rs.filter((r) => r.id !== id))}
+            />
           )}
         </Stack>
       </Stack>
@@ -615,6 +832,7 @@ export function FactureAchat() {
       <TableLignes
         key={bons.map((b) => b.id).join()}
         lignes={totaux ? apercu.data!.lignes : []}
+        retours={totaux ? apercu.data!.lignes_retour : []}
         monnaie={monnaie}
         magasin={magasin?.id}
       />
@@ -719,7 +937,17 @@ export function FactureAchat() {
         </Button>
       </Stack>
 
-      {importer && fournisseur && magasin && (
+      {importer === "br" && fournisseur && magasin && (
+        <ImportBr
+          magasin={magasin.id}
+          fournisseur={fournisseur}
+          deja={new Set(retours.map((r) => r.id))}
+          monnaie={monnaie}
+          onImporte={(nouveaux) => setRetours((rs) => [...rs, ...nouveaux])}
+          onFerme={() => setImporter(null)}
+        />
+      )}
+      {importer === "bl" && fournisseur && magasin && (
         <ImportBl
           magasin={magasin.id}
           fournisseur={fournisseur}
@@ -729,7 +957,7 @@ export function FactureAchat() {
             if (bons.length === 0) setTimbre(timbreParDefaut);
             setBons((bs) => [...bs, ...nouveaux]);
           }}
-          onFerme={() => setImporter(false)}
+          onFerme={() => setImporter(null)}
         />
       )}
     </Stack>
@@ -745,6 +973,12 @@ export function pageFacture(f: Facture, monnaie: Monnaie) {
     .map(
       (l) =>
         `<tr><td>${e(l.code)}</td><td>${e(l.designation)}</td><td class="n">${l.quantite}</td><td class="n">${m(l.prix_achat_ht)}</td><td class="n">${Number(l.taux_remise).toFixed(2)}</td><td class="n">${m(l.net_ht)}</td><td class="n">${Number(l.taux_tva).toFixed(2)}</td><td class="n">${m(l.montant_ttc)}</td></tr>`,
+    )
+    .join("");
+  const retours = f.lignes_retour
+    .map(
+      (l) =>
+        `<tr class="r"><td>${e(l.code)}</td><td>${e(l.designation)} (retour ${e(l.bon)})</td><td class="n">−${l.quantite}</td><td class="n">${m(l.prix_achat_ht)}</td><td class="n">${Number(l.taux_remise).toFixed(2)}</td><td class="n">−${m(l.net_ht)}</td><td class="n">${Number(l.taux_tva).toFixed(2)}</td><td class="n">−${m(l.montant_ttc)}</td></tr>`,
     )
     .join("");
   const tva = f.detail_tva
@@ -763,13 +997,14 @@ table { border-collapse: collapse; width: 100%; margin: 3mm 0; }
 th, td { border: 1px solid #999; padding: 1mm 1.5mm; }
 th { background: #eee; text-align: left; }
 .n { text-align: right; }
+.r td { color: #b00020; }
 .bas { display: flex; gap: 8mm; align-items: flex-start; }
 .bas table { width: auto; }
 </style></head><body>
 <h1>Facture Achat ${e(f.numero)}</h1>
 <p>Fournisseur : <strong>${f.fournisseur_code} · ${e(f.fournisseur)}</strong> · Référence fournisseur : <strong>${e(f.reference_fournisseur)}</strong> du ${dateCourte(f.date_reference)}<br>
-Magasin : ${e(f.magasin)} · Date d'entrée : ${dateCourte(f.date_entree)} · BL : ${f.bons.map((b) => e(b.numero_bl)).join(", ")}</p>
-<table><thead><tr><th>Code</th><th>Désignation</th><th class="n">Qté</th><th class="n">Prix achat HT</th><th class="n">Remise %</th><th class="n">Net HT</th><th class="n">TVA %</th><th class="n">TTC</th></tr></thead><tbody>${lignes}</tbody></table>
+Magasin : ${e(f.magasin)} · Date d'entrée : ${dateCourte(f.date_entree)} · BL : ${f.bons.map((b) => e(b.numero_bl)).join(", ")}${f.retours.length ? ` · Bons retour : ${f.retours.map((r) => e(r.numero)).join(", ")}` : ""}</p>
+<table><thead><tr><th>Code</th><th>Désignation</th><th class="n">Qté</th><th class="n">Prix achat HT</th><th class="n">Remise %</th><th class="n">Net HT</th><th class="n">TVA %</th><th class="n">TTC</th></tr></thead><tbody>${lignes}${retours}</tbody></table>
 <div class="bas"><table><thead><tr><th class="n">Base HT</th><th class="n">Taux TVA</th><th class="n">Montant TVA</th></tr></thead><tbody>${tva}</tbody></table>
 <table><tbody>${total("Total HT", f.total_ht)}${total("Total remise", f.total_remise)}${total("Remise exceptionnelle", f.remise_ex)}${total("Total net HT", f.total_net_ht)}${total("Total FODEC", f.total_fodec)}${total("Total TVA", f.total_tva)}${total("Timbre fiscal", f.timbre_fiscal)}${total("Frais supplémentaires", f.frais_supplementaires)}${Number(f.ajustement) ? total("Ajustement", f.ajustement) : ""}<tr><th>Total TTC</th><th class="n">${m(f.total_ttc)}</th></tr></tbody></table></div>
 <p>Créé par ${e(f.cree_par)} le ${dateCourte(f.cree_le)} · Facture achat : ${e(f.paiement_libelle)}</p>

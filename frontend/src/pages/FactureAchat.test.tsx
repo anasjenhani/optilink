@@ -42,11 +42,12 @@ test("importe les BL du fournisseur et enregistre la facture", async () => {
         return json({ results: [{ id: "m1", nom: "Tunis", pays: { devise: "TND", decimales: 3 } }] });
       if (url.startsWith("/api/v1/fournisseurs/"))
         return json({ count: 1, results: [{ id: "f1", code: 25, nom: "Optical Line Trading" }] });
-      if (url.includes("a-facturer")) return json({ timbre_fiscal: "1.000", bons: [BL] });
+      if (url.includes("a-facturer")) return json({ timbre_fiscal: "1.000", bons: [BL], retours: [] });
       if (url.includes("apercu"))
         return json({
           ...TOTAUX,
           detail_tva: [{ taux: "19.00", base_ht: "4815.802", montant_tva: "915.001" }],
+          lignes_retour: [],
           lignes: [
             {
               bon: BL.numero,
@@ -67,7 +68,10 @@ test("importe les BL du fournisseur et enregistre la facture", async () => {
             },
           ],
         });
-      return json({ ...TOTAUX, numero: "T01-FA2026-000043", reference_fournisseur: "26/00487", bons: [BL] }, 201);
+      return json(
+        { ...TOTAUX, numero: "T01-FA2026-000043", reference_fournisseur: "26/00487", bons: [BL], retours: [] },
+        201,
+      );
     }),
   );
   render(
@@ -111,7 +115,9 @@ test("la page imprimable reprend les lignes et les totaux", () => {
       date_entree: "2026-09-23",
       magasin: "Tunis",
       bons: [BL],
+      retours: [],
       lignes: [],
+      lignes_retour: [],
       detail_tva: [{ taux: "19.00", base_ht: "4815.802", montant_tva: "915.001" }],
       timbre_fiscal: "1.000",
       frais_supplementaires: "0.000",

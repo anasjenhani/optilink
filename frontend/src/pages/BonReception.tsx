@@ -76,14 +76,14 @@ const nombre = (texte: string) => Number(texte.replace(",", ".")) || 0;
 const arrondi = (montant: number, decimales: number) => Math.round(montant * 10 ** decimales) / 10 ** decimales;
 const aujourdhui = () => new Date().toISOString().slice(0, 10);
 
-/** Même calcul que le serveur : les lignes non conformes ne comptent pas. */
+/** Même calcul que le serveur : tout le livré compte, non conformes compris (ils se renvoient
+ * par un bon retour, déduit de la facture achat ; ils n'entrent pas en stock). */
 export function calculerBon(lignes: LigneSaisie[], tauxRemiseEx: number, fodec: boolean, decimales: number) {
   let totalHt = 0;
   let totalRemise = 0;
   let totalNet = 0;
   const bases = new Map<number, number>();
   for (const l of lignes) {
-    if (l.non_conforme) continue;
     const brut = nombre(l.prix_achat_ht) * nombre(l.quantite);
     const remise = (brut * nombre(l.taux_remise)) / 100;
     totalHt += brut;
@@ -167,14 +167,17 @@ export function ChoixFournisseur({
 }
 
 /** Ajout d'un article du stock (les verres et suppléments viennent du bon de commande). */
-function AjoutArticle({
+export function AjoutArticle({
   magasin,
   famille,
   onAjoute,
+  avecStock = false,
 }: {
   magasin: string;
-  famille: Famille;
+  famille: Famille | "";
   onAjoute: (article: Article) => void;
+  /** Affiche le stock du magasin sous chaque article (transfert, bon retour). */
+  avecStock?: boolean;
 }) {
   const [saisie, setSaisie] = useState("");
   const articles = useQuery({
@@ -200,7 +203,9 @@ function AjoutArticle({
           <Stack>
             <Typography variant="body2">{a.libelle}</Typography>
             <Typography variant="caption" color="text.secondary">
-              {[a.reference, a.code_barres, a.description].filter(Boolean).join(" · ")}
+              {[a.reference, a.code_barres, a.description, avecStock && a.stock !== null && `stock ${a.stock}`]
+                .filter(Boolean)
+                .join(" · ")}
             </Typography>
           </Stack>
         </li>

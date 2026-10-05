@@ -6,11 +6,13 @@ from core.admin_imports import AvecImport
 from .admin_saisie import saisir_facture, saisir_reception
 from .models import (
     BonReception,
+    BonRetour,
     CommandeFournisseur,
     FactureAchat,
     Fournisseur,
     LigneCommandeFournisseur,
     LigneReception,
+    LigneRetour,
 )
 
 
@@ -109,6 +111,33 @@ class CommandeFournisseurAdmin(admin.ModelAdmin):
         return CommandeFournisseur.tous.select_related("magasin", "fournisseur")
 
     # Une commande fournisseur se passe et se réceptionne depuis l'application.
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class LigneRetourInline(admin.TabularInline):
+    model = LigneRetour
+    extra = 0
+    can_delete = False
+
+
+@admin.register(BonRetour)
+class BonRetourAdmin(admin.ModelAdmin):
+    list_display = ("numero", "date_retour", "fournisseur", "motif", "etat", "total_ttc")
+    list_filter = ("magasin", "etat", "fournisseur")
+    search_fields = ("numero", "fournisseur__nom", "motif")
+    inlines = [LigneRetourInline]
+
+    def get_queryset(self, request):
+        return BonRetour.tous.select_related("magasin", "fournisseur")
+
+    # Un bon retour se saisit dans l'application (stock et non conformes renvoyés).
     def has_add_permission(self, request):
         return False
 
