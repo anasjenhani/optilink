@@ -3,6 +3,7 @@ import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import Checkbox from "@mui/material/Checkbox";
+import Chip from "@mui/material/Chip";
 import Divider from "@mui/material/Divider";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import List from "@mui/material/List";
@@ -16,6 +17,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import {
+  changerActivationClient,
   chercherClients,
   creerClient,
   formaterOeil,
@@ -106,10 +108,7 @@ export function FicheClient({ client, onEnregistre }: { client?: Client; onEnreg
     onSuccess: onEnregistre,
   });
   const organismes = useQuery({ queryKey: ["organismes"], queryFn: listerOrganismes });
-  const choisirMagasin = useCallback(
-    (id: string) => setSaisie((s) => ({ ...s, magasin_origine: id })),
-    [],
-  );
+  const choisirMagasin = useCallback((id: string) => setSaisie((s) => ({ ...s, magasin_origine: id })), []);
   const champ = (nom: Exclude<keyof SaisieFiche, "accepte_relances" | "civilite">, label: string, type = "text") => (
     <TextField
       size="small"
@@ -202,11 +201,7 @@ export function FicheClient({ client, onEnregistre }: { client?: Client; onEnreg
         label="Accepte les relances par e-mail ou SMS"
       />
       {enregistrement.isError && <Alert severity="error">{enregistrement.error.message}</Alert>}
-      <Button
-        type="submit"
-        variant="contained"
-        disabled={enregistrement.isPending || !saisie.nom || !saisie.prenom}
-      >
+      <Button type="submit" variant="contained" disabled={enregistrement.isPending || !saisie.nom || !saisie.prenom}>
         {client ? "Enregistrer la fiche" : "Créer le client"}
       </Button>
     </Stack>
@@ -299,7 +294,13 @@ function NouvelleOrdonnance({ client, onSaisie }: { client: Client; onSaisie: ()
     <Stack component="form" spacing={2} onSubmit={envoyer} aria-label="Nouvelle ordonnance">
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
         <ChoixMagasin valeur={magasin} onChange={setMagasin} />
-        <TextField select size="small" label="Type" value={type} onChange={(e) => setType(e.target.value as typeof type)}>
+        <TextField
+          select
+          size="small"
+          label="Type"
+          value={type}
+          onChange={(e) => setType(e.target.value as typeof type)}
+        >
           <MenuItem value="lunettes">Lunettes</MenuItem>
           <MenuItem value="lentilles">Lentilles</MenuItem>
         </TextField>
@@ -313,14 +314,24 @@ function NouvelleOrdonnance({ client, onSaisie }: { client: Client; onSaisie: ()
         />
       </Stack>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-        <TextField size="small" label="Prescripteur" value={prescripteur} onChange={(e) => setPrescripteur(e.target.value)} />
+        <TextField
+          size="small"
+          label="Prescripteur"
+          value={prescripteur}
+          onChange={(e) => setPrescripteur(e.target.value)}
+        />
         <TextField
           size="small"
           label={libelleIdentifiant}
           value={identifiant}
           onChange={(e) => setIdentifiant(e.target.value)}
         />
-        <TextField size="small" label="Écart pupillaire (mm)" value={ecart} onChange={(e) => setEcart(e.target.value)} />
+        <TextField
+          size="small"
+          label="Écart pupillaire (mm)"
+          value={ecart}
+          onChange={(e) => setEcart(e.target.value)}
+        />
       </Stack>
       {oeil("od", "OD")}
       {oeil("og", "OG")}
@@ -372,17 +383,30 @@ function Ordonnances({ client, peutSaisir }: { client: Client; peutSaisir: boole
   );
 }
 
+/** Marque d'une fiche désactivée, dans la liste comme sur la fiche. */
+const MarqueDesactive = () => <Chip size="small" label="Désactivé" sx={{ ml: 1 }} />;
+
 export function Clients({ droits }: { droits: Droits }) {
   const [recherche, setRecherche] = useState("");
+  const [avecDesactives, setAvecDesactives] = useState(false);
   const [choisi, setChoisi] = useState<Client | null>(null);
   const [creation, setCreation] = useState(false);
   const [edition, setEdition] = useState(false);
   const queryClient = useQueryClient();
   const clients = useQuery({
-    queryKey: ["clients", recherche],
-    queryFn: () => chercherClients(recherche),
+    queryKey: ["clients", recherche, avecDesactives],
+    queryFn: () => chercherClients(recherche, avecDesactives),
     enabled: recherche.trim().length >= 2,
   });
+  // On ne supprime jamais un client : on désactive sa fiche, et on peut la réactiver.
+  const activation = useMutation({
+    mutationFn: (client: Client) => changerActivationClient(client.id, client.est_actif === false),
+    onSuccess: (client) => {
+      setChoisi(client);
+      void queryClient.invalidateQueries({ queryKey: ["clients"] });
+    },
+  });
+  const desactive = choisi?.est_actif === false;
 
   return (
     <Card>
@@ -405,6 +429,10 @@ export function Clients({ droits }: { droits: Droits }) {
               </Button>
             )}
           </Stack>
+          <FormControlLabel
+            control={<Checkbox checked={avecDesactives} onChange={(e) => setAvecDesactives(e.target.checked)} />}
+            label="Voir les clients désactivés"
+          />
 
           {creation && (
             <FicheClient
@@ -425,10 +453,17 @@ export function Clients({ droits }: { droits: Droits }) {
                 onClick={() => {
                   setChoisi(client);
                   setEdition(false);
+                  activation.reset();
                 }}
+                sx={client.est_actif === false ? { opacity: 0.6 } : undefined}
               >
                 <ListItemText
-                  primary={`${client.nom.toUpperCase()} ${client.prenom}`}
+                  primary={
+                    <>
+                      {`${client.nom.toUpperCase()} ${client.prenom}`}
+                      {client.est_actif === false && <MarqueDesactive />}
+                    </>
+                  }
                   secondary={[client.societe, client.telephone, client.email, client.ville].filter(Boolean).join(" · ")}
                 />
               </ListItemButton>
@@ -440,7 +475,13 @@ export function Clients({ droits }: { droits: Droits }) {
               <Divider />
               <Typography variant="h6" component="h3">
                 {choisi.nom.toUpperCase()} {choisi.prenom}
+                {desactive && <MarqueDesactive />}
               </Typography>
+              {desactive && (
+                <Alert severity="warning">
+                  Fiche désactivée : le client n'apparaît plus dans les recherches de vente et de devis.
+                </Alert>
+              )}
               {edition ? (
                 <FicheClient
                   key={choisi.id}
@@ -455,10 +496,18 @@ export function Clients({ droits }: { droits: Droits }) {
                 <>
                   <Coordonnees client={choisi} />
                   {droits.modifierClient && (
-                    <Button onClick={() => setEdition(true)} sx={{ alignSelf: "flex-start" }}>
-                      Modifier la fiche
-                    </Button>
+                    <Stack direction="row" spacing={1}>
+                      <Button onClick={() => setEdition(true)}>Modifier la fiche</Button>
+                      <Button
+                        color={desactive ? "primary" : "error"}
+                        disabled={activation.isPending}
+                        onClick={() => activation.mutate(choisi)}
+                      >
+                        {desactive ? "Réactiver" : "Désactiver"}
+                      </Button>
+                    </Stack>
                   )}
+                  {activation.isError && <Alert severity="error">{activation.error.message}</Alert>}
                 </>
               )}
               {droits.voirOrdonnances && <Ordonnances client={choisi} peutSaisir={droits.saisirOrdonnance} />}
