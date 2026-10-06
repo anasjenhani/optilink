@@ -11,6 +11,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
 from apps.reseau.models import Magasin, Societe
+from apps.securite.corbeille import mettre_a_la_corbeille
 
 from .. import banque, services
 from ..models import ClotureCaisse, CompteTresorerie, DepenseCaisse, OperationTresorerie
@@ -185,6 +186,9 @@ class DepenseViewSet(
                 {"detail": f"Dépense déjà comprise dans la clôture {depense.cloture.numero}."}
             )
         return depense
+
+    def perform_destroy(self, depense):
+        mettre_a_la_corbeille(depense, auteur=self.request.user)
 
     def perform_update(self, serializer):
         # Le magasin d'une dépense ne change pas.
