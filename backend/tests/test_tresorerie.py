@@ -241,3 +241,28 @@ def donner_profil(tunis):
         return utilisateur
 
     return _donner
+
+
+def test_corriger_ou_supprimer_une_depense_avant_la_cloture(tunis, equipe, journee, client_de):
+    client = client_de(equipe["caissier"])
+    corps = {
+        "magasin_id": str(tunis.public_id),
+        "categorie": "transport",
+        "motif": "Taxi",
+        "montant": "8.000",
+    }
+    depense = client.post("/api/v1/tresorerie/depenses/", corps, format="json").json()
+    url = f"/api/v1/tresorerie/depenses/{depense['id']}/"
+    corrige = client.patch(url, {"montant": "6.500", "motif": "Taxi livraison"}, format="json")
+    assert corrige.status_code == 200, corrige.json()
+    assert (corrige.json()["montant"], corrige.json()["motif"]) == ("6.500", "Taxi livraison")
+    assert client.delete(url).status_code == 204
+    assert not DepenseCaisse.tous.filter(public_id=depense["id"]).exists()
+
+    # Une fois la caisse clôturée, la dépense fait partie de la clôture.
+    depense = client.post("/api/v1/tresorerie/depenses/", corps, format="json").json()
+    assert cloturer(client, tunis).status_code == 201
+    url = f"/api/v1/tresorerie/depenses/{depense['id']}/"
+    refus = client.patch(url, {"montant": "1.000"}, format="json")
+    assert refus.status_code == 400 and "clôture" in refus.json()["detail"]
+    assert client.delete(url).status_code == 400

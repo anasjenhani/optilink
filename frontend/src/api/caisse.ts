@@ -54,6 +54,7 @@ export type Vente = {
     total_ttc: string;
     prix_unitaire_ttc: string;
     remise_pct: string;
+    taux_tva?: string;
     /** N° de la lunette ou des lentilles qui contiennent l'article, et sa place. */
     lunette?: number | null;
     lentilles?: number | null;
@@ -196,6 +197,7 @@ export const chercherArticles = (
   recherche: string,
   famille: Famille | "" = "",
   typeVente: TypeVente | "" = "",
+  desactives = false,
 ) =>
   appeler<{ results: Article[] }>(
     `/api/v1/articles/?${new URLSearchParams({
@@ -203,6 +205,7 @@ export const chercherArticles = (
       recherche,
       ...(famille && { famille }),
       ...(typeVente && { type_vente: typeVente }),
+      ...(desactives && { desactives: "true" }),
     })}`,
   ).then((page) => page.results);
 
@@ -211,12 +214,21 @@ export const encaisser = (saisie: SaisieVente) => appeler<Vente>("/api/v1/ventes
 export type Facture = {
   id: string;
   numero: string;
+  /** Code du magasin émetteur. */
+  magasin: string;
   vente: string;
-  client: { id: string; nom: string; matricule_fiscal: string };
+  /** Tel qu'imprimé à l'émission. */
+  client: { id: string; nom: string; adresse: string; matricule_fiscal: string };
+  cree_le: string;
+  emise_par: string;
   devise: string;
+  total_ht: string;
+  total_tva: string;
   total_ttc: string;
   timbre_fiscal: string;
   net_a_payer: string;
+  mode_paiement_timbre: ModePaiement | "";
+  lignes: Vente["lignes"];
 };
 
 export const trouverVente = (numero: string) =>
@@ -227,6 +239,15 @@ export const trouverVente = (numero: string) =>
 /** La facture n'est acceptée que pour une vente entièrement payée ; le client règle le timbre. */
 export const genererFacture = (saisie: { vente: string; client?: string; mode_paiement_timbre?: ModePaiement }) =>
   appeler<Facture>("/api/v1/factures/", { methode: "POST", corps: saisie });
+
+/** Factures émises, les plus récentes d'abord ; le n° se cherche en entier. */
+export const listerFactures = (numero: string, page = 1) => {
+  const parametres = new URLSearchParams({ page: String(page) });
+  if (numero.trim()) parametres.set("numero", numero.trim());
+  return appeler<{ count: number; results: Facture[] }>(`/api/v1/factures/?${parametres}`);
+};
+
+export const lireFacture = (id: string) => appeler<Facture>(`/api/v1/factures/${id}/`);
 
 export const listerCommandes = (magasin: string) =>
   appeler<{ results: Vente[] }>(

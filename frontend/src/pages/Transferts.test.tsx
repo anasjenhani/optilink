@@ -40,12 +40,15 @@ const TRANSFERT = {
   cree_le: "2026-10-05T10:00:00Z",
   recu_par: "",
   recu_le: null,
+  annule_par: "",
+  annule_le: null,
   lignes: [
     { article: "a1", reference: "MON-1", code_barres: "", libelle: "Ray-Ban RB5154", famille: "monture", quantite: 2 },
   ],
 };
 
 function afficher(ecran: React.ReactNode) {
+  let detail: unknown = TRANSFERT;
   const appels: { url: string; methode?: string; corps?: unknown }[] = [];
   vi.stubGlobal(
     "fetch",
@@ -53,8 +56,12 @@ function afficher(ecran: React.ReactNode) {
       appels.push({ url, methode: init?.method, corps: init?.body ? JSON.parse(init.body as string) : undefined });
       if (url.startsWith("/api/v1/magasins/")) return json({ results: MAGASINS });
       if (url.startsWith("/api/v1/articles/")) return json({ results: [MONTURE] });
+      if (url.endsWith("/annuler/")) {
+        detail = { ...TRANSFERT, statut: "annule", annule_par: "achats", annule_le: "2026-10-05T11:00:00Z" };
+        return json(detail);
+      }
       if (url.endsWith("/recevoir/")) return json({ ...TRANSFERT, statut: "recu", recu_le: "2026-10-05T12:00:00Z" });
-      if (url === "/api/v1/transferts/t1/") return json(TRANSFERT);
+      if (url === "/api/v1/transferts/t1/") return json(detail);
       if (url.startsWith("/api/v1/transferts/?")) return json({ count: 1, results: [TRANSFERT] });
       if (url === "/api/v1/transferts/") return json(TRANSFERT, 201);
       return json({ results: [] });
@@ -98,4 +105,22 @@ test("le magasin destinataire réceptionne le transfert", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "Réceptionner" }));
   expect(await screen.findByText(/Reçu le/)).toBeInTheDocument();
   expect(appels.some((a) => a.url === "/api/v1/transferts/t1/recevoir/" && a.methode === "POST")).toBe(true);
+});
+
+test("le dépôt annule un transfert pas encore reçu", async () => {
+  const appels = afficher(<ListeTransferts recevoir={false} annuler />);
+  fireEvent.click(await screen.findByText("DEP-TR2026-000001"));
+  fireEvent.click(await screen.findByRole("button", { name: "Annuler le transfert" }));
+  expect(screen.getByText(/Les articles reviennent au stock de Dépôt central/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Oui, annuler" }));
+  expect(await screen.findByText(/Annulé le .* par achats/)).toBeInTheDocument();
+  expect(appels.some((a) => a.url === "/api/v1/transferts/t1/annuler/" && a.methode === "POST")).toBe(true);
+  expect(screen.queryByRole("button", { name: "Annuler le transfert" })).not.toBeInTheDocument();
+});
+
+test("sans le droit d'envoyer, pas de bouton Annuler", async () => {
+  afficher(<ListeTransferts recevoir />);
+  fireEvent.click(await screen.findByText("DEP-TR2026-000001"));
+  await screen.findByRole("button", { name: "Réceptionner" });
+  expect(screen.queryByRole("button", { name: "Annuler le transfert" })).not.toBeInTheDocument();
 });

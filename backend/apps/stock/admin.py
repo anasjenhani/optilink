@@ -3,7 +3,7 @@ from django.core.exceptions import PermissionDenied
 
 from core.admin_imports import AvecImport
 
-from .admin_saisie import saisir_inventaire
+from .admin_saisie import saisir_inventaire, saisir_transfert
 from .models import (
     Article,
     Inventaire,
@@ -143,9 +143,12 @@ class TransfertStockAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return TransfertStock.tous.select_related("magasin", "destination")
 
-    # Envoyé par le dépôt et réceptionné par le magasin dans l'application (stock des deux).
-    def has_add_permission(self, request):
-        return False
+    # « Ajouter » envoie le transfert par le même service que l'application ; le magasin de
+    # destination le réceptionne dans l'application. Un transfert ne se modifie pas.
+    def add_view(self, request, form_url="", extra_context=None):
+        if not self.has_add_permission(request):
+            raise PermissionDenied
+        return saisir_transfert(self, request)
 
     def has_change_permission(self, request, obj=None):
         return False

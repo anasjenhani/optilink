@@ -99,6 +99,34 @@ def test_casse_de_verre_le_remet_a_commander(opticien, client_de, tunis, monture
     ]
 
 
+def test_corriger_puis_annuler_une_casse(opticien, client_de, tunis, monture, verre, amel):  # noqa: F811
+    api = client_de(opticien)
+    vente = commander(tunis, monture, verre, opticien, client=amel)
+    recevoir_verres(vente, opticien)
+    verre_recu = api.get(f"/api/v1/ventes/{vente.public_id}/fiche/").json()["verres_commandes"][0]
+    casse = api.post(
+        "/api/v1/casses-verres/", {"ligne_commande": verre_recu["id"], "cause": "atelier"}
+    ).json()
+    url = f"/api/v1/casses-verres/{casse['id']}/"
+    corrige = api.patch(url, {"cause": "fournisseur", "observation": "Défaut de traitement"})
+    assert corrige.status_code == 200, corrige.json()
+    assert corrige.json()["cause_libelle"] == "Défaut du fournisseur"
+
+    # Déclarée par erreur : la casse s'annule et le verre reçu compte de nouveau.
+    assert api.delete(url).status_code == 204
+    fiche = api.get(f"/api/v1/ventes/{vente.public_id}/fiche/").json()
+    assert (fiche["verres"], fiche["etat"]) == ("recus", "montage")
+    assert fiche["etapes"][-1]["observation"].startswith("Casse verre annulée")
+
+    # Une fois le verre recommandé, la casse ne s'annule plus.
+    casse = api.post(
+        "/api/v1/casses-verres/", {"ligne_commande": verre_recu["id"], "cause": "atelier"}
+    ).json()
+    recevoir_verres(vente, opticien)
+    refus = api.delete(f"/api/v1/casses-verres/{casse['id']}/")
+    assert refus.status_code == 400 and "recommandé" in refus.json()["detail"]
+
+
 def test_casse_sans_droit_refusee(affecter, client_de, tunis, monture, verre):  # noqa: F811
     vendeur = affecter("vendeur", "ventes.view_vente", portee="magasin", magasin=tunis)
     vente = commander(tunis, monture, verre, vendeur)

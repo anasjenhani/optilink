@@ -28,6 +28,7 @@ from ..receptions import (
 from ..services import (
     CasseImpossible,
     CommandeFournisseurImpossible,
+    annuler_casse,
     annuler_commande_fournisseur,
     declarer_casse,
     passer_commande,
@@ -38,6 +39,7 @@ from .serializers import (
     BonReceptionListeSerializer,
     BonReceptionSaisieSerializer,
     BonReceptionSerializer,
+    CasseVerreCorrectionSerializer,
     CasseVerreSaisieSerializer,
     CasseVerreSerializer,
     CommandeFournisseurSaisieSerializer,
@@ -188,12 +190,29 @@ class CommandeFournisseurViewSet(
         return self._changer(annuler_commande_fournisseur)
 
 
-class CasseVerreViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
-    """Verres cassés ou défectueux après réception, à recommander au fournisseur."""
+class CasseVerreViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Verres cassés ou défectueux après réception, à recommander au fournisseur.
+
+    Qui déclare une casse peut en corriger la cause et l'observation, ou l'annuler si elle a été
+    déclarée par erreur (tant que le verre n'a pas été recommandé).
+    """
 
     serializer_class = CasseVerreSerializer
+    lookup_field = "public_id"
+    http_method_names = ["get", "post", "patch", "delete"]
     filterset_fields = ["cause", "vente__magasin__public_id"]
-    permissions_requises = {"list": "achats.view_casseverre", "create": "achats.add_casseverre"}
+    permissions_requises = {
+        "list": "achats.view_casseverre",
+        "create": "achats.add_casseverre",
+        "partial_update": "achats.add_casseverre",
+        "destroy": "achats.add_casseverre",
+    }
 
     def get_queryset(self):
         # Les ventes visibles portent le périmètre de magasins de l'utilisateur.
@@ -237,6 +256,29 @@ class CasseVerreViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewsets
             return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)
         casse = self.get_queryset().get(pk=casse.pk)
         return Response(CasseVerreSerializer(casse).data, status=status.HTTP_201_CREATED)
+
+    def _casse(self, public_id):
+        casse = get_object_or_404(self.get_queryset(), public_id=public_id)
+        if not self.request.user.has_perm("achats.add_casseverre", casse.vente):
+            raise PermissionDenied("Pas de droit de corriger une casse dans ce magasin.")
+        return casse
+
+    @extend_schema(request=CasseVerreCorrectionSerializer, responses=CasseVerreSerializer)
+    def partial_update(self, request, public_id=None):
+        """Corrige la cause ou l'observation d'une casse."""
+        casse = self._casse(public_id)
+        saisie = CasseVerreCorrectionSerializer(casse, data=request.data, partial=True)
+        saisie.is_valid(raise_exception=True)
+        saisie.save()
+        return Response(CasseVerreSerializer(self.get_queryset().get(pk=casse.pk)).data)
+
+    def destroy(self, request, public_id=None):
+        """Annule une casse déclarée par erreur : le verre reçu compte de nouveau."""
+        try:
+            annuler_casse(self._casse(public_id), utilisateur=request.user)
+        except CasseImpossible as erreur:
+            return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class BonReceptionViewSet(

@@ -31,6 +31,10 @@ class DemandeCongeAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
 
+    # Une demande se refuse ou s'annule dans l'application : elle reste dans l'historique.
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(Acompte)
 class AcompteAdmin(admin.ModelAdmin):
@@ -44,6 +48,10 @@ class AcompteAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
 
+    # Une demande se refuse ou s'annule dans l'application : elle reste dans l'historique.
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(Prime)
 class PrimeAdmin(admin.ModelAdmin):
@@ -54,4 +62,8 @@ class PrimeAdmin(admin.ModelAdmin):
         return False
 
     def has_change_permission(self, request, obj=None):
+        return False
+
+    # Une demande se refuse ou s'annule dans l'application : elle reste dans l'historique.
+    def has_delete_permission(self, request, obj=None):
         return False

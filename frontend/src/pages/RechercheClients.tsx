@@ -94,7 +94,8 @@ export function RechercheClients({
   const decimales = magasins.data?.[0]?.pays.decimales ?? 3;
   const clients = useQuery({
     queryKey: ["clients", "tableau", recherche, tri, page],
-    queryFn: () => listerClients({ ...recherche, tri }, page),
+    // On choisit ici le client d'une vente : les fiches désactivées n'y figurent pas.
+    queryFn: () => listerClients({ ...recherche, tri, est_actif: "true" }, page),
     placeholderData: keepPreviousData,
   });
   const lignes = clients.data?.results ?? [];

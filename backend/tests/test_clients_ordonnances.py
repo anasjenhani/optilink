@@ -118,6 +118,28 @@ def test_pas_de_suppression_de_client(affecter, client_de, dupont):
     assert client_de(vendeur).delete(f"/api/v1/clients/{dupont.public_id}/").status_code == 405
 
 
+def test_desactivation_et_filtre_des_clients_actifs(affecter, client_de, reseau, dupont):
+    durand = Client.objects.create(nom="Durand", prenom="Paul", magasin_origine=reseau["lille"])
+    lecteur = client_de(affecter("lecteur", "crm.view_client", portee="reseau"))
+    url = f"/api/v1/clients/{dupont.public_id}/"
+    assert lecteur.patch(url, {"est_actif": False}, format="json").status_code == 403
+
+    vendeur = client_de(affecter("vendeur", *CLIENTS, portee="reseau"))
+    reponse = vendeur.patch(url, {"est_actif": False}, format="json")
+    assert reponse.status_code == 200 and reponse.json()["est_actif"] is False
+
+    def noms(**filtres):
+        return [c["nom"] for c in vendeur.get("/api/v1/clients/", filtres).json()["results"]]
+
+    assert noms(tri="nom") == ["Dupont", "Durand"]
+    assert noms(est_actif="true") == ["Durand"]
+    assert noms(est_actif="false") == ["Dupont"]
+    # Réactivation : la fiche revient dans les recherches des clients actifs.
+    assert vendeur.patch(url, {"est_actif": True}, format="json").status_code == 200
+    assert noms(est_actif="true", tri="nom") == ["Dupont", "Durand"]
+    assert durand.est_actif
+
+
 # Ordonnances
 
 

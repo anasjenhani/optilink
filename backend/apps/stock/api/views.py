@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 from django.db.models import (
     CharField,
@@ -16,7 +17,7 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import mixins, viewsets
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.reseau.models import Magasin
 
@@ -44,6 +45,11 @@ TYPES_DE_VENTE = {
             ),
             OpenApiParameter("marque", OpenApiTypes.STR, description="Marque (toutes familles)"),
             OpenApiParameter(
+                "desactives",
+                OpenApiTypes.BOOL,
+                description="Les articles désactivés (pour les rouvrir et les réactiver)",
+            ),
+            OpenApiParameter(
                 "type_vente",
                 OpenApiTypes.STR,
                 enum=list(TYPES_DE_VENTE),
@@ -69,7 +75,9 @@ class ArticleViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ["famille"]
 
     def get_queryset(self):
-        articles = Article.objects.filter(est_actif=True).select_related(
+        # Les articles désactivés ne se vendent plus ; ils restent consultables à la demande.
+        actifs = self.request.query_params.get("desactives") != "true"
+        articles = Article.objects.filter(est_actif=actifs).select_related(
             "monture", "verre", "lentille", "fournisseur"
         )
         fournisseur = self.request.query_params.get("fournisseur")
@@ -127,16 +135,57 @@ class ArticleViewSet(viewsets.ReadOnlyModelViewSet):
         return articles.annotate(stock=Coalesce(Subquery(stock), 0))
 
 
+@extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter("magasin", OpenApiTypes.UUID, description="Mouvements de ce magasin"),
+            OpenApiParameter(
+                "article",
+                OpenApiTypes.STR,
+                description="Référence de l'article (contient) ou code-barres exact",
+            ),
+            OpenApiParameter("du", OpenApiTypes.DATE, description="À partir de ce jour inclus"),
+            OpenApiParameter("au", OpenApiTypes.DATE, description="Jusqu'à ce jour inclus"),
+        ]
+    )
+)
 class MouvementStockViewSet(
     mixins.CreateModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet
 ):
-    """Réceptions et ajustements saisis à la main ; les ventes créent leurs propres sorties."""
+    """Réceptions et ajustements saisis à la main ; les ventes créent leurs propres sorties.
+
+    Un mouvement n'est jamais modifié ni supprimé : on corrige par un nouveau mouvement.
+    """
 
     serializer_class = MouvementStockSerializer
     filterset_fields = ["type"]
 
     def get_queryset(self):
-        return MouvementStock.objects.select_related("magasin", "article").order_by("-horodatage")
+        mouvements = MouvementStock.objects.select_related(
+            "magasin", "article", "utilisateur"
+        ).order_by("-horodatage", "-pk")
+        if self.action != "list":
+            return mouvements
+        parametres = self.request.query_params
+        magasin = parametres.get("magasin", "").strip()
+        if magasin:
+            try:
+                mouvements = mouvements.filter(magasin__public_id=uuid.UUID(magasin))
+            except ValueError:
+                raise ValidationError({"magasin": "Identifiant invalide."}) from None
+        article = parametres.get("article", "").strip()
+        if article:
+            mouvements = mouvements.filter(
+                Q(article__reference__icontains=article) | Q(article__code_barres=article)
+            )
+        for champ, critere in (("du", "horodatage__date__gte"), ("au", "horodatage__date__lte")):
+            valeur = parametres.get(champ, "").strip()
+            if valeur:
+                try:
+                    mouvements = mouvements.filter(**{critere: date.fromisoformat(valeur)})
+                except ValueError:
+                    raise ValidationError({champ: "Date attendue au format AAAA-MM-JJ."}) from None
+        return mouvements
 
     def perform_create(self, serializer):
         magasin = serializer.validated_data["magasin"]

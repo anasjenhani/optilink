@@ -165,3 +165,28 @@ def declarer_casse(*, ligne_commande, cause, utilisateur, observation=""):
         par=utilisateur,
     )
     return casse
+
+
+@transaction.atomic
+def annuler_casse(casse, *, utilisateur):
+    """Casse déclarée par erreur : le verre reçu compte de nouveau, tant qu'il n'a pas déjà été
+    recommandé au fournisseur."""
+    from apps.ventes.models import Etape, EtapeCommande
+
+    casse = CasseVerre.objects.select_for_update(of=("self",)).get(pk=casse.pk)
+    ligne_vente_id = casse.ligne_commande.ligne_vente_id
+    vente = Vente.tous.select_for_update().get(pk=casse.vente_id)
+    if vente.statut != Vente.Statut.EN_COMMANDE:
+        raise CasseImpossible(f"La visite {vente.numero} n'est plus une commande en cours.")
+    if _verres_valides().filter(ligne_vente_id=ligne_vente_id).exists():
+        raise CasseImpossible(
+            "Le verre a déjà été recommandé au fournisseur : annulez d'abord cette commande."
+        )
+    cause = casse.get_cause_display()
+    casse.delete()
+    EtapeCommande.objects.create(
+        vente=vente,
+        etape=Etape.MONTAGE,
+        observation=f"Casse verre annulée (déclarée par erreur : {cause})",
+        par=utilisateur,
+    )

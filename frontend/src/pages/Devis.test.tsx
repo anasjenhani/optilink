@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import { Devis, type DroitsDevis } from "./Devis";
 
@@ -21,10 +21,35 @@ const TUNIS = {
 };
 const CLIENT = { id: "c1", nom: "Ben Salah", prenom: "Leila", telephone: "98000000" };
 const ARTICLES = [
-  { id: "a1", reference: "MON-1", libelle: "Monture titane", famille: "monture", prix_vente_ttc: "289.500", taux_tva: "19.00", devise: "TND", stock: 3 },
-  { id: "a2", reference: "VER-1", libelle: "Verre progressif", famille: "verre", prix_vente_ttc: "180.000", taux_tva: "7.00", devise: "TND", stock: 0 },
+  {
+    id: "a1",
+    reference: "MON-1",
+    libelle: "Monture titane",
+    famille: "monture",
+    prix_vente_ttc: "289.500",
+    taux_tva: "19.00",
+    devise: "TND",
+    stock: 3,
+  },
+  {
+    id: "a2",
+    reference: "VER-1",
+    libelle: "Verre progressif",
+    famille: "verre",
+    prix_vente_ttc: "180.000",
+    taux_tva: "7.00",
+    devise: "TND",
+    stock: 0,
+  },
 ];
-const ORDONNANCE = { id: "p1", type: "lunettes", date_prescription: "2026-09-01", prescripteur: "Dr Trabelsi", mesures: {}, saisie_par: "x" };
+const ORDONNANCE = {
+  id: "p1",
+  type: "lunettes",
+  date_prescription: "2026-09-01",
+  prescripteur: "Dr Trabelsi",
+  mesures: {},
+  saisie_par: "x",
+};
 
 function devis(statut: string, valable = "2099-12-31") {
   return {
@@ -47,13 +72,53 @@ function json(donnees: unknown, status = 200) {
 
 afterEach(() => vi.unstubAllGlobals());
 
-const TOUS: DroitsDevis = { remise: true, voirOrdonnances: true, changerStatut: true, encaisser: true };
+const TOUS: DroitsDevis = {
+  remise: true,
+  voirOrdonnances: true,
+  changerStatut: true,
+  encaisser: true,
+  consulter: true,
+};
+
+const DETAIL = {
+  ...devis("accepte"),
+  magasin: "T01",
+  etabli_par: "opticien",
+  cree_le: "2026-10-01T10:00:00Z",
+  total_ht: "560.000",
+  total_tva: "89.500",
+  remarques: "Verres amincis",
+  lignes: [
+    {
+      article: "a1",
+      libelle: "Monture titane",
+      oeil: "",
+      quantite: 1,
+      prix_unitaire_ttc: "289.500",
+      remise_pct: "0.00",
+      taux_tva: "19.00",
+      total_ttc: "289.500",
+    },
+    {
+      article: "a2",
+      libelle: "Verre progressif",
+      oeil: "od",
+      quantite: 2,
+      prix_unitaire_ttc: "200.000",
+      remise_pct: "10.00",
+      taux_tva: "7.00",
+      total_ttc: "360.000",
+    },
+  ],
+};
 
 function afficher(droits: DroitsDevis, existants: unknown[] = []) {
   const envois: { url: string; corps: unknown }[] = [];
+  const lectures: string[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string, init?: RequestInit) => {
+      lectures.push(url);
       if (init?.method === "POST") {
         envois.push({ url, corps: init.body ? JSON.parse(init.body as string) : null });
         if (url.endsWith("/encaisser/")) return json({ id: "v1", numero: "T01-T2026-000007" }, 201);
@@ -63,6 +128,8 @@ function afficher(droits: DroitsDevis, existants: unknown[] = []) {
       if (url.startsWith("/api/v1/clients/")) return json({ results: [CLIENT] });
       if (url.startsWith("/api/v1/prescriptions/")) return json({ results: [ORDONNANCE] });
       if (url.startsWith("/api/v1/articles/")) return json({ results: ARTICLES });
+      if (url === "/api/v1/devis/d1/") return json(DETAIL);
+      if (url.startsWith("/api/v1/devis/?page=")) return json({ count: existants.length, results: existants });
       return json({ results: existants });
     }),
   );
@@ -71,7 +138,7 @@ function afficher(droits: DroitsDevis, existants: unknown[] = []) {
       <Devis droits={droits} />
     </QueryClientProvider>,
   );
-  return envois;
+  return Object.assign(envois, { lectures });
 }
 
 async function choisirClient() {
@@ -112,7 +179,7 @@ test("établit un devis avec ordonnance, monture et verres œil par œil", async
 });
 
 test("sans droit aux ordonnances ni aux remises, ces champs n'apparaissent pas", async () => {
-  afficher({ remise: false, voirOrdonnances: false, changerStatut: true, encaisser: true });
+  afficher({ remise: false, voirOrdonnances: false, changerStatut: true, encaisser: true, consulter: true });
   await choisirClient();
   fireEvent.change(screen.getByLabelText(/Ajouter un article/), { target: { value: "mon" } });
   fireEvent.click((await screen.findAllByRole("button", { name: "Ajouter" }))[0]);
@@ -155,5 +222,54 @@ test("un devis expiré ne propose plus d'action", async () => {
   await choisirClient();
   const liste = await screen.findByRole("list", { name: "Devis du client" });
   expect(within(liste).getByText("Expiré")).toBeInTheDocument();
-  expect(within(liste).queryByRole("button")).not.toBeInTheDocument();
+  expect(within(liste).queryByRole("button", { name: /Accepter|Refuser|Encaisser|Commander/ })).not.toBeInTheDocument();
+});
+
+test("ouvre le détail d'un devis du client : lignes, totaux et statut", async () => {
+  const { lectures } = afficher(TOUS, [devis("accepte")]);
+  await choisirClient();
+  const liste = await screen.findByRole("list", { name: "Devis du client" });
+  fireEvent.click(within(liste).getByRole("button", { name: "Détail" }));
+
+  const fenetre = await screen.findByRole("dialog");
+  const lignes = await within(fenetre).findByRole("table", { name: "Détail des lignes" });
+  expect(lectures).toContain("/api/v1/devis/d1/");
+  expect(within(fenetre).getByText("Devis T01-D2026-000001")).toBeInTheDocument();
+  expect(within(fenetre).getByText("Accepté")).toBeInTheDocument();
+  const verre = within(lignes).getByText("Verre progressif").closest("tr")!;
+  expect(within(verre).getByText("Droit")).toBeInTheDocument();
+  expect(within(verre).getByText(/200,000\sTND/)).toBeInTheDocument();
+  expect(within(verre).getByText("10")).toBeInTheDocument();
+  expect(within(verre).getByText(/360,000\sTND/)).toBeInTheDocument();
+  expect(within(fenetre).getByText(/Total HT 560,000\sTND · TVA 89,500\sTND/)).toBeInTheDocument();
+  expect(within(fenetre).getByText(/Total TTC 649,500\sTND/)).toBeInTheDocument();
+  expect(within(fenetre).getByText("Remarques : Verres amincis")).toBeInTheDocument();
+  fireEvent.click(within(fenetre).getByRole("button", { name: "Fermer" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+});
+
+test("liste tous les devis, filtrés par numéro et statut, et ouvre un détail", async () => {
+  const { lectures } = afficher(TOUS, [{ ...DETAIL, statut: "en_cours" }]);
+  fireEvent.click(screen.getByRole("tab", { name: "Tous les devis" }));
+  const table = await screen.findByRole("table", { name: "Liste des devis" });
+  expect(await within(table).findByText("T01-D2026-000001")).toBeInTheDocument();
+  expect(within(table).getByText("BEN SALAH Leila")).toBeInTheDocument();
+  expect(within(table).getByText("En cours")).toBeInTheDocument();
+  expect(lectures).toContain("/api/v1/devis/?page=1");
+
+  fireEvent.change(screen.getByLabelText(/N° de devis/), { target: { value: "T01-D2026-000001" } });
+  fireEvent.mouseDown(screen.getByRole("combobox", { name: "Statut" }));
+  fireEvent.click(await screen.findByRole("option", { name: "Accepté" }));
+  await waitFor(() => expect(lectures.at(-1)).toBe("/api/v1/devis/?page=1&numero=T01-D2026-000001&statut=accepte"));
+
+  fireEvent.click(within(table).getByText("T01-D2026-000001"));
+  expect(await screen.findByRole("table", { name: "Détail des lignes" })).toBeInTheDocument();
+});
+
+test("sans droit de consultation, ni liste globale ni détail", async () => {
+  afficher({ ...TOUS, consulter: false }, [devis("accepte")]);
+  expect(screen.queryByRole("tab", { name: "Tous les devis" })).not.toBeInTheDocument();
+  await choisirClient();
+  const liste = await screen.findByRole("list", { name: "Devis du client" });
+  expect(within(liste).queryByRole("button", { name: "Détail" })).not.toBeInTheDocument();
 });

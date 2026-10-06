@@ -2,7 +2,13 @@ import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
+import Checkbox from "@mui/material/Checkbox";
 import Chip from "@mui/material/Chip";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
@@ -20,6 +26,7 @@ import { useState } from "react";
 
 import { listerMagasins } from "../api/magasins";
 import {
+  annulerConge,
   annulerMonConge,
   creerEmploye,
   deciderConge,
@@ -29,8 +36,11 @@ import {
   lirePresence,
   listerConges,
   listerEmployes,
+  listerTousEmployes,
+  modifierEmploye,
   saisirConge,
   type Conge,
+  type Employe,
   type LignePresence,
   type SaisieConge,
   type Solde,
@@ -38,16 +48,20 @@ import {
   type StatutPointage,
   type TypeConge,
 } from "../api/rh";
-import { Acomptes, MesAcomptes, Primes, RecapPaie } from "./Remunerations";
+import { Acomptes, BoutonAnnuler, MesAcomptes, Primes, RecapPaie } from "./Remunerations";
 
 export type DroitsRh = {
   voirEmployes: boolean;
   creerEmploye: boolean;
+  /** Corriger une fiche, enregistrer une sortie. */
+  modifierEmploye?: boolean;
   voirPresence: boolean;
   pointer: boolean;
   voirConges: boolean;
   saisirConge: boolean;
   deciderConge: boolean;
+  /** Annuler une demande en attente ou un congé accepté pas encore commencé. */
+  annulerConge?: boolean;
   voirAcomptes?: boolean;
   demanderAcompte?: boolean;
   deciderAcompte?: boolean;
@@ -81,6 +95,8 @@ const POINTAGES: { valeur: StatutPointage; libelle: string }[] = [
 const jour = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("fr-FR");
 const aujourdhui = () => new Date().toLocaleDateString("en-CA");
 const jours = (valeur: string) => `${Number(valeur).toLocaleString("fr-FR")} j`;
+/** Ce que le serveur accepte encore d'annuler : une demande en attente, un congé accepté pas commencé. */
+const annulable = (c: Conge) => c.statut === "demandee" || (c.statut === "acceptee" && c.debut > aujourdhui());
 
 /** Personnel : congés de chacun, présence du jour, décisions et fiches employés. */
 export function RessourcesHumaines({ droits, ongletInitial }: { droits: DroitsRh; ongletInitial?: string }) {
@@ -112,10 +128,12 @@ export function RessourcesHumaines({ droits, ongletInitial }: { droits: DroitsRh
               <Tab key={o.valeur} value={o.valeur} label={o.libelle} />
             ))}
           </Tabs>
-          {onglet === "moi" && espace.data && <MesConges conges={espace.data.employe.solde} demandes={espace.data.conges} />}
+          {onglet === "moi" && espace.data && (
+            <MesConges conges={espace.data.employe.solde} demandes={espace.data.conges} />
+          )}
           {onglet === "presence" && <Presence pointer={droits.pointer} />}
           {onglet === "conges" && <Conges droits={droits} />}
-          {onglet === "employes" && <Employes creer={droits.creerEmploye} />}
+          {onglet === "employes" && <Employes creer={droits.creerEmploye} modifier={Boolean(droits.modifierEmploye)} />}
           {onglet === "mes-acomptes" && espace.data && (
             <MesAcomptes
               acomptes={espace.data.acomptes}
@@ -124,10 +142,18 @@ export function RessourcesHumaines({ droits, ongletInitial }: { droits: DroitsRh
             />
           )}
           {onglet === "acomptes" && (
-            <Acomptes demander={Boolean(droits.demanderAcompte && droits.voirEmployes)} decider={Boolean(droits.deciderAcompte)} />
+            <Acomptes
+              demander={Boolean(droits.demanderAcompte && droits.voirEmployes)}
+              decider={Boolean(droits.deciderAcompte)}
+              annuler={Boolean(droits.demanderAcompte)}
+            />
           )}
           {onglet === "primes" && (
-            <Primes proposer={Boolean(droits.proposerPrime && droits.voirEmployes)} valider={Boolean(droits.validerPrime)} />
+            <Primes
+              proposer={Boolean(droits.proposerPrime && droits.voirEmployes)}
+              valider={Boolean(droits.validerPrime)}
+              annuler={Boolean(droits.proposerPrime)}
+            />
           )}
           {onglet === "recap" && <RecapPaie />}
         </Stack>
@@ -152,7 +178,11 @@ function SoldeConges({ solde }: { solde: Solde }) {
 
 const DEMANDE_VIDE: SaisieConge = { type: "annuel", debut: "", fin: "", motif: "" };
 
-function FormulaireConge({ envoyer, enCours, erreur }: {
+function FormulaireConge({
+  envoyer,
+  enCours,
+  erreur,
+}: {
   envoyer: (demande: SaisieConge) => void;
   enCours: boolean;
   erreur: Error | null;
@@ -170,8 +200,20 @@ function FormulaireConge({ envoyer, enCours, erreur }: {
             </MenuItem>
           ))}
         </TextField>
-        <TextField type="date" label="Du" value={demande.debut} onChange={changer("debut")} slotProps={{ inputLabel: { shrink: true } }} />
-        <TextField type="date" label="Au" value={demande.fin} onChange={changer("fin")} slotProps={{ inputLabel: { shrink: true } }} />
+        <TextField
+          type="date"
+          label="Du"
+          value={demande.debut}
+          onChange={changer("debut")}
+          slotProps={{ inputLabel: { shrink: true } }}
+        />
+        <TextField
+          type="date"
+          label="Au"
+          value={demande.fin}
+          onChange={changer("fin")}
+          slotProps={{ inputLabel: { shrink: true } }}
+        />
       </Stack>
       <TextField label="Motif" value={demande.motif} onChange={changer("motif")} />
       {erreur && <Alert severity="error">{erreur.message}</Alert>}
@@ -202,19 +244,26 @@ function MesConges({ conges: solde, demandes }: { conges: Solde; demandes: Conge
       <FormulaireConge envoyer={(d) => demande.mutate(d)} enCours={demande.isPending} erreur={demande.error} />
       {annulation.isError && <Alert severity="error">{annulation.error.message}</Alert>}
       {demandes.length > 0 && (
-        <TableConges conges={demandes} action={(c) =>
-          (c.statut === "demandee" || (c.statut === "acceptee" && c.debut > aujourdhui())) && (
-            <Button size="small" color="error" onClick={() => annulation.mutate(c.id)}>
-              Annuler
-            </Button>
-          )
-        } />
+        <TableConges
+          conges={demandes}
+          action={(c) =>
+            annulable(c) && (
+              <Button size="small" color="error" onClick={() => annulation.mutate(c.id)}>
+                Annuler
+              </Button>
+            )
+          }
+        />
       )}
     </Stack>
   );
 }
 
-function TableConges({ conges, action, avecNom = false }: {
+function TableConges({
+  conges,
+  action,
+  avecNom = false,
+}: {
   conges: Conge[];
   action?: (conge: Conge) => React.ReactNode;
   avecNom?: boolean;
@@ -297,15 +346,28 @@ function Presence({ pointer }: { pointer: boolean }) {
         />
       </Stack>
       {feuille.isError && <Alert severity="error">{feuille.error.message}</Alert>}
-      {feuille.data?.length === 0 && <Typography color="text.secondary">Aucun employé dans ce magasin ce jour-là.</Typography>}
+      {feuille.data?.length === 0 && (
+        <Typography color="text.secondary">Aucun employé dans ce magasin ce jour-là.</Typography>
+      )}
       {feuille.data && feuille.data.length > 0 && (
-        <FeuillePresence key={`${magasin}-${date}`} magasin={magasin} date={date} lignes={feuille.data} pointer={pointer} />
+        <FeuillePresence
+          key={`${magasin}-${date}`}
+          magasin={magasin}
+          date={date}
+          lignes={feuille.data}
+          pointer={pointer}
+        />
       )}
     </Stack>
   );
 }
 
-function FeuillePresence({ magasin, date, lignes, pointer }: {
+function FeuillePresence({
+  magasin,
+  date,
+  lignes,
+  pointer,
+}: {
   magasin: string;
   date: string;
   lignes: LignePresence[];
@@ -407,7 +469,9 @@ function FeuillePresence({ magasin, date, lignes, pointer }: {
                           value={s[champ]}
                           onChange={(e) => changer(l.employe, champ, e.target.value)}
                           disabled={!pointer}
-                          slotProps={{ htmlInput: { "aria-label": `${champ === "arrivee" ? "Arrivée" : "Départ"} ${l.nom}` } }}
+                          slotProps={{
+                            htmlInput: { "aria-label": `${champ === "arrivee" ? "Arrivée" : "Départ"} ${l.nom}` },
+                          }}
                         />
                       </TableCell>
                     ))}
@@ -466,6 +530,20 @@ function Conges({ droits }: { droits: DroitsRh }) {
     mutationFn: (demande: SaisieConge) => saisirConge({ ...demande, employe }),
     onSuccess: invalider,
   });
+  const annulation = useMutation({ mutationFn: annulerConge, onSuccess: invalider });
+  const boutonAnnuler = (c: Conge) =>
+    droits.annulerConge &&
+    annulable(c) && (
+      <BoutonAnnuler
+        nom={`le congé de ${c.employe_nom}`}
+        titre="Annuler ce congé ?"
+        texte={`${c.type_libelle} de ${c.employe_nom} du ${jour(c.debut)} au ${jour(c.fin)} : ${
+          c.statut === "acceptee" ? "les jours seront rendus à son solde." : "la demande sera retirée."
+        }`}
+        confirmer={() => annulation.mutate(c.id)}
+        enCours={annulation.isPending}
+      />
+    );
   const choisi = employes.data?.find((e) => e.id === employe);
 
   return (
@@ -474,7 +552,13 @@ function Conges({ droits }: { droits: DroitsRh }) {
         <Paper variant="outlined" sx={{ p: 2 }}>
           <Stack spacing={2}>
             <Typography variant="subtitle2">Saisir un congé pour un employé</Typography>
-            <TextField select label="Employé" value={employe} onChange={(e) => setEmploye(e.target.value)} sx={{ maxWidth: 320 }}>
+            <TextField
+              select
+              label="Employé"
+              value={employe}
+              onChange={(e) => setEmploye(e.target.value)}
+              sx={{ maxWidth: 320 }}
+            >
               {employes.data?.map((e) => (
                 <MenuItem key={e.id} value={e.id}>
                   {e.prenom} {e.nom} · {e.magasin_nom}
@@ -482,7 +566,9 @@ function Conges({ droits }: { droits: DroitsRh }) {
               ))}
             </TextField>
             {choisi && <SoldeConges solde={choisi.solde} />}
-            {employe && <FormulaireConge envoyer={(d) => saisie.mutate(d)} enCours={saisie.isPending} erreur={saisie.error} />}
+            {employe && (
+              <FormulaireConge envoyer={(d) => saisie.mutate(d)} enCours={saisie.isPending} erreur={saisie.error} />
+            )}
           </Stack>
         </Paper>
       )}
@@ -497,17 +583,20 @@ function Conges({ droits }: { droits: DroitsRh }) {
         <MenuItem value="demandee">En attente</MenuItem>
         <MenuItem value="acceptee">Acceptées</MenuItem>
         <MenuItem value="refusee">Refusées</MenuItem>
+        <MenuItem value="annulee">Annulées</MenuItem>
         <MenuItem value="tous">Toutes</MenuItem>
       </TextField>
       {decision.isError && <Alert severity="error">{decision.error.message}</Alert>}
+      {annulation.isError && <Alert severity="error">{annulation.error.message}</Alert>}
       {conges.data?.length === 0 && <Typography color="text.secondary">Aucune demande.</Typography>}
       {conges.data && conges.data.length > 0 && (
         <TableConges
           avecNom
           conges={conges.data}
           action={(c) =>
-            droits.deciderConge &&
-            c.statut === "demandee" && (
+            !(droits.deciderConge && c.statut === "demandee") ? (
+              boutonAnnuler(c)
+            ) : (
               <Stack spacing={1}>
                 <TextField
                   size="small"
@@ -517,7 +606,12 @@ function Conges({ droits }: { droits: DroitsRh }) {
                   helperText="Obligatoire pour un refus."
                 />
                 <Stack direction="row" spacing={1}>
-                  <Button size="small" variant="contained" color="success" onClick={() => decision.mutate({ conge: c, choix: "accepter" })}>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    color="success"
+                    onClick={() => decision.mutate({ conge: c, choix: "accepter" })}
+                  >
                     Accepter
                   </Button>
                   <Button
@@ -528,6 +622,7 @@ function Conges({ droits }: { droits: DroitsRh }) {
                   >
                     Refuser
                   </Button>
+                  {boutonAnnuler(c)}
                 </Stack>
               </Stack>
             )
@@ -550,9 +645,15 @@ const FICHE_VIDE = {
   utilisateur: "",
 };
 
-function Employes({ creer }: { creer: boolean }) {
+function Employes({ creer, modifier }: { creer: boolean; modifier: boolean }) {
   const queryClient = useQueryClient();
-  const employes = useQuery({ queryKey: ["employes"], queryFn: listerEmployes });
+  const [avecSortis, setAvecSortis] = useState(false);
+  const employes = useQuery({
+    queryKey: avecSortis ? ["employes", "tous"] : ["employes"],
+    queryFn: avecSortis ? listerTousEmployes : listerEmployes,
+  });
+  const [edite, setEdite] = useState<Employe | null>(null);
+  const [sortant, setSortant] = useState<Employe | null>(null);
   const [magasin, setMagasin] = useMagasin();
   const [ouvert, setOuvert] = useState(false);
   const [fiche, setFiche] = useState(FICHE_VIDE);
@@ -637,6 +738,10 @@ function Employes({ creer }: { creer: boolean }) {
           </Stack>
         </Paper>
       )}
+      <FormControlLabel
+        control={<Checkbox checked={avecSortis} onChange={(e) => setAvecSortis(e.target.checked)} />}
+        label="Afficher aussi les employés sortis"
+      />
       {employes.data?.length === 0 && <Typography color="text.secondary">Aucun employé pour l'instant.</Typography>}
       {employes.data && employes.data.length > 0 && (
         <Table size="small" aria-label="Employés">
@@ -645,13 +750,15 @@ function Employes({ creer }: { creer: boolean }) {
               <TableCell>Employé</TableCell>
               <TableCell>Embauche</TableCell>
               <TableCell align="right">Congés disponibles</TableCell>
+              {modifier && <TableCell />}
             </TableRow>
           </TableHead>
           <TableBody>
             {employes.data.map((e) => (
-              <TableRow key={e.id}>
+              <TableRow key={e.id} sx={e.date_sortie ? { opacity: 0.6 } : undefined}>
                 <TableCell>
                   {e.prenom} {e.nom}
+                  {e.date_sortie && <Chip size="small" label={`Sorti le ${jour(e.date_sortie)}`} sx={{ ml: 1 }} />}
                   <Typography variant="body2" color="text.secondary">
                     {e.matricule} · {e.poste} · {e.magasin_nom}
                   </Typography>
@@ -663,11 +770,195 @@ function Employes({ creer }: { creer: boolean }) {
                     sur {jours(e.solde.acquis)} acquis
                   </Typography>
                 </TableCell>
+                {modifier && (
+                  <TableCell align="right">
+                    <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
+                      <Button size="small" onClick={() => setEdite(e)} aria-label={`Modifier ${e.prenom} ${e.nom}`}>
+                        Modifier
+                      </Button>
+                      {!e.date_sortie && (
+                        <Button
+                          size="small"
+                          color="error"
+                          onClick={() => setSortant(e)}
+                          aria-label={`Sortie de ${e.prenom} ${e.nom}`}
+                        >
+                          Sortie
+                        </Button>
+                      )}
+                    </Stack>
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>
         </Table>
       )}
+      {edite && <FicheEmploye key={edite.id} employe={edite} onFerme={() => setEdite(null)} />}
+      {sortant && <SortieEmploye key={sortant.id} employe={sortant} onFerme={() => setSortant(null)} />}
     </Stack>
+  );
+}
+
+function invaliderEmployes(queryClient: ReturnType<typeof useQueryClient>) {
+  for (const cle of ["employes", "presence", "recap-paie"]) {
+    void queryClient.invalidateQueries({ queryKey: [cle] });
+  }
+}
+
+/** Correction d'une fiche employé ; la date de sortie se corrige ici une fois enregistrée. */
+function FicheEmploye({ employe, onFerme }: { employe: Employe; onFerme: () => void }) {
+  const queryClient = useQueryClient();
+  const [fiche, setFiche] = useState({
+    nom: employe.nom,
+    prenom: employe.prenom,
+    poste: employe.poste,
+    cin: employe.cin,
+    telephone: employe.telephone,
+    date_embauche: employe.date_embauche,
+    date_sortie: employe.date_sortie ?? "",
+    conges_par_mois: employe.conges_par_mois,
+    solde_conges_initial: employe.solde_conges_initial,
+    salaire_base: employe.salaire_base ?? "",
+    utilisateur: employe.utilisateur ?? "",
+  });
+  const [magasin, setMagasin] = useState(employe.magasin);
+  const changer = (champ: keyof typeof fiche) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setFiche((f) => ({ ...f, [champ]: e.target.value }));
+  const enregistrement = useMutation({
+    mutationFn: () =>
+      modifierEmploye(employe.id, {
+        ...fiche,
+        magasin,
+        date_sortie: fiche.date_sortie || null,
+        conges_par_mois: fiche.conges_par_mois || "0",
+        solde_conges_initial: fiche.solde_conges_initial || "0",
+        salaire_base: fiche.salaire_base || null,
+        utilisateur: fiche.utilisateur || null,
+      }),
+    onSuccess: () => {
+      invaliderEmployes(queryClient);
+      onFerme();
+    },
+  });
+  return (
+    <Dialog open onClose={onFerme} maxWidth="md" fullWidth>
+      <DialogTitle>
+        Fiche de {employe.prenom} {employe.nom} · {employe.matricule}
+      </DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            <TextField label="Nom" value={fiche.nom} onChange={changer("nom")} />
+            <TextField label="Prénom" value={fiche.prenom} onChange={changer("prenom")} />
+            <TextField label="Poste" value={fiche.poste} onChange={changer("poste")} />
+          </Stack>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            <ChoixMagasin valeur={magasin} changer={setMagasin} />
+            <TextField
+              type="date"
+              label="Date d'embauche"
+              value={fiche.date_embauche}
+              onChange={changer("date_embauche")}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+            {employe.date_sortie && (
+              <TextField
+                type="date"
+                label="Date de sortie"
+                value={fiche.date_sortie}
+                onChange={changer("date_sortie")}
+                helperText="Videz-la pour le remettre dans l'effectif."
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+            )}
+          </Stack>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            <TextField
+              label="Salaire de base"
+              value={fiche.salaire_base}
+              onChange={changer("salaire_base")}
+              helperText="Brut mensuel."
+              slotProps={{ htmlInput: { inputMode: "decimal" } }}
+            />
+            <TextField
+              label="Jours de congé par mois"
+              value={fiche.conges_par_mois}
+              onChange={changer("conges_par_mois")}
+              slotProps={{ htmlInput: { inputMode: "decimal" } }}
+            />
+            <TextField
+              label="Solde de congés de départ"
+              value={fiche.solde_conges_initial}
+              onChange={changer("solde_conges_initial")}
+              slotProps={{ htmlInput: { inputMode: "decimal" } }}
+            />
+          </Stack>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            <TextField label="CIN" value={fiche.cin} onChange={changer("cin")} />
+            <TextField label="Téléphone" value={fiche.telephone} onChange={changer("telephone")} />
+            <TextField
+              label="Compte OptiLink"
+              value={fiche.utilisateur}
+              onChange={changer("utilisateur")}
+              helperText="Identifiant de connexion."
+            />
+          </Stack>
+          {enregistrement.isError && <Alert severity="error">{enregistrement.error.message}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onFerme}>Fermer</Button>
+        <Button
+          variant="contained"
+          onClick={() => enregistrement.mutate()}
+          disabled={!fiche.nom || !fiche.prenom || !fiche.poste || !fiche.date_embauche || enregistrement.isPending}
+        >
+          Enregistrer
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+/** Départ d'un employé : sa fiche reste, il sort de l'effectif (présence, listes, paie) après cette date. */
+function SortieEmploye({ employe, onFerme }: { employe: Employe; onFerme: () => void }) {
+  const queryClient = useQueryClient();
+  const [date, setDate] = useState(aujourdhui());
+  const sortie = useMutation({
+    mutationFn: () => modifierEmploye(employe.id, { date_sortie: date }),
+    onSuccess: () => {
+      invaliderEmployes(queryClient);
+      onFerme();
+    },
+  });
+  return (
+    <Dialog open onClose={onFerme}>
+      <DialogTitle>
+        Sortie de {employe.prenom} {employe.nom}
+      </DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          <Typography>
+            Sa fiche et son historique sont conservés. Il quitte les listes du personnel (affichez les employés sortis
+            pour le retrouver) et, après cette date, la feuille de présence.
+          </Typography>
+          <TextField
+            type="date"
+            label="Dernier jour dans l'effectif"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: employe.date_embauche } }}
+          />
+          {sortie.isError && <Alert severity="error">{sortie.error.message}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onFerme}>Retour</Button>
+        <Button variant="contained" color="error" onClick={() => sortie.mutate()} disabled={!date || sortie.isPending}>
+          Enregistrer la sortie
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }

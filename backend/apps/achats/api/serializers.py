@@ -351,3 +351,9 @@ class CasseVerreSaisieSerializer(serializers.Serializer):
     )
     cause = serializers.ChoiceField(choices=CasseVerre.Cause.choices)
     observation = serializers.CharField(required=False, allow_blank=True, max_length=300)
+
+
+class CasseVerreCorrectionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CasseVerre
+        fields = ["cause", "observation"]

@@ -370,6 +370,7 @@ class TransfertStock(ModeleDeBase):
     class Statut(models.TextChoices):
         ENVOYE = "envoye", "Envoyé (en route)"
         RECU = "recu", "Reçu"
+        ANNULE = "annule", "Annulé"
 
     magasin = models.ForeignKey(
         "reseau.Magasin",
@@ -395,6 +396,10 @@ class TransfertStock(ModeleDeBase):
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
     )
     recu_le = models.DateTimeField(null=True, blank=True)
+    annule_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    annule_le = models.DateTimeField(null=True, blank=True)
 
     # Deux magasins par transfert : le périmètre est filtré par l'API (départ ou destination)
     # et par la RLS de la base.

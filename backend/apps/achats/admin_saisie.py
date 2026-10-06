@@ -1,6 +1,7 @@
-"""Saisie manuelle dans l'administration du serveur (/admin/) : bon de réception, facture achat.
+"""Saisie manuelle dans l'administration du serveur (/admin/) : bon de réception, facture achat,
+bon retour fournisseur.
 
-Le bouton « Ajouter » des deux listes ouvre un formulaire simple. L'enregistrement passe par
+Le bouton « Ajouter » de ces listes ouvre un formulaire simple. L'enregistrement passe par
 les mêmes services que l'application (contrôles, numéro, stock, totaux figés).
 """
 
@@ -21,6 +22,7 @@ from .factures import FactureImpossible, enregistrer_facture, timbre_par_defaut
 from .imports import _article
 from .models import BonReception, Fournisseur
 from .receptions import ReceptionImpossible, enregistrer_reception, taux_tva_par_defaut
+from .retours import RetourImpossible, enregistrer_retour
 
 DECIMAL = {"max_digits": 12, "decimal_places": 3}
 TAUX = {"max_digits": 5, "decimal_places": 2, "min_value": 0, "max_value": 100}
@@ -240,6 +242,104 @@ def saisir_facture(model_admin, request):
         "partir des BL ; utilisez « Ajustement du total » pour retrouver le total de la facture "
         "papier.",
         entete=formulaire,
+    )
+
+
+class EnteteRetourForm(forms.Form):
+    magasin = ChoixMagasin(queryset=Magasin.tous.none())
+    fournisseur = forms.ModelChoiceField(queryset=Fournisseur.objects.filter(est_actif=True))
+    date_retour = forms.DateField(
+        label="Date du retour", widget=forms.DateInput(attrs={"type": "date"}), required=False
+    )
+    motif = forms.CharField(max_length=200, required=False)
+    observation = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}), required=False)
+
+    def __init__(self, *args, magasins, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Le dépôt central d'abord : c'est lui qui renvoie au fournisseur.
+        ordre = sorted(magasins, key=lambda m: (not m.est_depot, m.nom))
+        self.fields["magasin"].queryset = Magasin.tous.filter(pk__in=[m.pk for m in ordre])
+        self.fields["magasin"].initial = ordre[0].pk if ordre else None
+        self.fields["fournisseur"].queryset = Fournisseur.objects.filter(est_actif=True).order_by(
+            "nom"
+        )
+
+
+class LigneRetourForm(forms.Form):
+    article = forms.CharField(label="Code-barres ou référence", max_length=60)
+    quantite = forms.IntegerField(label="Quantité", min_value=1, initial=1)
+    prix_achat_ht = forms.DecimalField(label="Prix d'achat HT", min_value=0, **DECIMAL)
+    taux_remise = forms.DecimalField(label="Remise %", required=False, **TAUX)
+    taux_tva = forms.DecimalField(
+        label="TVA %", required=False, help_text="Vide : taux de l'article.", **TAUX
+    )
+    motif = forms.CharField(max_length=200, required=False)
+
+    def clean_article(self):
+        texte = self.cleaned_data["article"].strip()
+        return _article({"code_barres": texte, "reference": texte})
+
+
+LignesRetour = forms.formset_factory(LigneRetourForm, extra=3, min_num=1, validate_min=True)
+
+
+def saisir_retour(model_admin, request):
+    """Page « Ajouter un bon retour fournisseur » de l'administration (articles du stock)."""
+    magasins = magasins_autorises(request.user, "achats.add_bonretour")
+    if not magasins:
+        raise PermissionDenied
+    entete = EnteteRetourForm(request.POST or None, magasins=magasins)
+    lignes = LignesRetour(request.POST or None, prefix="lignes")
+    if request.method == "POST" and entete.is_valid() and lignes.is_valid():
+        donnees = entete.cleaned_data
+        magasin = donnees["magasin"]
+        details = [
+            {
+                "article": ligne["article"],
+                "quantite": ligne["quantite"],
+                "prix_achat_ht": ligne["prix_achat_ht"],
+                "taux_remise": ligne["taux_remise"] or Decimal("0"),
+                "taux_tva": ligne["taux_tva"],
+                "motif": ligne["motif"],
+            }
+            for ligne in lignes.cleaned_data
+            if ligne
+        ]
+        sans_taux = [d["article"] for d in details if d["taux_tva"] is None]
+        defauts = taux_tva_par_defaut(sans_taux, magasin.pays) if sans_taux else {}
+        for d in details:
+            if d["taux_tva"] is None:
+                d["taux_tva"] = defauts[d["article"].pk]
+        try:
+            with transaction.atomic():
+                bon = enregistrer_retour(
+                    magasin=magasin,
+                    fournisseur=donnees["fournisseur"],
+                    lignes=details,
+                    auteur=request.user,
+                    date_retour=donnees["date_retour"],
+                    motif=donnees["motif"],
+                    observation=donnees["observation"],
+                )
+        except (RetourImpossible, ValidationError) as erreur:
+            message = erreur.messages if isinstance(erreur, ValidationError) else str(erreur)
+            entete.add_error(None, message)
+        else:
+            messages.success(
+                request,
+                f"Bon retour {bon.numero} enregistré ({bon.total_ttc} TTC). "
+                "Les articles sont sortis du stock.",
+            )
+            return redirect(reverse("admin:achats_bonretour_change", args=[bon.pk]))
+    return _page(
+        model_admin,
+        request,
+        titre="Ajouter un bon retour fournisseur",
+        aide="Pour renvoyer des articles du stock. Les articles non conformes d'un bon de "
+        "réception se renvoient dans l'application, Stock › Bon Retour Fournisseur.",
+        entete=entete,
+        lignes=lignes,
+        titre_lignes="Articles renvoyés",
     )
 
 

@@ -27,6 +27,9 @@ import {
   listerDepensesOuvertes,
   lireSituation,
   saisirDepense,
+  corrigerDepense,
+  supprimerDepense,
+  type Depense,
   verifierCloture,
   type CategorieDepense,
   type Cloture,
@@ -46,6 +49,7 @@ export type DroitsTresorerie = {
   banque?: boolean;
   rapprocher?: boolean;
   gererComptes?: boolean;
+  modifierComptes?: boolean;
 };
 
 const STATUTS: Record<StatutCloture, { libelle: string; couleur: "info" | "success" | "error" }> = {
@@ -62,8 +66,7 @@ const CATEGORIES: { valeur: CategorieDepense; libelle: string }[] = [
   { valeur: "divers", libelle: "Divers" },
 ];
 
-const dateHeure = (iso: string) =>
-  new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+const dateHeure = (iso: string) => new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
 
 /** Caisse et banque : clôture quotidienne vérifiée par la finance, puis dépôt jusqu'à la banque. */
 export function Tresorerie({ droits, ongletInitial }: { droits: DroitsTresorerie; ongletInitial?: string }) {
@@ -121,6 +124,7 @@ export function Tresorerie({ droits, ongletInitial }: { droits: DroitsTresorerie
                 gererComptes: Boolean(droits.gererComptes),
                 rapprocher: Boolean(droits.rapprocher),
                 operations: Boolean(droits.gererComptes && droits.versements),
+                modifierComptes: Boolean(droits.modifierComptes),
               }}
             />
           )}
@@ -177,7 +181,12 @@ function ClotureDeCaisse({ magasin }: { magasin: string }) {
   const monnaie = monnaieDe(base.devise);
   const u = (montant: string) => enUnites(montant || "0", monnaie.decimales);
   const lignes = [
-    { mode: "Espèces", compte: "Espèces comptées", attendu: base.especes_attendues, champ: "especes_comptees" as const },
+    {
+      mode: "Espèces",
+      compte: "Espèces comptées",
+      attendu: base.especes_attendues,
+      champ: "especes_comptees" as const,
+    },
     {
       mode: `Chèques (${base.nombre_cheques})`,
       compte: "Chèques comptés",
@@ -199,8 +208,8 @@ function ClotureDeCaisse({ magasin }: { magasin: string }) {
       {message && <Alert severity="success">{message}</Alert>}
       {rejetee.data && (
         <Alert severity="error">
-          La clôture {rejetee.data.numero} a été rejetée par {rejetee.data.verifiee_par} :{" "}
-          « {rejetee.data.commentaire_finance} ». Recomptez et renvoyez-la.
+          La clôture {rejetee.data.numero} a été rejetée par {rejetee.data.verifiee_par} : «{" "}
+          {rejetee.data.commentaire_finance} ». Recomptez et renvoyez-la.
         </Alert>
       )}
       <Typography color="text.secondary">
@@ -212,9 +221,8 @@ function ClotureDeCaisse({ magasin }: { magasin: string }) {
         <Typography variant="body2" color="text.secondary">
           Fond de caisse {formater(u(base.fond_initial), monnaie)}
           {u(base.alimentations) > 0 && ` + alimentation ${formater(u(base.alimentations), monnaie)}`} + espèces
-          encaissées{" "}
-          {formater(u(base.encaisse_especes), monnaie)} − remboursements {formater(u(base.rembourse_especes), monnaie)}{" "}
-          − dépenses {formater(u(base.depenses), monnaie)}
+          encaissées {formater(u(base.encaisse_especes), monnaie)} − remboursements{" "}
+          {formater(u(base.rembourse_especes), monnaie)} − dépenses {formater(u(base.depenses), monnaie)}
         </Typography>
       </Paper>
       <Table size="small" aria-label="Comptage de la caisse">
@@ -298,17 +306,45 @@ function Depenses({ magasin }: { magasin: string }) {
   const [motif, setMotif] = useState("");
   const [beneficiaire, setBeneficiaire] = useState("");
   const [montant, setMontant] = useState("");
+  // Dépense en cours de correction (le formulaire la reprend), ou à supprimer (confirmation).
+  const [enCorrection, setEnCorrection] = useState<Depense | null>(null);
+  const [aSupprimer, setASupprimer] = useState<string | null>(null);
+  const rafraichir = () => {
+    void queryClient.invalidateQueries({ queryKey: ["depenses"] });
+    void queryClient.invalidateQueries({ queryKey: ["situation-caisse"] });
+  };
+  const vider = () => {
+    setEnCorrection(null);
+    setCategorie("fournitures");
+    setMotif("");
+    setBeneficiaire("");
+    setMontant("");
+  };
 
   const saisie = useMutation({
-    mutationFn: () => saisirDepense({ magasin_id: magasin, categorie, motif, beneficiaire, montant }),
+    mutationFn: () =>
+      enCorrection
+        ? corrigerDepense(enCorrection.id, { categorie, motif, beneficiaire, montant })
+        : saisirDepense({ magasin_id: magasin, categorie, motif, beneficiaire, montant }),
     onSuccess: () => {
-      setMotif("");
-      setBeneficiaire("");
-      setMontant("");
-      void queryClient.invalidateQueries({ queryKey: ["depenses"] });
-      void queryClient.invalidateQueries({ queryKey: ["situation-caisse"] });
+      vider();
+      rafraichir();
     },
   });
+  const suppression = useMutation({
+    mutationFn: (id: string) => supprimerDepense(id),
+    onSuccess: () => {
+      setASupprimer(null);
+      rafraichir();
+    },
+  });
+  const corriger = (d: Depense) => {
+    setEnCorrection(d);
+    setCategorie(d.categorie);
+    setMotif(d.motif);
+    setBeneficiaire(d.beneficiaire);
+    setMontant(d.montant);
+  };
 
   return (
     <Stack spacing={2}>
@@ -337,14 +373,13 @@ function Depenses({ magasin }: { magasin: string }) {
         />
       </Stack>
       {saisie.isError && <Alert severity="error">{saisie.error.message}</Alert>}
-      <Button
-        variant="contained"
-        onClick={() => saisie.mutate()}
-        disabled={!motif || !montant || saisie.isPending}
-        sx={{ alignSelf: "flex-start" }}
-      >
-        Enregistrer la dépense
-      </Button>
+      {suppression.isError && <Alert severity="error">{suppression.error.message}</Alert>}
+      <Stack direction="row" spacing={1}>
+        <Button variant="contained" onClick={() => saisie.mutate()} disabled={!motif || !montant || saisie.isPending}>
+          {enCorrection ? "Enregistrer la correction" : "Enregistrer la dépense"}
+        </Button>
+        {enCorrection && <Button onClick={vider}>Abandonner la correction</Button>}
+      </Stack>
       <Typography variant="subtitle2">Dépenses depuis la dernière clôture</Typography>
       {depenses.data?.length === 0 && <Typography color="text.secondary">Aucune dépense.</Typography>}
       {depenses.data && depenses.data.length > 0 && (
@@ -361,6 +396,38 @@ function Depenses({ magasin }: { magasin: string }) {
                   </Typography>
                 </TableCell>
                 <TableCell align="right">{formater(enUnites(d.montant, monnaie.decimales), monnaie)}</TableCell>
+                <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                  {aSupprimer === d.id ? (
+                    <>
+                      Supprimer ?{" "}
+                      <Button
+                        size="small"
+                        color="error"
+                        disabled={suppression.isPending}
+                        onClick={() => suppression.mutate(d.id)}
+                      >
+                        Oui
+                      </Button>
+                      <Button size="small" onClick={() => setASupprimer(null)}>
+                        Non
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button size="small" onClick={() => corriger(d)} aria-label={`Modifier ${d.motif}`}>
+                        Modifier
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        onClick={() => setASupprimer(d.id)}
+                        aria-label={`Supprimer ${d.motif}`}
+                      >
+                        Supprimer
+                      </Button>
+                    </>
+                  )}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -375,7 +442,12 @@ function DetailCloture({ cloture }: { cloture: Cloture }) {
   const f = (montant: string) => formater(enUnites(montant, monnaie.decimales), monnaie);
   const lignes = [
     ["Espèces", cloture.especes_attendues, cloture.especes_comptees, cloture.ecart_especes],
-    [`Chèques (${cloture.nombre_cheques_comptes}/${cloture.nombre_cheques})`, cloture.cheques_attendus, cloture.cheques_comptes, cloture.ecart_cheques],
+    [
+      `Chèques (${cloture.nombre_cheques_comptes}/${cloture.nombre_cheques})`,
+      cloture.cheques_attendus,
+      cloture.cheques_comptes,
+      cloture.ecart_cheques,
+    ],
     ["Cartes bancaires", cloture.cartes_attendues, cloture.cartes_comptees, cloture.ecart_cartes],
   ];
   return (
@@ -417,7 +489,10 @@ function DetailCloture({ cloture }: { cloture: Cloture }) {
 }
 
 function AVerifier() {
-  const clotures = useQuery({ queryKey: ["clotures", "envoyee"], queryFn: () => listerClotures({ statut: "envoyee" }) });
+  const clotures = useQuery({
+    queryKey: ["clotures", "envoyee"],
+    queryFn: () => listerClotures({ statut: "envoyee" }),
+  });
   if (clotures.data?.length === 0) return <Typography color="text.secondary">Aucune clôture à vérifier.</Typography>;
   return (
     <Stack spacing={2}>
@@ -454,10 +529,19 @@ function Verification({ cloture }: { cloture: Cloture }) {
         />
         {decision.isError && <Alert severity="error">{decision.error.message}</Alert>}
         <Stack direction="row" spacing={2}>
-          <Button variant="contained" color="success" onClick={() => decision.mutate("valider")} disabled={decision.isPending}>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={() => decision.mutate("valider")}
+            disabled={decision.isPending}
+          >
             Valider
           </Button>
-          <Button color="error" onClick={() => decision.mutate("rejeter")} disabled={decision.isPending || !commentaire.trim()}>
+          <Button
+            color="error"
+            onClick={() => decision.mutate("rejeter")}
+            disabled={decision.isPending || !commentaire.trim()}
+          >
             Rejeter
           </Button>
         </Stack>
@@ -484,7 +568,12 @@ function Historique() {
         {clotures.data?.flatMap((c) => {
           const monnaie = monnaieDe(c.devise);
           const lignes = [
-            <TableRow key={c.id} hover onClick={() => setOuverte(ouverte === c.id ? null : c.id)} sx={{ cursor: "pointer" }}>
+            <TableRow
+              key={c.id}
+              hover
+              onClick={() => setOuverte(ouverte === c.id ? null : c.id)}
+              sx={{ cursor: "pointer" }}
+            >
               <TableCell>
                 {c.numero}
                 <Typography variant="body2" color="text.secondary">

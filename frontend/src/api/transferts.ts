@@ -16,7 +16,7 @@ export type TransfertResume = {
   magasin_id: string;
   destination: string;
   destination_id: string;
-  statut: "envoye" | "recu";
+  statut: "envoye" | "recu" | "annule";
   statut_libelle: string;
   total_articles: number | null;
   observation: string;
@@ -24,6 +24,8 @@ export type TransfertResume = {
   cree_le: string;
   recu_par: string;
   recu_le: string | null;
+  annule_par: string;
+  annule_le: string | null;
 };
 
 export type Transfert = TransfertResume & { lignes: LigneTransfert[] };
@@ -42,6 +44,10 @@ export const envoyerTransfert = (saisie: SaisieTransfert) =>
 
 export const recevoirTransfert = (id: string) =>
   appeler<Transfert>(`/api/v1/transferts/${id}/recevoir/`, { methode: "POST" });
+
+/** Transfert envoyé par erreur, pas encore réceptionné : les articles reviennent au départ. */
+export const annulerTransfert = (id: string) =>
+  appeler<Transfert>(`/api/v1/transferts/${id}/annuler/`, { methode: "POST" });
 
 export const lireTransfert = (id: string) => appeler<Transfert>(`/api/v1/transferts/${id}/`);
 
