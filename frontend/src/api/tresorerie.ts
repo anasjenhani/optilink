@@ -171,10 +171,13 @@ export const creerCompte = (compte: {
   solde_initial: string;
 }) => appeler<Compte>("/api/v1/tresorerie/comptes/", { methode: "POST", corps: compte });
 
+export type SaisieCompte = Partial<Pick<Compte, "nom" | "banque" | "rib" | "magasin" | "est_actif">>;
+
+export const modifierCompte = (id: string, saisie: SaisieCompte) =>
+  appeler<Compte>(`/api/v1/tresorerie/comptes/${id}/`, { methode: "PATCH", corps: saisie });
+
 export const listerOperations = (statut?: StatutOperation) =>
-  appeler<Page<Operation>>(`/api/v1/tresorerie/operations/${statut ? `?statut=${statut}` : ""}`).then(
-    (p) => p.results,
-  );
+  appeler<Page<Operation>>(`/api/v1/tresorerie/operations/${statut ? `?statut=${statut}` : ""}`).then((p) => p.results);
 
 export const listerARemettre = () => appeler<ARemettre[]>("/api/v1/tresorerie/operations/a-remettre/");
 

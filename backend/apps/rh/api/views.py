@@ -241,7 +241,13 @@ class MonEspaceViewSet(viewsets.GenericViewSet):
     serializer_class = MonEspaceSerializer
     pagination_class = None
     # Chacun voit ses propres congés : aucun privilège n'est exigé.
-    permissions_requises = {"list": [], "demander": [], "annuler": [], "demander_acompte": []}
+    permissions_requises = {
+        "list": [],
+        "demander": [],
+        "annuler": [],
+        "demander_acompte": [],
+        "annuler_acompte": [],
+    }
 
     def get_queryset(self):
         return Employe.objects.none()
@@ -310,6 +316,18 @@ class MonEspaceViewSet(viewsets.GenericViewSet):
             d["motif"],
         )
         return Response(self._espace(employe), status=status.HTTP_201_CREATED)
+
+    @extend_schema(request=None, responses=MonEspaceSerializer)
+    @action(detail=True, methods=["post"], url_path="annuler-acompte")
+    def annuler_acompte(self, request, pk=None):
+        """Retire sa propre demande d'acompte tant que les RH n'ont pas décidé."""
+        employe = self._employe()
+        try:
+            acompte = Acompte.tous.get(employe=employe, public_id=uuid.UUID(str(pk)))
+        except (ValueError, Acompte.DoesNotExist) as erreur:
+            raise NotFound("Acompte introuvable.") from erreur
+        _executer(remunerations.annuler_acompte, acompte, par_l_employe=True)
+        return Response(self._espace(employe))
 
 
 def _employe_autorise(request, public_id, permission):

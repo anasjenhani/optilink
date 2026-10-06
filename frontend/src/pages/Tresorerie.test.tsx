@@ -8,8 +8,17 @@ const TUNIS = {
   code: "T01",
   nom: "Tunis",
   societe: "Optique de Tunis",
+  societe_id: "s1",
   ville: "Tunis",
-  pays: { code: "TN", nom: "Tunisie", devise: "TND", decimales: 3, indicatif_telephonique: "+216", timbre_fiscal: "1.000", libelle_identifiant_prescripteur: "" },
+  pays: {
+    code: "TN",
+    nom: "Tunisie",
+    devise: "TND",
+    decimales: 3,
+    indicatif_telephonique: "+216",
+    timbre_fiscal: "1.000",
+    libelle_identifiant_prescripteur: "",
+  },
 };
 const SITUATION = {
   debut: null,
@@ -51,6 +60,22 @@ const CLOTURE = {
   verifiee_le: null,
   commentaire_finance: "",
 };
+const COMPTE = {
+  id: "b1",
+  societe: "s1",
+  societe_nom: "Optique de Tunis",
+  type: "coffre",
+  nom: "Coffre T01",
+  banque: "",
+  rib: "",
+  magasin: "m1",
+  magasin_nom: "Tunis",
+  devise: "TND",
+  solde_initial: "0.000",
+  est_actif: true,
+  solde_comptable: "200.000",
+  solde_banque: null,
+};
 const TOUT: DroitsTresorerie = { cloturer: true, depenses: true, verifier: true, voirClotures: true };
 
 function json(donnees: unknown, status = 200) {
@@ -64,13 +89,15 @@ function afficher(droits = TOUT) {
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string, init?: RequestInit) => {
-      if (init?.method === "POST") {
+      if (init?.method === "POST" || init?.method === "PATCH") {
         envois.push({ url, corps: JSON.parse(init.body as string) });
         return json(url.endsWith("/valider/") ? { ...CLOTURE, statut: "validee" } : CLOTURE, 201);
       }
       if (url === "/api/v1/magasins/") return json({ results: [TUNIS] });
       if (url.includes("/situation/")) return json(SITUATION);
       if (url.includes("/depenses/")) return json({ results: [] });
+      if (url.includes("/comptes/")) return json([COMPTE]);
+      if (url.includes("/operations/")) return json({ results: [] });
       return json({ results: [CLOTURE] });
     }),
   );
@@ -134,4 +161,32 @@ test("une dépense de caisse s'enregistre", async () => {
     beneficiaire: "",
     montant: "12.5",
   });
+});
+
+test("l'onglet Banque laisse corriger un coffre à qui a le droit de modifier les comptes", async () => {
+  const banque = { ...TOUT, cloturer: false, depenses: false, verifier: false, voirClotures: false, banque: true };
+  const envois = afficher({ ...banque, gererComptes: true, modifierComptes: true });
+  fireEvent.click(await screen.findByRole("button", { name: "Modifier Coffre T01" }));
+  expect(await screen.findByRole("combobox", { name: "Magasin" })).toHaveTextContent("Tunis");
+  fireEvent.change(screen.getByLabelText("Nom du compte"), { target: { value: "Coffre Tunis centre" } });
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+  await vi.waitFor(() => expect(envois).toHaveLength(1));
+  expect(envois[0]).toEqual({
+    url: "/api/v1/tresorerie/comptes/b1/",
+    corps: { nom: "Coffre Tunis centre", magasin: "m1" },
+  });
+});
+
+test("sans droit de modification, l'onglet Banque n'offre ni correction ni désactivation", async () => {
+  afficher({
+    cloturer: false,
+    depenses: false,
+    verifier: false,
+    voirClotures: false,
+    banque: true,
+    gererComptes: true,
+  });
+  expect(await screen.findByText("Coffre T01")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Modifier Coffre T01" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Désactiver Coffre T01" })).not.toBeInTheDocument();
 });

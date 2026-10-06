@@ -2,6 +2,10 @@ import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
 import Chip from "@mui/material/Chip";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Paper from "@mui/material/Paper";
@@ -29,6 +33,7 @@ import {
   listerARemettre,
   listerComptes,
   listerOperations,
+  modifierCompte,
   rapprocherOperation,
   type ARemettre,
   type Compte,
@@ -41,8 +46,9 @@ import {
 /** Nombre de décimales d'une devise (3 pour le dinar, 2 pour l'euro). */
 export const monnaieDe = (devise: string): Monnaie => ({
   devise,
-  decimales: new Intl.NumberFormat("fr-FR", { style: "currency", currency: devise }).resolvedOptions()
-    .maximumFractionDigits ?? 2,
+  decimales:
+    new Intl.NumberFormat("fr-FR", { style: "currency", currency: devise }).resolvedOptions().maximumFractionDigits ??
+    2,
 });
 
 const montant = (valeur: string | null, devise = "TND") => {
@@ -219,7 +225,9 @@ export function Versements() {
               label="Prévision : le versement n'est pas encore fait"
             />
             {destinations.length === 0 && (
-              <Alert severity="info">Aucun compte ne convient : la finance doit d'abord le créer dans « Banque ».</Alert>
+              <Alert severity="info">
+                Aucun compte ne convient : la finance doit d'abord le créer dans « Banque ».
+              </Alert>
             )}
             {depot.isError && <Alert severity="error">{depot.error.message}</Alert>}
             <Button
@@ -275,7 +283,11 @@ function Previsions() {
               </TableCell>
               <TableCell>
                 <Stack direction="row" spacing={1}>
-                  <Button size="small" variant="outlined" onClick={() => action.mutate({ operation: o, annuler: false })}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => action.mutate({ operation: o, annuler: false })}
+                  >
                     Versement fait
                   </Button>
                   <Button size="small" color="error" onClick={() => action.mutate({ operation: o, annuler: true })}>
@@ -291,7 +303,13 @@ function Previsions() {
   );
 }
 
-export type DroitsBanque = { gererComptes: boolean; rapprocher: boolean; operations: boolean };
+export type DroitsBanque = {
+  gererComptes: boolean;
+  rapprocher: boolean;
+  operations: boolean;
+  /** Corriger un compte ou le désactiver (la société doit aussi être gérée : ``gererComptes``). */
+  modifierComptes?: boolean;
+};
 
 /** Comptes et soldes, opérations, rapprochement avec le relevé bancaire. */
 export function Banque({ droits }: { droits: DroitsBanque }) {
@@ -307,7 +325,9 @@ export function Banque({ droits }: { droits: DroitsBanque }) {
       <Stack spacing={1}>
         <Typography variant="subtitle2">Comptes</Typography>
         {comptes.data?.length === 0 && <Typography color="text.secondary">Aucun compte pour l'instant.</Typography>}
-        {comptes.data && comptes.data.length > 0 && <Comptes comptes={comptes.data} />}
+        {comptes.data && comptes.data.length > 0 && (
+          <Comptes comptes={comptes.data} modifier={Boolean(droits.gererComptes && droits.modifierComptes)} />
+        )}
         {droits.gererComptes && <NouveauCompte />}
       </Stack>
       {droits.operations && comptes.data && comptes.data.length > 0 && <NouvelleOperation comptes={comptes.data} />}
@@ -337,33 +357,174 @@ export function Banque({ droits }: { droits: DroitsBanque }) {
   );
 }
 
-function Comptes({ comptes }: { comptes: Compte[] }) {
+function Comptes({ comptes, modifier }: { comptes: Compte[]; modifier: boolean }) {
+  const queryClient = useQueryClient();
+  const [edite, setEdite] = useState<Compte | null>(null);
+  const [aDesactiver, setADesactiver] = useState<Compte | null>(null);
+  const activation = useMutation({
+    mutationFn: (compte: Compte) => modifierCompte(compte.id, { est_actif: !compte.est_actif }),
+    onSuccess: () => {
+      setADesactiver(null);
+      invalider(queryClient);
+    },
+  });
   return (
-    <Table size="small" aria-label="Comptes de trésorerie">
-      <TableHead>
-        <TableRow>
-          <TableCell>Compte</TableCell>
-          <TableCell align="right">Solde OptiLink</TableCell>
-          <TableCell align="right">Solde banque</TableCell>
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {comptes.map((c) => (
-          <TableRow key={c.id}>
-            <TableCell>
-              {c.nom}
-              <Typography variant="body2" color="text.secondary">
-                {TYPES_COMPTE.find((t) => t.valeur === c.type)?.libelle} · {c.societe_nom}
-                {c.rib && ` · RIB ${c.rib}`}
-                {c.magasin_nom && ` · ${c.magasin_nom}`}
-              </Typography>
-            </TableCell>
-            <TableCell align="right">{montant(c.solde_comptable, c.devise)}</TableCell>
-            <TableCell align="right">{c.type === "banque" ? montant(c.solde_banque, c.devise) : ""}</TableCell>
+    <>
+      {activation.isError && <Alert severity="error">{activation.error.message}</Alert>}
+      <Table size="small" aria-label="Comptes de trésorerie">
+        <TableHead>
+          <TableRow>
+            <TableCell>Compte</TableCell>
+            <TableCell align="right">Solde OptiLink</TableCell>
+            <TableCell align="right">Solde banque</TableCell>
+            {modifier && <TableCell />}
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHead>
+        <TableBody>
+          {comptes.map((c) => (
+            <TableRow key={c.id} sx={c.est_actif ? undefined : { opacity: 0.6 }}>
+              <TableCell>
+                {c.nom}
+                {!c.est_actif && <Chip size="small" label="Inactif" sx={{ ml: 1 }} />}
+                <Typography variant="body2" color="text.secondary">
+                  {TYPES_COMPTE.find((t) => t.valeur === c.type)?.libelle} · {c.societe_nom}
+                  {c.rib && ` · RIB ${c.rib}`}
+                  {c.magasin_nom && ` · ${c.magasin_nom}`}
+                </Typography>
+              </TableCell>
+              <TableCell align="right">{montant(c.solde_comptable, c.devise)}</TableCell>
+              <TableCell align="right">{c.type === "banque" ? montant(c.solde_banque, c.devise) : ""}</TableCell>
+              {modifier && (
+                <TableCell align="right">
+                  <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
+                    <Button size="small" onClick={() => setEdite(c)} aria-label={`Modifier ${c.nom}`}>
+                      Modifier
+                    </Button>
+                    {c.est_actif ? (
+                      <Button
+                        size="small"
+                        color="error"
+                        onClick={() => setADesactiver(c)}
+                        aria-label={`Désactiver ${c.nom}`}
+                      >
+                        Désactiver
+                      </Button>
+                    ) : (
+                      <Button
+                        size="small"
+                        onClick={() => activation.mutate(c)}
+                        disabled={activation.isPending}
+                        aria-label={`Réactiver ${c.nom}`}
+                      >
+                        Réactiver
+                      </Button>
+                    )}
+                  </Stack>
+                </TableCell>
+              )}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      {edite && <FicheCompte key={edite.id} compte={edite} onFerme={() => setEdite(null)} />}
+      {aDesactiver && (
+        <Dialog open onClose={() => setADesactiver(null)}>
+          <DialogTitle>Désactiver « {aDesactiver.nom} » ?</DialogTitle>
+          <DialogContent>
+            <Typography>
+              Le compte et ses opérations restent dans l'historique, mais il ne sera plus proposé pour les dépôts, les
+              versements et les nouvelles opérations. Vous pourrez le réactiver.
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setADesactiver(null)}>Retour</Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={() => activation.mutate(aDesactiver)}
+              disabled={activation.isPending}
+            >
+              Désactiver le compte
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+/** Correction d'un compte : nom, banque et RIB, magasin d'un coffre. Le type et le solde de départ ne changent pas. */
+function FicheCompte({ compte, onFerme }: { compte: Compte; onFerme: () => void }) {
+  const queryClient = useQueryClient();
+  const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins, enabled: compte.type === "coffre" });
+  const [saisie, setSaisie] = useState({
+    nom: compte.nom,
+    banque: compte.banque,
+    rib: compte.rib,
+    magasin: compte.magasin ?? "",
+  });
+  const changer = (champ: keyof typeof saisie) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setSaisie((s) => ({ ...s, [champ]: e.target.value }));
+  const enregistrement = useMutation({
+    mutationFn: () =>
+      modifierCompte(
+        compte.id,
+        compte.type === "banque"
+          ? { nom: saisie.nom, banque: saisie.banque, rib: saisie.rib }
+          : compte.type === "coffre"
+            ? { nom: saisie.nom, magasin: saisie.magasin }
+            : { nom: saisie.nom },
+      ),
+    onSuccess: () => {
+      invalider(queryClient);
+      onFerme();
+    },
+  });
+  return (
+    <Dialog open onClose={onFerme} maxWidth="sm" fullWidth>
+      <DialogTitle>Modifier le compte</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            {TYPES_COMPTE.find((t) => t.valeur === compte.type)?.libelle} · {compte.societe_nom} · {compte.devise}
+          </Typography>
+          <TextField label="Nom du compte" value={saisie.nom} onChange={changer("nom")} />
+          {compte.type === "banque" && (
+            <>
+              <TextField label="Banque" value={saisie.banque} onChange={changer("banque")} />
+              <TextField
+                label="RIB"
+                value={saisie.rib}
+                onChange={changer("rib")}
+                slotProps={{ htmlInput: { maxLength: 34 } }}
+              />
+            </>
+          )}
+          {compte.type === "coffre" && (
+            <TextField select label="Magasin" value={saisie.magasin} onChange={changer("magasin")}>
+              {magasins.data
+                ?.filter((m) => m.societe_id === compte.societe)
+                .map((m) => (
+                  <MenuItem key={m.id} value={m.id}>
+                    {m.nom}
+                  </MenuItem>
+                ))}
+            </TextField>
+          )}
+          {enregistrement.isError && <Alert severity="error">{enregistrement.error.message}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onFerme}>Fermer</Button>
+        <Button
+          variant="contained"
+          onClick={() => enregistrement.mutate()}
+          disabled={!saisie.nom.trim() || (compte.type === "coffre" && !saisie.magasin) || enregistrement.isPending}
+        >
+          Enregistrer
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -413,7 +574,13 @@ function NouveauCompte() {
               ))}
             </TextField>
           )}
-          <TextField select label="Type de compte" value={saisie.type} onChange={changer("type")} sx={{ minWidth: 200 }}>
+          <TextField
+            select
+            label="Type de compte"
+            value={saisie.type}
+            onChange={changer("type")}
+            sx={{ minWidth: 200 }}
+          >
             {TYPES_COMPTE.map((t) => (
               <MenuItem key={t.valeur} value={t.valeur}>
                 {t.libelle}
@@ -430,7 +597,13 @@ function NouveauCompte() {
             </>
           )}
           {saisie.type === "coffre" && (
-            <TextField select label="Magasin" value={saisie.magasin} onChange={changer("magasin")} sx={{ minWidth: 200 }}>
+            <TextField
+              select
+              label="Magasin"
+              value={saisie.magasin}
+              onChange={changer("magasin")}
+              sx={{ minWidth: 200 }}
+            >
               {magasins.data
                 ?.filter((m) => m.societe_id === societe)
                 .map((m) => (
@@ -571,7 +744,13 @@ function NouvelleOperation({ comptes }: { comptes: Compte[] }) {
             ))}
           </TextField>
           {type === "transfert" && (
-            <TextField select label="Vers" value={saisie.destination} onChange={changer("destination")} sx={{ minWidth: 220 }}>
+            <TextField
+              select
+              label="Vers"
+              value={saisie.destination}
+              onChange={changer("destination")}
+              sx={{ minWidth: 220 }}
+            >
               {actifs
                 .filter((c) => c.id !== saisie.source && (!societe || c.societe === societe))
                 .map((c) => (
@@ -582,7 +761,13 @@ function NouvelleOperation({ comptes }: { comptes: Compte[] }) {
             </TextField>
           )}
           {type === "alimentation_fond" && (
-            <TextField select label="Caisse du magasin" value={saisie.magasin} onChange={changer("magasin")} sx={{ minWidth: 200 }}>
+            <TextField
+              select
+              label="Caisse du magasin"
+              value={saisie.magasin}
+              onChange={changer("magasin")}
+              sx={{ minWidth: 200 }}
+            >
               {magasins.data
                 ?.filter((m) => !societe || m.societe_id === societe)
                 .map((m) => (
@@ -620,7 +805,15 @@ function NouvelleOperation({ comptes }: { comptes: Compte[] }) {
   );
 }
 
-function Operations({ operations, comptes, rapprocher }: { operations: Operation[]; comptes: Compte[]; rapprocher: boolean }) {
+function Operations({
+  operations,
+  comptes,
+  rapprocher,
+}: {
+  operations: Operation[];
+  comptes: Compte[];
+  rapprocher: boolean;
+}) {
   const banques = new Set(comptes.filter((c) => c.type === "banque").map((c) => c.nom));
   return (
     <Table size="small" aria-label="Opérations de trésorerie">
