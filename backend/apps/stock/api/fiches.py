@@ -1,4 +1,4 @@
-"""Fiche article (fiche monture) : création et modification depuis l'application.
+"""Fiche article (monture, verre, lentille, divers) : création et modification dans l'application.
 
 La fiche reprend celle de l'ancien logiciel : en-tête (code, fournisseur, matière, famille…),
 puis l'onglet « Détail prix » (prix d'achat, remise, TVA, marge, prix de vente) dans le pays du
@@ -22,7 +22,7 @@ from rest_framework.response import Response
 from apps.achats.models import BonReception, Fournisseur, LigneReception
 from apps.reseau.models import Magasin, TauxTva
 
-from ..models import Article, Monture, MouvementStock, PrixArticle
+from ..models import Article, Lentille, Monture, MouvementStock, PrixArticle, Verre
 
 PREFIXE_CODE_INTERNE = "2"  # EAN-13 commençant par 2 : codes réservés à l'usage interne.
 
@@ -77,6 +77,48 @@ class MontureSerializer(serializers.ModelSerializer):
         ]
 
 
+class VerreSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Verre
+        fields = [
+            "marque",
+            "gamme",
+            "geometrie",
+            "indice",
+            "matiere",
+            "traitements",
+            "photochromique",
+            "teinte",
+            "diametre",
+        ]
+
+
+class LentilleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Lentille
+        fields = [
+            "marque",
+            "modele",
+            "renouvellement",
+            "type",
+            "rayon",
+            "diametre",
+            "puissance",
+            "cylindre",
+            "axe",
+            "addition",
+            "lentilles_par_boite",
+        ]
+
+
+# Familles qui ont leurs caractéristiques à part ; le champ de la fiche porte le nom de la famille.
+CARACTERISTIQUES = {
+    Article.Famille.MONTURE: Monture,
+    Article.Famille.VERRE: Verre,
+    Article.Famille.LENTILLE: Lentille,
+}
+
+
 class PrixSerializer(serializers.Serializer):
     """Prix dans le pays du magasin choisi."""
 
@@ -109,7 +151,7 @@ class FicheArticleSerializer(serializers.ModelSerializer):
         max_length=40,
         required=False,
         allow_blank=True,
-        help_text="Code monture ; un code interne EAN-13 est attribué si vide.",
+        help_text="Code-barres ; un code interne EAN-13 est attribué aux montures si vide.",
     )
     fournisseur = serializers.SlugRelatedField(
         slug_field="public_id", queryset=Fournisseur.objects.all()
@@ -120,6 +162,8 @@ class FicheArticleSerializer(serializers.ModelSerializer):
         required=False, help_text="Vendu sur le stock du magasin (sinon commandé pour le client)."
     )
     monture = MontureSerializer(required=False)
+    verre = VerreSerializer(required=False)
+    lentille = LentilleSerializer(required=False)
     prix = serializers.SerializerMethodField()
     nouveau_prix = PrixSerializer(write_only=True, required=False, source="prix_saisi")
     dernier_achat = serializers.SerializerMethodField()
@@ -146,6 +190,8 @@ class FicheArticleSerializer(serializers.ModelSerializer):
             "fodec",
             "observation",
             "monture",
+            "verre",
+            "lentille",
             "prix",
             "nouveau_prix",
             "dernier_achat",
@@ -237,6 +283,11 @@ class FicheArticleSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"famille": "La famille d'un article ne change pas."})
         if "monture" in donnees and famille != Article.Famille.MONTURE:
             raise serializers.ValidationError({"monture": "Réservé aux montures."})
+        for cle in ("verre", "lentille"):
+            if cle in donnees and famille != cle:
+                raise serializers.ValidationError(
+                    {cle: f"Réservé aux articles de la famille {cle}."}
+                )
         prix = donnees.get("prix_saisi")
         if prix is not None:
             taux = TauxTva.objects.filter(pays=self.pays, taux=prix["taux_tva"]).first()
@@ -259,7 +310,7 @@ class FicheArticleSerializer(serializers.ModelSerializer):
         return self._enregistrer(article, donnees)
 
     def _enregistrer(self, article, donnees):
-        monture = donnees.pop("monture", None)
+        saisies = {cle: donnees.pop(cle, None) for cle in CARACTERISTIQUES}
         prix = donnees.pop("prix_saisi", None)
         if "stockable" in donnees:
             article.sur_commande = not donnees.pop("stockable")
@@ -271,17 +322,19 @@ class FicheArticleSerializer(serializers.ModelSerializer):
             article.code_barres = prochain_code_interne()
 
         fiche = None
-        if article.famille == Article.Famille.MONTURE:
-            fiche = getattr(article, "monture", None) if article.pk else None
-            fiche = fiche or Monture()
-            for champ, valeur in (monture or {}).items():
+        modele = CARACTERISTIQUES.get(article.famille)
+        if modele is not None:
+            fiche = getattr(article, article.famille, None) if article.pk else None
+            fiche = fiche or modele()
+            for champ, valeur in (saisies[article.famille] or {}).items():
                 setattr(fiche, champ, valeur)
         if not article.libelle:
             article.libelle = self._libelle(article, fiche)
         self._sauver(article)
         if fiche is not None:
             fiche.article = article
-            self._sauver(fiche)
+            # Erreurs des montures sans clé, comme avant ; sous « verre » ou « lentille » sinon.
+            self._sauver(fiche, None if modele is Monture else article.famille)
         if prix is not None:
             tarif = PrixArticle.objects.filter(article=article, pays=self.pays).first()
             tarif = tarif or PrixArticle(article=article, pays=self.pays)
@@ -298,6 +351,14 @@ class FicheArticleSerializer(serializers.ModelSerializer):
     def _libelle(article, fiche):
         if fiche is None:
             return article.reference
+        if isinstance(fiche, Verre):
+            indice = "" if fiche.indice is None else format(Decimal(fiche.indice).normalize(), "f")
+            geometrie = fiche.get_geometrie_display()
+            morceaux = [fiche.marque, fiche.gamme, geometrie, indice, fiche.traitements]
+            return " ".join(m for m in morceaux if m)[:200] or article.reference
+        if isinstance(fiche, Lentille):
+            morceaux = [fiche.marque, fiche.modele, fiche.get_renouvellement_display()]
+            return " ".join(m for m in morceaux if m)[:200] or article.reference
         taille = f"{fiche.calibre}" + (f"□{fiche.pont}" if fiche.pont else "")
         morceaux = [fiche.marque, fiche.modele, fiche.couleur, taille if fiche.calibre else ""]
         return " ".join(m for m in morceaux if m)[:200] or article.reference
@@ -331,7 +392,10 @@ class FicheArticleViewSet(
     mixins.UpdateModelMixin,
     viewsets.GenericViewSet,
 ):
-    """Fiche article à créer ou modifier (montures pour l'instant), prix dans le pays du magasin."""
+    """Fiche article à créer ou modifier (toutes familles), prix dans le pays du magasin.
+
+    Pas de suppression : un article servi par des ventes ou du stock se désactive (est_actif).
+    """
 
     serializer_class = FicheArticleSerializer
     lookup_field = "public_id"
@@ -349,7 +413,9 @@ class FicheArticleViewSet(
     }
 
     def get_queryset(self):
-        return Article.objects.select_related("monture", "fournisseur", "cree_par")
+        return Article.objects.select_related(
+            "monture", "verre", "lentille", "fournisseur", "cree_par"
+        )
 
     def get_serializer_context(self):
         contexte = super().get_serializer_context()

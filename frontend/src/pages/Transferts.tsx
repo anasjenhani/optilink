@@ -30,6 +30,7 @@ import {
   lireTransfert,
   listerTransferts,
   recevoirTransfert,
+  annulerTransfert,
   type Transfert,
 } from "../api/transferts";
 import { AjoutArticle } from "./BonReception";
@@ -300,10 +301,12 @@ export function TransfertStock() {
 function DetailTransfert({
   id,
   peutRecevoir,
+  peutAnnuler,
   onFerme,
 }: {
   id: string;
   peutRecevoir: (t: Transfert) => boolean;
+  peutAnnuler: (t: Transfert) => boolean;
   onFerme: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -311,6 +314,15 @@ function DetailTransfert({
   const reception = useMutation({
     mutationFn: () => recevoirTransfert(id),
     onSuccess: (t) => {
+      queryClient.setQueryData(["transferts", id], t);
+      for (const cle of ["transferts", "articles"]) void queryClient.invalidateQueries({ queryKey: [cle] });
+    },
+  });
+  const [confirmer, setConfirmer] = useState(false);
+  const annulation = useMutation({
+    mutationFn: () => annulerTransfert(id),
+    onSuccess: (t) => {
+      setConfirmer(false);
       queryClient.setQueryData(["transferts", id], t);
       for (const cle of ["transferts", "articles"]) void queryClient.invalidateQueries({ queryKey: [cle] });
     },
@@ -327,10 +339,15 @@ function DetailTransfert({
               De <strong>{t.magasin}</strong> vers <strong>{t.destination}</strong> · envoyé le{" "}
               {new Date(t.cree_le).toLocaleString("fr-FR")} par {t.envoye_par}
             </Typography>
-            <Typography color={t.statut === "recu" ? "success.main" : "warning.main"} sx={{ fontWeight: 700 }}>
+            <Typography
+              color={t.statut === "recu" ? "success.main" : t.statut === "annule" ? "text.secondary" : "warning.main"}
+              sx={{ fontWeight: 700 }}
+            >
               {t.statut === "recu"
                 ? `Reçu le ${new Date(t.recu_le!).toLocaleString("fr-FR")} par ${t.recu_par}`
-                : "En route : pas encore réceptionné par le magasin."}
+                : t.statut === "annule"
+                  ? `Annulé le ${new Date(t.annule_le!).toLocaleString("fr-FR")} par ${t.annule_par} : les articles sont revenus au stock de départ.`
+                  : "En route : pas encore réceptionné par le magasin."}
             </Typography>
             <Table size="small" aria-label="Articles du transfert">
               <TableHead>
@@ -354,6 +371,29 @@ function DetailTransfert({
             </Table>
             {t.observation && <Typography variant="body2">Observation : {t.observation}</Typography>}
             {reception.isError && <Alert severity="error">{reception.error.message}</Alert>}
+            {annulation.isError && <Alert severity="error">{annulation.error.message}</Alert>}
+            {confirmer && (
+              <Alert
+                severity="warning"
+                action={
+                  <Stack direction="row" spacing={1}>
+                    <Button color="inherit" onClick={() => setConfirmer(false)}>
+                      Non
+                    </Button>
+                    <Button
+                      color="error"
+                      variant="contained"
+                      disabled={annulation.isPending}
+                      onClick={() => annulation.mutate()}
+                    >
+                      Oui, annuler
+                    </Button>
+                  </Stack>
+                }
+              >
+                Annuler ce transfert ? Les articles reviennent au stock de {t.magasin}.
+              </Alert>
+            )}
           </Stack>
         )}
       </DialogContent>
@@ -361,6 +401,11 @@ function DetailTransfert({
         {t && (
           <Button startIcon={<Print />} onClick={() => imprimer(pageTransfert(t))}>
             Imprimer
+          </Button>
+        )}
+        {t && t.statut === "envoye" && peutAnnuler(t) && !confirmer && (
+          <Button color="error" onClick={() => setConfirmer(true)}>
+            Annuler le transfert
           </Button>
         )}
         {t && t.statut === "envoye" && peutRecevoir(t) && (
@@ -375,7 +420,7 @@ function DetailTransfert({
 }
 
 /** « Liste des Transferts » : envoyés par le dépôt et à réceptionner par les magasins. */
-export function ListeTransferts({ recevoir }: { recevoir: boolean }) {
+export function ListeTransferts({ recevoir, annuler = false }: { recevoir: boolean; annuler?: boolean }) {
   const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
   const mesMagasins = new Set((magasins.data ?? []).map((m) => m.id));
   const [filtres, setFiltres] = useState<FiltresTransferts>({});
@@ -414,6 +459,7 @@ export function ListeTransferts({ recevoir }: { recevoir: boolean }) {
           <MenuItem value="">Tous</MenuItem>
           <MenuItem value="envoye">En route</MenuItem>
           <MenuItem value="recu">Reçus</MenuItem>
+          <MenuItem value="annule">Annulés</MenuItem>
         </TextField>
         <TextField
           size="small"
@@ -459,8 +505,14 @@ export function ListeTransferts({ recevoir }: { recevoir: boolean }) {
                 <TableCell>{t.magasin}</TableCell>
                 <TableCell>{t.destination}</TableCell>
                 <TableCell align="right">{t.total_articles ?? 0}</TableCell>
-                <TableCell sx={{ color: t.statut === "recu" ? "success.main" : "warning.main", fontWeight: 600 }}>
-                  {t.statut === "recu" ? "Reçu" : "En route"}
+                <TableCell
+                  sx={{
+                    color:
+                      t.statut === "recu" ? "success.main" : t.statut === "annule" ? "text.secondary" : "warning.main",
+                    fontWeight: 600,
+                  }}
+                >
+                  {t.statut === "recu" ? "Reçu" : t.statut === "annule" ? "Annulé" : "En route"}
                 </TableCell>
                 <TableCell>{t.envoye_par}</TableCell>
                 <TableCell>{t.recu_le ? dateCourte(t.recu_le) : ""}</TableCell>
@@ -491,6 +543,7 @@ export function ListeTransferts({ recevoir }: { recevoir: boolean }) {
         <DetailTransfert
           id={ouvert}
           peutRecevoir={(t) => recevoir && mesMagasins.has(t.destination_id)}
+          peutAnnuler={(t) => annuler && mesMagasins.has(t.magasin_id)}
           onFerme={() => setOuvert(null)}
         />
       )}

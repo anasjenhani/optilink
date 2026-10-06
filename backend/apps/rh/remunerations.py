@@ -109,8 +109,11 @@ def verser_acompte(acompte, mode, reference="", date=None):
 
 
 @transaction.atomic
-def annuler_acompte(acompte):
+def annuler_acompte(acompte, par_l_employe=False):
+    """Les RH annulent un acompte pas encore versé ; l'employé, sa demande encore en attente."""
     acompte = Acompte.tous.select_for_update().get(pk=acompte.pk)
+    if par_l_employe and acompte.statut != Acompte.Statut.DEMANDE:
+        raise OperationImpossible("Les RH ont déjà répondu : cet acompte ne s'annule plus.")
     if acompte.statut not in (Acompte.Statut.DEMANDE, Acompte.Statut.ACCORDE):
         raise OperationImpossible("Un acompte versé ou refusé ne s'annule plus.")
     acompte.statut = Acompte.Statut.ANNULE

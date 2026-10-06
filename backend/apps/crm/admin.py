@@ -38,6 +38,4 @@ class OrganismeAdmin(admin.ModelAdmin):
     list_display = ("nom", "type", "pays", "est_actif")
     list_filter = ("type", "pays", "est_actif")
     search_fields = ("nom",)
-
-    def has_delete_permission(self, request, obj=None):
-        return False
+    # Supprimable tant qu'aucun client ni aucune prise en charge ne le cite (sinon : désactiver).

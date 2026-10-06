@@ -95,3 +95,33 @@ def recevoir_transfert(transfert, *, auteur):
     transfert.recu_le = timezone.now()
     transfert.save(update_fields=["statut", "recu_par", "recu_le", "modifie_le"])
     return transfert
+
+
+@transaction.atomic
+def annuler_transfert(transfert, *, auteur):
+    """Transfert envoyé par erreur et pas encore réceptionné : les articles reviennent au stock
+    du magasin de départ (mouvement inverse, l'historique de l'envoi reste)."""
+    transfert = (
+        TransfertStock.tous.select_for_update(of=("self",))
+        .prefetch_related("lignes__article")
+        .get(pk=transfert.pk)
+    )
+    if transfert.statut != TransfertStock.Statut.ENVOYE:
+        raise TransfertImpossible(
+            f"Le transfert {transfert.numero} est {transfert.get_statut_display().lower()} : "
+            "il ne s'annule plus."
+        )
+    for ligne in transfert.lignes.all():
+        MouvementStock.tous.create(
+            magasin_id=transfert.magasin_id,
+            article=ligne.article,
+            quantite=ligne.quantite,
+            type=MouvementStock.Type.TRANSFERT_ENTREE,
+            utilisateur=auteur,
+            reference=f"{transfert.numero} annulé",
+        )
+    transfert.statut = TransfertStock.Statut.ANNULE
+    transfert.annule_par = auteur
+    transfert.annule_le = timezone.now()
+    transfert.save(update_fields=["statut", "annule_par", "annule_le", "modifie_le"])
+    return transfert

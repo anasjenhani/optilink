@@ -61,17 +61,22 @@ function json(donnees: unknown, status = 200) {
 
 afterEach(() => vi.unstubAllGlobals());
 
-function afficher(ecran: React.ReactNode) {
+function afficher(ecran: React.ReactNode, compte: typeof COMPTE = COMPTE) {
   const envois: { url: string; corps: unknown }[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === "PATCH") {
+        const corps = JSON.parse(init.body as string);
+        envois.push({ url, corps });
+        return json({ ...compte, ...corps });
+      }
       if (init?.method === "POST") {
         envois.push({ url, corps: JSON.parse(init.body as string) });
         return json({ ...OPERATION, numero: "SCTE001-OP2026-000001" }, 201);
       }
       if (url.includes("a-remettre")) return json(A_REMETTRE);
-      if (url.includes("/comptes/")) return json([COMPTE]);
+      if (url.includes("/comptes/")) return json([compte]);
       if (url.includes("/operations/")) return json({ results: url.includes("prevue") ? [] : [OPERATION] });
       return json({ results: [] });
     }),
@@ -121,4 +126,48 @@ test("la finance rapproche les cartes avec le montant crédité", async () => {
     url: "/api/v1/tresorerie/operations/o1/rapprocher/",
     corps: { date_valeur: "2026-10-05", montant_credite: "315" },
   });
+});
+
+test("la finance corrige le RIB d'un compte puis le désactive après confirmation", async () => {
+  const envois = afficher(
+    <Banque droits={{ gererComptes: true, rapprocher: false, operations: false, modifierComptes: true }} />,
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "Modifier BIAT Aouina" }));
+  expect(screen.queryByLabelText("Solde de départ")).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Nom du compte"), { target: { value: "BIAT Aouina principal" } });
+  fireEvent.change(screen.getByLabelText("RIB"), { target: { value: "08006012345678901234" } });
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+  await vi.waitFor(() => expect(envois).toHaveLength(1));
+  expect(envois[0]).toEqual({
+    url: "/api/v1/tresorerie/comptes/b1/",
+    corps: { nom: "BIAT Aouina principal", banque: "BIAT", rib: "08006012345678901234" },
+  });
+
+  fireEvent.click(await screen.findByRole("button", { name: "Désactiver BIAT Aouina" }));
+  expect(await screen.findByText(/ne sera plus proposé pour les dépôts/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Retour" }));
+  expect(envois).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: "Désactiver BIAT Aouina" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Désactiver le compte" }));
+  await vi.waitFor(() => expect(envois).toHaveLength(2));
+  expect(envois[1]).toEqual({ url: "/api/v1/tresorerie/comptes/b1/", corps: { est_actif: false } });
+});
+
+test("un compte inactif est signalé et se réactive", async () => {
+  const envois = afficher(
+    <Banque droits={{ gererComptes: true, rapprocher: false, operations: false, modifierComptes: true }} />,
+    { ...COMPTE, est_actif: false },
+  );
+  const comptes = await screen.findByRole("table", { name: "Comptes de trésorerie" });
+  expect(within(comptes).getByText("Inactif")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Réactiver BIAT Aouina" }));
+  await vi.waitFor(() => expect(envois).toHaveLength(1));
+  expect(envois[0].corps).toEqual({ est_actif: true });
+});
+
+test("sans le droit de modifier, les comptes restent en lecture seule", async () => {
+  afficher(<Banque droits={{ gererComptes: true, rapprocher: false, operations: false }} />);
+  expect(await screen.findByRole("table", { name: "Comptes de trésorerie" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Modifier BIAT Aouina" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Désactiver BIAT Aouina" })).not.toBeInTheDocument();
 });

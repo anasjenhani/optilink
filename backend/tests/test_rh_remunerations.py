@@ -85,6 +85,43 @@ def test_acompte_demande_accorde_verse(salma, equipe, client_de):
     assert rh.post(url + "annuler/").status_code == 400
 
 
+def test_employe_annule_sa_demande_d_acompte(tunis, salma, equipe, client_de):
+    vendeuse = client_de(equipe["vendeur"])
+    demande = vendeuse.post(
+        "/api/v1/rh/mon-espace/demander-acompte/", {"montant": "300"}, format="json"
+    )
+    acompte = demande.json()["acomptes"][0]["id"]
+    url = f"/api/v1/rh/mon-espace/{acompte}/annuler-acompte/"
+
+    # Un collègue ne retire pas la demande de Salma, même avec sa propre fiche.
+    Employe.objects.create(
+        magasin=tunis,
+        utilisateur=equipe["responsable"],
+        nom="Trabelsi",
+        prenom="Karim",
+        poste="Responsable",
+        date_embauche=il_y_a_mois(6),
+    )
+    assert client_de(equipe["responsable"]).post(url).status_code == 404
+    assert vendeuse.post("/api/v1/rh/mon-espace/pas-un-id/annuler-acompte/").status_code == 404
+
+    reponse = vendeuse.post(url)
+    assert reponse.status_code == 200, reponse.json()
+    assert reponse.json()["acomptes"][0]["statut"] == "annule"
+    assert Acompte.objects.get(public_id=acompte).statut == Acompte.Statut.ANNULE
+    assert vendeuse.post(url).status_code == 400
+
+    # Une fois accordé par les RH, l'employé ne l'annule plus.
+    acomptes = vendeuse.post(
+        "/api/v1/rh/mon-espace/demander-acompte/", {"montant": "300"}, format="json"
+    ).json()["acomptes"]
+    nouveau = next(a["id"] for a in acomptes if a["statut"] == "demande")
+    client_de(equipe["rh"]).post(f"{ACOMPTES}{nouveau}/accorder/", {}, format="json")
+    refus = vendeuse.post(f"/api/v1/rh/mon-espace/{nouveau}/annuler-acompte/")
+    assert refus.status_code == 400 and "déjà répondu" in refus.json()["detail"]
+    assert Acompte.objects.get(public_id=nouveau).statut == Acompte.Statut.ACCORDE
+
+
 def test_acompte_refuse_avec_motif(salma, equipe, client_de):
     demande = client_de(equipe["responsable"]).post(
         ACOMPTES, {"employe": str(salma.public_id), "montant": "100"}, format="json"

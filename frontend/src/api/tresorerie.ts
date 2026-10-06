@@ -99,6 +99,15 @@ export const saisirDepense = (depense: {
   montant: string;
 }) => appeler<Depense>("/api/v1/tresorerie/depenses/", { methode: "POST", corps: depense });
 
+/** Une dépense se corrige ou se supprime tant que la caisse n'est pas clôturée. */
+export const corrigerDepense = (
+  id: string,
+  correction: { categorie: CategorieDepense; motif: string; beneficiaire: string; montant: string },
+) => appeler<Depense>(`/api/v1/tresorerie/depenses/${id}/`, { methode: "PATCH", corps: correction });
+
+export const supprimerDepense = (id: string) =>
+  appeler<void>(`/api/v1/tresorerie/depenses/${id}/`, { methode: "DELETE" });
+
 export type TypeCompte = "banque" | "coffre" | "caisse_centrale";
 
 export type Compte = {
@@ -171,10 +180,13 @@ export const creerCompte = (compte: {
   solde_initial: string;
 }) => appeler<Compte>("/api/v1/tresorerie/comptes/", { methode: "POST", corps: compte });
 
+export type SaisieCompte = Partial<Pick<Compte, "nom" | "banque" | "rib" | "magasin" | "est_actif">>;
+
+export const modifierCompte = (id: string, saisie: SaisieCompte) =>
+  appeler<Compte>(`/api/v1/tresorerie/comptes/${id}/`, { methode: "PATCH", corps: saisie });
+
 export const listerOperations = (statut?: StatutOperation) =>
-  appeler<Page<Operation>>(`/api/v1/tresorerie/operations/${statut ? `?statut=${statut}` : ""}`).then(
-    (p) => p.results,
-  );
+  appeler<Page<Operation>>(`/api/v1/tresorerie/operations/${statut ? `?statut=${statut}` : ""}`).then((p) => p.results);
 
 export const listerARemettre = () => appeler<ARemettre[]>("/api/v1/tresorerie/operations/a-remettre/");
 

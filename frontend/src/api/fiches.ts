@@ -55,6 +55,61 @@ export type FicheMonture = {
   branche: number | null;
 };
 
+export const GEOMETRIES = [
+  { valeur: "unifocal", libelle: "Unifocal" },
+  { valeur: "progressif", libelle: "Progressif" },
+  { valeur: "degressif", libelle: "Dégressif" },
+  { valeur: "bifocal", libelle: "Bifocal" },
+] as const;
+
+export const MATIERES_VERRE = [
+  { valeur: "", libelle: "—" },
+  { valeur: "organique", libelle: "Organique" },
+  { valeur: "polycarbonate", libelle: "Polycarbonate" },
+  { valeur: "mineral", libelle: "Minéral" },
+] as const;
+
+export const RENOUVELLEMENTS = [
+  { valeur: "journaliere", libelle: "Journalière" },
+  { valeur: "bimensuelle", libelle: "Bimensuelle" },
+  { valeur: "mensuelle", libelle: "Mensuelle" },
+  { valeur: "trimestrielle", libelle: "Trimestrielle" },
+  { valeur: "annuelle", libelle: "Annuelle" },
+] as const;
+
+export const TYPES_LENTILLE = [
+  { valeur: "spherique", libelle: "Sphérique" },
+  { valeur: "torique", libelle: "Torique" },
+  { valeur: "multifocale", libelle: "Multifocale" },
+] as const;
+
+/** Décimaux en texte (« 1.600 », « -3.25 »), comme l'API les rend. */
+export type FicheVerre = {
+  marque: string;
+  gamme: string;
+  geometrie: string;
+  indice: string | null;
+  matiere: string;
+  traitements: string;
+  photochromique: boolean;
+  teinte: string;
+  diametre: number | null;
+};
+
+export type FicheLentille = {
+  marque: string;
+  modele: string;
+  renouvellement: string;
+  type: string;
+  rayon: string | null;
+  diametre: string | null;
+  puissance: string | null;
+  cylindre: string | null;
+  axe: number | null;
+  addition: string | null;
+  lentilles_par_boite: number | null;
+};
+
 export type Prix = {
   prix_achat_ht: string | null;
   taux_remise_achat: string;
@@ -66,7 +121,7 @@ export type FicheArticle = {
   id: string;
   reference: string;
   libelle: string;
-  famille: "monture";
+  famille: "monture" | "verre" | "lentille" | "divers" | "supplement";
   code_barres: string;
   fournisseur: string;
   fournisseur_nom: string;
@@ -80,6 +135,8 @@ export type FicheArticle = {
   fodec: boolean;
   observation: string;
   monture: FicheMonture | null;
+  verre: FicheVerre | null;
+  lentille: FicheLentille | null;
   prix: Prix | null;
   dernier_achat: {
     prix_achat_ht: string;

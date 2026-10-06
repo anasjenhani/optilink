@@ -78,6 +78,7 @@ import { FactureAchat } from "../pages/FactureAchat";
 import { ListeFacturesAchat } from "../pages/ListeFacturesAchat";
 import { ListeReceptions } from "../pages/ListeReceptions";
 import { Magasins } from "../pages/Magasins";
+import { MouvementsStock } from "../pages/MouvementsStock";
 import { RessourcesHumaines } from "../pages/RessourcesHumaines";
 import { Suivi } from "../pages/Suivi";
 import { ListeTransferts, TransfertStock } from "../pages/Transferts";
@@ -155,19 +156,22 @@ export function modulesPour(session: EtatSession): Module[] {
     banque: a("tresorerie.view_operationtresorerie"),
     rapprocher: a("tresorerie.rapprocher_operationtresorerie"),
     gererComptes: a("tresorerie.add_comptetresorerie"),
+    modifierComptes: a("tresorerie.change_comptetresorerie"),
   };
-  const tresorerie = (onglet: keyof typeof droitsTresorerie) =>
+  const tresorerie = (onglet: keyof typeof ONGLETS_TRESORERIE) =>
     si(droitsTresorerie[onglet], () => (
       <Tresorerie droits={droitsTresorerie} ongletInitial={ONGLETS_TRESORERIE[onglet]} />
     ));
   const droitsRh = {
     voirEmployes: a("rh.view_employe"),
     creerEmploye: a("rh.add_employe"),
+    modifierEmploye: a("rh.change_employe"),
     voirPresence: a("rh.view_pointage"),
     pointer: a("rh.add_pointage"),
     voirConges: a("rh.view_demandeconge"),
     saisirConge: a("rh.add_demandeconge") && a("rh.view_employe"),
     deciderConge: a("rh.decider_demandeconge"),
+    annulerConge: a("rh.add_demandeconge"),
     voirAcomptes: a("rh.view_acompte"),
     demanderAcompte: a("rh.add_acompte"),
     deciderAcompte: a("rh.decider_acompte"),
@@ -257,6 +261,7 @@ export function modulesPour(session: EtatSession): Module[] {
                 voirOrdonnances: a("optique.view_prescription"),
                 changerStatut: a("ventes.change_devis"),
                 encaisser: vendre,
+                consulter: a("ventes.view_devis"),
               }}
             />
           )),
@@ -470,7 +475,7 @@ export function modulesPour(session: EtatSession): Module[] {
           icone: CompareArrows,
           couleur: COULEURS.bleu,
           ecran: si(a("stock.view_transfertstock"), () => (
-            <ListeTransferts recevoir={a("stock.change_transfertstock")} />
+            <ListeTransferts recevoir={a("stock.change_transfertstock")} annuler={a("stock.add_transfertstock")} />
           )),
         },
         {
@@ -500,7 +505,13 @@ export function modulesPour(session: EtatSession): Module[] {
         aVenir("stock-date", "Stock à la Date", CalendarMonth, COULEURS.vert),
         aVenir("config-stock", "Config Stock", Widgets, COULEURS.brun),
         aVenir("stock-depense", "Stock Article Dépense", Inventory2, COULEURS.jaune),
-        aVenir("mouvements", "Mouvements de Stock", TableChart, COULEURS.brun),
+        {
+          id: "mouvements",
+          libelle: "Mouvements de Stock",
+          icone: TableChart,
+          couleur: COULEURS.brun,
+          ecran: si(a("stock.view_mouvementstock"), () => <MouvementsStock />),
+        },
         aVenir("stock-total", "Stock Total", Widgets, COULEURS.orange),
         aVenir("bon-sortie", "Bon Sortie", ArrowUpward, COULEURS.vert),
         aVenir("demande-transfert", "Demande Transfert", CompareArrows, COULEURS.bleu),
@@ -526,7 +537,9 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Remboursement Client",
           icone: Undo,
           couleur: COULEURS.vert,
-          ecran: si(a("ventes.add_avoir"), () => <Avoirs />),
+          ecran: si(a("ventes.add_avoir") || a("ventes.view_avoir"), () => (
+            <Avoirs emettre={a("ventes.add_avoir")} consulter={a("ventes.view_avoir")} />
+          )),
         },
         {
           id: "avance-personnel",
@@ -637,14 +650,18 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Facture",
           icone: Description,
           couleur: COULEURS.violet,
-          ecran: si(a("ventes.add_facture"), () => <Factures />),
+          ecran: si(a("ventes.add_facture") || a("ventes.view_facture"), () => (
+            <Factures generer={a("ventes.add_facture")} consulter={a("ventes.view_facture")} />
+          )),
         },
         {
           id: "avoir",
           libelle: "Avoir",
           icone: Undo,
           couleur: COULEURS.rouge,
-          ecran: si(a("ventes.add_avoir"), () => <Avoirs />),
+          ecran: si(a("ventes.add_avoir") || a("ventes.view_avoir"), () => (
+            <Avoirs emettre={a("ventes.add_avoir")} consulter={a("ventes.view_avoir")} />
+          )),
         },
         aVenir("ca-previsionnel", "CA Prévisionnel", TableChart, COULEURS.bleu),
         aVenir("cloture-mois", "Clôture Mois", Lock, COULEURS.brun),
