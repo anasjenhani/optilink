@@ -46,6 +46,7 @@ export type DroitsTresorerie = {
   banque?: boolean;
   rapprocher?: boolean;
   gererComptes?: boolean;
+  modifierComptes?: boolean;
 };
 
 const STATUTS: Record<StatutCloture, { libelle: string; couleur: "info" | "success" | "error" }> = {
@@ -121,6 +122,7 @@ export function Tresorerie({ droits, ongletInitial }: { droits: DroitsTresorerie
                 gererComptes: Boolean(droits.gererComptes),
                 rapprocher: Boolean(droits.rapprocher),
                 operations: Boolean(droits.gererComptes && droits.versements),
+                modifierComptes: Boolean(droits.modifierComptes),
               }}
             />
           )}

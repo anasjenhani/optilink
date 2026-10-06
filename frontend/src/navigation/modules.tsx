@@ -155,19 +155,22 @@ export function modulesPour(session: EtatSession): Module[] {
     banque: a("tresorerie.view_operationtresorerie"),
     rapprocher: a("tresorerie.rapprocher_operationtresorerie"),
     gererComptes: a("tresorerie.add_comptetresorerie"),
+    modifierComptes: a("tresorerie.change_comptetresorerie"),
   };
-  const tresorerie = (onglet: keyof typeof droitsTresorerie) =>
+  const tresorerie = (onglet: keyof typeof ONGLETS_TRESORERIE) =>
     si(droitsTresorerie[onglet], () => (
       <Tresorerie droits={droitsTresorerie} ongletInitial={ONGLETS_TRESORERIE[onglet]} />
     ));
   const droitsRh = {
     voirEmployes: a("rh.view_employe"),
     creerEmploye: a("rh.add_employe"),
+    modifierEmploye: a("rh.change_employe"),
     voirPresence: a("rh.view_pointage"),
     pointer: a("rh.add_pointage"),
     voirConges: a("rh.view_demandeconge"),
     saisirConge: a("rh.add_demandeconge") && a("rh.view_employe"),
     deciderConge: a("rh.decider_demandeconge"),
+    annulerConge: a("rh.add_demandeconge"),
     voirAcomptes: a("rh.view_acompte"),
     demanderAcompte: a("rh.add_acompte"),
     deciderAcompte: a("rh.decider_acompte"),

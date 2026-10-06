@@ -120,6 +120,28 @@ export const annulerMonConge = (id: string) =>
 
 export const listerEmployes = () => appeler<Employe[]>("/api/v1/rh/employes/?actifs=true");
 
+/** Tous les employés, sortis compris. */
+export const listerTousEmployes = () => appeler<Employe[]>("/api/v1/rh/employes/");
+
+export type SaisieEmploye = Pick<
+  Employe,
+  | "magasin"
+  | "nom"
+  | "prenom"
+  | "cin"
+  | "telephone"
+  | "poste"
+  | "date_embauche"
+  | "date_sortie"
+  | "conges_par_mois"
+  | "salaire_base"
+  | "solde_conges_initial"
+  | "utilisateur"
+>;
+
+export const modifierEmploye = (id: string, saisie: Partial<SaisieEmploye>) =>
+  appeler<Employe>(`/api/v1/rh/employes/${id}/`, { methode: "PATCH", corps: saisie });
+
 export const creerEmploye = (employe: {
   magasin: string;
   nom: string;
@@ -139,7 +161,13 @@ export const lirePresence = (magasin: string, date: string) =>
 export const enregistrerPresence = (
   magasin: string,
   date: string,
-  lignes: { employe: string; statut: StatutPointage; arrivee: string | null; depart: string | null; commentaire: string }[],
+  lignes: {
+    employe: string;
+    statut: StatutPointage;
+    arrivee: string | null;
+    depart: string | null;
+    commentaire: string;
+  }[],
 ) => appeler<LignePresence[]>("/api/v1/rh/presence/", { methode: "POST", corps: { magasin, date, lignes } });
 
 export const listerConges = (statut?: StatutConge) =>
@@ -148,11 +176,19 @@ export const listerConges = (statut?: StatutConge) =>
 export const saisirConge = (demande: SaisieConge & { employe: string }) =>
   appeler<Conge>("/api/v1/rh/conges/", { methode: "POST", corps: demande });
 
+export const annulerConge = (id: string) => appeler<Conge>(`/api/v1/rh/conges/${id}/annuler/`, { methode: "POST" });
+
 export const deciderConge = (id: string, decision: "accepter" | "refuser", commentaire: string) =>
   appeler<Conge>(`/api/v1/rh/conges/${id}/${decision}/`, { methode: "POST", corps: { commentaire } });
 
 export const demanderMonAcompte = (acompte: { montant: string; motif: string }) =>
   appeler<MonEspace>("/api/v1/rh/mon-espace/demander-acompte/", { methode: "POST", corps: acompte });
+
+export const annulerMonAcompte = (id: string) =>
+  appeler<MonEspace>(`/api/v1/rh/mon-espace/${id}/annuler-acompte/`, { methode: "POST" });
+
+export const annulerAcompte = (id: string) =>
+  appeler<Acompte>(`/api/v1/rh/acomptes/${id}/annuler/`, { methode: "POST" });
 
 export const listerAcomptes = (statut?: StatutAcompte) =>
   appeler<Page<Acompte>>(`/api/v1/rh/acomptes/${statut ? `?statut=${statut}` : ""}`).then((p) => p.results);
@@ -169,10 +205,17 @@ export const verserAcompte = (id: string, mode: ModeVersement, reference: string
 export const listerPrimes = (statut?: StatutPrime) =>
   appeler<Page<Prime>>(`/api/v1/rh/primes/${statut ? `?statut=${statut}` : ""}`).then((p) => p.results);
 
-export const proposerPrime = (prime: { employe: string; type: TypePrime; montant: string; mois: string; motif: string }) =>
-  appeler<Prime>("/api/v1/rh/primes/", { methode: "POST", corps: prime });
+export const proposerPrime = (prime: {
+  employe: string;
+  type: TypePrime;
+  montant: string;
+  mois: string;
+  motif: string;
+}) => appeler<Prime>("/api/v1/rh/primes/", { methode: "POST", corps: prime });
 
 export const deciderPrime = (id: string, decision: "valider" | "refuser", commentaire: string) =>
   appeler<Prime>(`/api/v1/rh/primes/${id}/${decision}/`, { methode: "POST", corps: { commentaire } });
+
+export const annulerPrime = (id: string) => appeler<Prime>(`/api/v1/rh/primes/${id}/annuler/`, { methode: "POST" });
 
 export const lireRecap = (mois: string) => appeler<LigneRecap[]>(`/api/v1/rh/recap/?mois=${mois}`);
