@@ -12,6 +12,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from apps.reseau.models import Pays
+from apps.reseau.villes import ville_importee
 from apps.stock.imports import (
     Rapport,
     _Annuler,
@@ -175,6 +176,10 @@ def importer_fournisseurs(lignes, *, pays, apercu=False):
                     continue
                 if matricule:
                     matricules[matricule] = numero
+                if ligne.get("ville", ""):
+                    ligne["ville"], alerte = ville_importee(ligne["ville"])
+                    if alerte:
+                        rapport.alerte(numero, alerte)
                 try:
                     with transaction.atomic():
                         fournisseur, cree, par = _importer_fournisseur(ligne, pays)

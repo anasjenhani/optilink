@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.core.exceptions import PermissionDenied
 
+from apps.reseau.admin import AvecListeVilles
 from core.admin_imports import AvecImport
 
 from .admin_saisie import saisir_facture, saisir_reception, saisir_retour
@@ -18,7 +19,7 @@ from .models import (
 
 
 @admin.register(Fournisseur)
-class FournisseurAdmin(AvecImport, admin.ModelAdmin):
+class FournisseurAdmin(AvecListeVilles, AvecImport, admin.ModelAdmin):
     imports = ("fournisseurs",)
     list_display = ("code", "nom", "ville", "telephone", "fournisseur_verres", "est_actif")
     list_filter = ("pays", "fournisseur_verres", "est_actif")
