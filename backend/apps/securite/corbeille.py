@@ -36,7 +36,8 @@ class RestaurationImpossible(Exception):
 
 
 def concerne(modele):
-    return modele._meta.label_lower not in EXCLUS
+    # Un modèle proxy (vue d'un journal, par exemple) suit le modèle qu'il présente.
+    return modele._meta.concrete_model._meta.label_lower not in EXCLUS
 
 
 def _objets_lies(objet):
