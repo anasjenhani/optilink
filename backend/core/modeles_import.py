@@ -230,6 +230,7 @@ MODELES = {
             "profil": "Vendeur, Caissier, Opticien, Responsable de magasin…",
             "magasin": "Code du magasin (MAG001…) pour un profil limité à ce magasin.",
             "societe": "Code de la société pour un profil sur toute la société.",
+            "actif": "oui (par défaut) ou non : un compte inactif ne peut pas se connecter.",
         },
         exemples=[
             {

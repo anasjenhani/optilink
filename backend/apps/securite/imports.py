@@ -25,7 +25,11 @@ COLONNES_UTILISATEURS = [
     "profil",
     "magasin",
     "societe",
+    "actif",
 ]
+
+OUI = {"", "oui", "o", "1", "vrai", "actif", "active", "yes", "true"}
+NON = {"non", "n", "0", "faux", "inactif", "inactive", "no", "false"}
 
 
 def _texte_erreur(detail):
@@ -86,6 +90,10 @@ def importer_utilisateurs(lignes, *, demandeur, apercu=False):
         except ValidationError as erreur:
             rapport.erreur(numero, _texte_erreur(erreur.detail))
             continue
+        actif = normaliser(ligne.get("actif", ""))
+        if actif not in OUI | NON:
+            rapport.erreur(numero, f"actif : « {ligne['actif']} » ; écrire oui ou non.")
+            continue
         compte = comptes.setdefault(
             identifiant.lower(),
             {
@@ -96,6 +104,7 @@ def importer_utilisateurs(lignes, *, demandeur, apercu=False):
                     "nom": ligne.get("nom", ""),
                     "email": ligne.get("email", ""),
                     "mot_de_passe": ligne["mot_de_passe"],
+                    "actif": actif not in NON,
                     "affectations": [],
                 },
             },
