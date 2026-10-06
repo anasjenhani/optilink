@@ -78,6 +78,7 @@ import { FactureAchat } from "../pages/FactureAchat";
 import { ListeFacturesAchat } from "../pages/ListeFacturesAchat";
 import { ListeReceptions } from "../pages/ListeReceptions";
 import { Magasins } from "../pages/Magasins";
+import { MouvementsStock } from "../pages/MouvementsStock";
 import { RessourcesHumaines } from "../pages/RessourcesHumaines";
 import { Suivi } from "../pages/Suivi";
 import { ListeTransferts, TransfertStock } from "../pages/Transferts";
@@ -257,6 +258,7 @@ export function modulesPour(session: EtatSession): Module[] {
                 voirOrdonnances: a("optique.view_prescription"),
                 changerStatut: a("ventes.change_devis"),
                 encaisser: vendre,
+                consulter: a("ventes.view_devis"),
               }}
             />
           )),
@@ -500,7 +502,13 @@ export function modulesPour(session: EtatSession): Module[] {
         aVenir("stock-date", "Stock à la Date", CalendarMonth, COULEURS.vert),
         aVenir("config-stock", "Config Stock", Widgets, COULEURS.brun),
         aVenir("stock-depense", "Stock Article Dépense", Inventory2, COULEURS.jaune),
-        aVenir("mouvements", "Mouvements de Stock", TableChart, COULEURS.brun),
+        {
+          id: "mouvements",
+          libelle: "Mouvements de Stock",
+          icone: TableChart,
+          couleur: COULEURS.brun,
+          ecran: si(a("stock.view_mouvementstock"), () => <MouvementsStock />),
+        },
         aVenir("stock-total", "Stock Total", Widgets, COULEURS.orange),
         aVenir("bon-sortie", "Bon Sortie", ArrowUpward, COULEURS.vert),
         aVenir("demande-transfert", "Demande Transfert", CompareArrows, COULEURS.bleu),
