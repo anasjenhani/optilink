@@ -98,8 +98,15 @@ PERMISSIONS_VILLES = [
     "reseau.change_ville",
     "reseau.delete_ville",
 ]
+PERMISSIONS_BANQUES = [
+    "reseau.view_banque",
+    "reseau.add_banque",
+    "reseau.change_banque",
+    "reseau.delete_banque",
+]
 PERMISSIONS_PARAMETRAGE = {
     "Administrateur": PERMISSIONS_VILLES
+    + PERMISSIONS_BANQUES
     + [
         "reseau.view_pays",
         "reseau.add_pays",

@@ -1,8 +1,10 @@
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.reseau.banques import valider_banque
 from apps.reseau.models import Magasin, Societe
 
 from .. import banque
@@ -211,6 +213,15 @@ class CompteSerializer(serializers.ModelSerializer):
             donnees["magasin"] = None
         elif magasin.societe_id != societe.pk:
             raise serializers.ValidationError({"magasin": "Ce magasin est d'une autre société."})
+        if "banque" in donnees or "rib" in donnees:
+            try:
+                donnees["banque"] = valider_banque(
+                    donnees.get("banque", getattr(self.instance, "banque", "")),
+                    donnees.get("rib", getattr(self.instance, "rib", "")),
+                    getattr(societe, "pays", None),
+                )
+            except DjangoValidationError as erreur:
+                raise serializers.ValidationError(erreur.message_dict) from erreur
         return donnees
 
     def _soldes(self, compte):

@@ -42,6 +42,7 @@ import {
   type TypeCompte,
   type TypeDepot,
 } from "../api/tresorerie";
+import { ChampBanque } from "./ChampBanque";
 
 /** Nombre de décimales d'une devise (3 pour le dinar, 2 pour l'euro). */
 export const monnaieDe = (devise: string): Monnaie => ({
@@ -491,7 +492,11 @@ function FicheCompte({ compte, onFerme }: { compte: Compte; onFerme: () => void 
           <TextField label="Nom du compte" value={saisie.nom} onChange={changer("nom")} />
           {compte.type === "banque" && (
             <>
-              <TextField label="Banque" value={saisie.banque} onChange={changer("banque")} />
+              <ChampBanque
+                valeur={saisie.banque}
+                changer={(banque) => setSaisie((s) => ({ ...s, banque }))}
+                largeur={300}
+              />
               <TextField
                 label="RIB"
                 value={saisie.rib}
@@ -592,7 +597,11 @@ function NouveauCompte() {
         <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
           {saisie.type === "banque" && (
             <>
-              <TextField label="Banque" value={saisie.banque} onChange={changer("banque")} />
+              <ChampBanque
+                valeur={saisie.banque}
+                changer={(banque) => setSaisie((s) => ({ ...s, banque }))}
+                largeur={300}
+              />
               <TextField label="RIB" value={saisie.rib} onChange={changer("rib")} sx={{ flexGrow: 1 }} />
             </>
           )}

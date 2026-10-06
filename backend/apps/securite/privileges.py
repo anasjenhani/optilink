@@ -122,6 +122,10 @@ PRIVILEGES = {
         "reseau.add_ville": "Ajouter une ville à la liste",
         "reseau.change_ville": "Modifier une ville de la liste",
         "reseau.delete_ville": "Supprimer une ville de la liste",
+        "reseau.view_banque": "Voir la liste des banques",
+        "reseau.add_banque": "Ajouter une banque à la liste",
+        "reseau.change_banque": "Modifier une banque de la liste",
+        "reseau.delete_banque": "Supprimer une banque de la liste",
     },
     "Accès et sécurité": {
         "securite.view_utilisateur": "Voir les utilisateurs",

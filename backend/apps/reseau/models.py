@@ -74,6 +74,34 @@ class Ville(models.Model):
         return self.nom
 
 
+class Banque(models.Model):
+    """Banque proposée dans la liste des fiches (fournisseur, société, compte bancaire).
+
+    Le code est celui de la banque dans le RIB (ses 2 premiers chiffres en Tunisie) : il permet
+    de retrouver la banque d'un RIB et de signaler un RIB qui ne va pas avec la banque choisie.
+    Comme pour les villes, les fiches gardent le nom de la banque en texte.
+    """
+
+    pays = models.ForeignKey(Pays, on_delete=models.PROTECT, related_name="banques")
+    code = models.CharField(max_length=5, help_text="Code de la banque dans le RIB, ex. 08.")
+    nom = models.CharField(max_length=100)
+    sigle = models.CharField(max_length=20, blank=True)
+    est_active = models.BooleanField(
+        "active", default=True, help_text="Une banque désactivée n'est plus proposée."
+    )
+
+    class Meta:
+        ordering = ["nom"]
+        verbose_name = "banque"
+        constraints = [
+            models.UniqueConstraint(fields=["pays", "code"], name="banque_code_unique_par_pays"),
+            models.UniqueConstraint(Lower("nom"), "pays", name="banque_unique_par_pays"),
+        ]
+
+    def __str__(self):
+        return f"{self.nom} ({self.sigle})" if self.sigle else self.nom
+
+
 class TauxTva(models.Model):
     pays = models.ForeignKey(Pays, on_delete=models.CASCADE, related_name="taux_tva")
     taux = models.DecimalField(max_digits=5, decimal_places=2)
