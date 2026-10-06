@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.utils import timezone
 
+from apps.reseau.admin import AvecListeBanques
 from apps.reseau.models import Magasin
 
 from .api.views import magasins_couverts
@@ -66,7 +67,11 @@ class DepenseCaisseAdmin(admin.ModelAdmin):
 
 
 @admin.register(CompteTresorerie)
-class CompteTresorerieAdmin(admin.ModelAdmin):
+class CompteTresorerieAdmin(AvecListeBanques, admin.ModelAdmin):
+    def pays_de_la_fiche(self, donnees, instance):
+        societe = donnees.get("societe") or getattr(instance, "societe", None)
+        return getattr(societe, "pays", None)
+
     list_display = ("nom", "type", "societe", "banque", "magasin", "est_actif")
     list_filter = ("type", "societe", "est_actif")
     search_fields = ("nom", "rib")

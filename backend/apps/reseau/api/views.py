@@ -1,7 +1,7 @@
 from rest_framework import viewsets
 
-from ..models import Magasin, Societe, Ville
-from .serializers import MagasinSerializer, SocieteSerializer, VilleSerializer
+from ..models import Banque, Magasin, Societe, Ville
+from .serializers import BanqueSerializer, MagasinSerializer, SocieteSerializer, VilleSerializer
 
 
 class MagasinViewSet(viewsets.ReadOnlyModelViewSet):
@@ -34,3 +34,15 @@ class VilleViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         return Ville.objects.filter(est_active=True).select_related("pays")
+
+
+class BanqueViewSet(viewsets.ReadOnlyModelViewSet):
+    """Banques proposées sur les fiches ; la liste se tient dans /admin/ (Réseau › Banques)."""
+
+    serializer_class = BanqueSerializer
+    pagination_class = None
+    permissions_requises = {"list": []}  # Comme les villes : rien de confidentiel.
+    filterset_fields = {"pays__code": ["exact"]}
+
+    def get_queryset(self):
+        return Banque.objects.filter(est_active=True).select_related("pays")

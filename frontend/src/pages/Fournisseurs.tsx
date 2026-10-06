@@ -36,6 +36,7 @@ import {
   type Fournisseur,
   type SaisieFournisseur,
 } from "../api/achats";
+import { ChampBanque } from "./ChampBanque";
 import { ChampVille } from "./ChampVille";
 import { BoutonImport } from "./Imports";
 import { BANDEAU, BORDEAUX, BOUTON, useApaise } from "./RechercheClients";
@@ -258,7 +259,11 @@ export function FicheFournisseur({
           )}
           {onglet === 2 && (
             <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: "wrap" }}>
-              {texte("banque", "Banque")}
+              <ChampBanque
+                valeur={fiche.banque ?? ""}
+                changer={(banque) => changer("banque", banque)}
+                lectureSeule={lectureSeule}
+              />
               {texte("rib", "RIB", { largeur: 320 })}
             </Stack>
           )}
