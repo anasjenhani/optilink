@@ -5,8 +5,10 @@ provisoire conforme, identifiant libre, profils et périmètre que le demandeur 
 donner. L'import ne fait que créer : un compte existant se modifie à l'écran.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
+from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Group
 from django.db import transaction
 from rest_framework.exceptions import APIException, ValidationError
@@ -25,7 +27,11 @@ COLONNES_UTILISATEURS = [
     "profil",
     "magasin",
     "societe",
+    "actif",
 ]
+
+OUI = {"", "oui", "o", "1", "vrai", "actif", "active", "yes", "true"}
+NON = {"non", "n", "0", "faux", "inactif", "inactive", "no", "false"}
 
 
 def _texte_erreur(detail):
@@ -86,6 +92,10 @@ def importer_utilisateurs(lignes, *, demandeur, apercu=False):
         except ValidationError as erreur:
             rapport.erreur(numero, _texte_erreur(erreur.detail))
             continue
+        actif = normaliser(ligne.get("actif", ""))
+        if actif not in OUI | NON:
+            rapport.erreur(numero, f"actif : « {ligne['actif']} » ; écrire oui ou non.")
+            continue
         compte = comptes.setdefault(
             identifiant.lower(),
             {
@@ -96,6 +106,7 @@ def importer_utilisateurs(lignes, *, demandeur, apercu=False):
                     "nom": ligne.get("nom", ""),
                     "email": ligne.get("email", ""),
                     "mot_de_passe": ligne["mot_de_passe"],
+                    "actif": actif not in NON,
                     "affectations": [],
                 },
             },
@@ -104,7 +115,14 @@ def importer_utilisateurs(lignes, *, demandeur, apercu=False):
     if rapport.erreurs:
         return rapport
 
-    contexte = {"request": SimpleNamespace(user=demandeur)}
+    # Chaque mot de passe coûte près d'une seconde à chiffrer : en parallèle pour l'import,
+    # pas du tout pour la vérification (rien n'est gardé).
+    chiffres = {}
+    if not apercu:
+        mots = list({c["donnees"]["mot_de_passe"] for c in comptes.values()})
+        with ThreadPoolExecutor() as groupe:
+            chiffres = dict(zip(mots, groupe.map(make_password, mots), strict=True))
+    contexte = {"request": SimpleNamespace(user=demandeur), "mots_de_passe_chiffres": chiffres}
     try:
         with transaction.atomic():
             for compte in comptes.values():
