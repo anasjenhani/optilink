@@ -1,12 +1,13 @@
 from django.contrib import admin
 
+from apps.reseau.admin import AvecListeVilles
 from core.admin_imports import AvecImport
 
 from .models import Client, Organisme
 
 
 @admin.register(Client)
-class ClientAdmin(AvecImport, admin.ModelAdmin):
+class ClientAdmin(AvecListeVilles, AvecImport, admin.ModelAdmin):
     imports = ("clients",)
     list_display = (
         "nom",

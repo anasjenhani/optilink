@@ -29,6 +29,7 @@ import {
 } from "../api/clients";
 import { listerMagasins } from "../api/magasins";
 import { listerOrganismes } from "../api/prisesEnCharge";
+import { ChampVille } from "./ChampVille";
 
 type Droits = {
   creerClient: boolean;
@@ -152,7 +153,7 @@ export function FicheClient({ client, onEnregistre }: { client?: Client; onEnreg
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
         {champ("adresse", "Adresse")}
         {champ("code_postal", "Code postal")}
-        {champ("ville", "Ville")}
+        <ChampVille valeur={saisie.ville} changer={(ville) => setSaisie({ ...saisie, ville })} />
         {!client && <ChoixMagasin valeur={saisie.magasin_origine} onChange={choisirMagasin} />}
       </Stack>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>

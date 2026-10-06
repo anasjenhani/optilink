@@ -3,12 +3,54 @@ import json
 
 from django import forms
 from django.contrib import admin
-from django.utils.html import format_html
+from django.core.exceptions import ValidationError
+from django.utils.html import format_html, format_html_join
 
-from .models import Magasin, Pays, Societe, TauxTva
+from .models import Magasin, Pays, Societe, TauxTva, Ville
 from .pays_du_monde import CHAMPS, pays_du_monde
+from .villes import normaliser, valider_ville
 
 OBLIGATOIRES = ("code_numerique", "code", "nom", "devise")
+
+
+class ListeVilles(forms.TextInput):
+    """Champ ville : on tape les premières lettres et on choisit dans la liste des villes."""
+
+    def render(self, name, value, attrs=None, renderer=None):
+        identifiant = f"villes-{name}"
+        attrs = {**(attrs or {}), "list": identifiant, "autocomplete": "off"}
+        noms = sorted(
+            Ville.objects.filter(est_active=True).values_list("nom", flat=True), key=normaliser
+        )
+        options = format_html_join("", '<option value="{}">', ((nom,) for nom in noms))
+        return super().render(name, value, attrs, renderer) + format_html(
+            '<datalist id="{}">{}</datalist>', identifiant, options
+        )
+
+
+class AvecListeVilles:
+    """Fiches de l'administration : la ville se choisit dans la liste (Réseau › Villes)."""
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        if db_field.name == "ville":
+            kwargs["widget"] = ListeVilles()
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
+
+    def get_form(self, request, obj=None, **kwargs):
+        formulaire = super().get_form(request, obj, **kwargs)
+
+        class AvecVille(formulaire):
+            def clean(self):
+                donnees = super().clean()
+                if donnees.get("ville"):
+                    pays = donnees.get("pays") or getattr(self.instance, "pays", None)
+                    try:
+                        donnees["ville"] = valider_ville(donnees["ville"], pays)
+                    except ValidationError as erreur:
+                        self.add_error("ville", erreur)
+                return donnees
+
+        return AvecVille
 
 
 class PaysForm(forms.ModelForm):
@@ -169,7 +211,7 @@ class SocieteForm(forms.ModelForm):
 
 
 @admin.register(Societe)
-class SocieteAdmin(admin.ModelAdmin):
+class SocieteAdmin(AvecListeVilles, admin.ModelAdmin):
     form = SocieteForm
     list_display = ("code", "raison_sociale", "forme_juridique", "matricule_fiscal", "ville")
     search_fields = ("code", "raison_sociale", "matricule_fiscal")
@@ -216,7 +258,15 @@ class SocieteAdmin(admin.ModelAdmin):
 
 
 @admin.register(Magasin)
-class MagasinAdmin(admin.ModelAdmin):
+class MagasinAdmin(AvecListeVilles, admin.ModelAdmin):
     list_display = ("code", "nom", "type", "pays", "societe", "ville", "est_actif")
     list_filter = ("type", "pays", "societe", "est_actif")
     search_fields = ("code", "nom", "ville")
+
+
+@admin.register(Ville)
+class VilleAdmin(admin.ModelAdmin):
+    list_display = ("nom", "pays", "est_active")
+    list_filter = ("pays", "est_active")
+    list_editable = ("est_active",)
+    search_fields = ("nom",)
