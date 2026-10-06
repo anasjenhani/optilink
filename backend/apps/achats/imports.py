@@ -11,6 +11,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
+from apps.reseau.banques import banque_importee
 from apps.reseau.models import Pays
 from apps.reseau.villes import ville_importee
 from apps.stock.imports import (
@@ -178,6 +179,12 @@ def importer_fournisseurs(lignes, *, pays, apercu=False):
                     matricules[matricule] = numero
                 if ligne.get("ville", ""):
                     ligne["ville"], alerte = ville_importee(ligne["ville"])
+                    if alerte:
+                        rapport.alerte(numero, alerte)
+                if ligne.get("banque", "") or ligne.get("rib", ""):
+                    ligne["banque"], alerte = banque_importee(
+                        ligne.get("banque", ""), ligne.get("rib", "")
+                    )
                     if alerte:
                         rapport.alerte(numero, alerte)
                 try:

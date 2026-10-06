@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from ..models import Magasin, Pays, Societe, Ville
+from ..models import Banque, Magasin, Pays, Societe, Ville
 
 
 class PaysSerializer(serializers.ModelSerializer):
@@ -62,3 +62,11 @@ class VilleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ville
         fields = ["id", "nom", "pays"]
+
+
+class BanqueSerializer(serializers.ModelSerializer):
+    pays = serializers.CharField(source="pays.code", read_only=True)
+
+    class Meta:
+        model = Banque
+        fields = ["id", "code", "nom", "sigle", "pays"]

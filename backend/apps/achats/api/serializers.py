@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
+from apps.reseau.banques import valider_banque
 from apps.reseau.models import Pays
 from apps.reseau.villes import valider_ville
 from apps.stock.models import Article
@@ -67,8 +68,17 @@ class FournisseurSerializer(serializers.ModelSerializer):
         au = attrs.get("exoneration_au", getattr(self.instance, "exoneration_au", None))
         if du and au and au < du:
             raise serializers.ValidationError({"exoneration_au": "Fin avant le début."})
+        pays = attrs.get("pays", getattr(self.instance, "pays", None))
+        if "banque" in attrs or "rib" in attrs:
+            try:
+                attrs["banque"] = valider_banque(
+                    attrs.get("banque", getattr(self.instance, "banque", "")),
+                    attrs.get("rib", getattr(self.instance, "rib", "")),
+                    pays,
+                )
+            except DjangoValidationError as erreur:
+                raise serializers.ValidationError(erreur.message_dict) from erreur
         if attrs.get("ville"):
-            pays = attrs.get("pays", getattr(self.instance, "pays", None))
             try:
                 attrs["ville"] = valider_ville(attrs["ville"], pays)
             except DjangoValidationError as erreur:
