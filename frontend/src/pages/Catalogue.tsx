@@ -17,12 +17,13 @@ import { chercherArticles, FAMILLES, type Famille } from "../api/caisse";
 import { listerMagasins } from "../api/magasins";
 import { formaterTexte } from "../api/monnaie";
 import Button from "@mui/material/Button";
+import { FicheArticle } from "./FicheArticle";
 import { FicheMonture } from "./FicheMonture";
 import { BoutonImport } from "./Imports";
 
 /**
- * Catalogue par famille, avec prix et stock du magasin. Les montures s'ouvrent sur leur fiche (création et
- * modification) ; les autres articles se créent dans l'administration ou par import.
+ * Catalogue par famille, avec prix et stock du magasin. Chaque article s'ouvre sur sa fiche (création et
+ * modification) : fiche monture pour les montures, fiche article pour les verres, lentilles et articles divers.
  */
 export function Catalogue({
   familleInitiale = "monture",
@@ -32,10 +33,11 @@ export function Catalogue({
   familleInitiale?: Famille | "";
   /** Bouton d'import : des verres sur la liste des verres, du catalogue sinon. */
   importer?: boolean;
-  /** Droits sur la fiche monture. */
+  /** Droits sur les fiches article. */
   fiche?: { creer: boolean; modifier: boolean };
 }) {
-  const [ouverte, setOuverte] = useState<string | null | undefined>(undefined);
+  // Fiche ouverte : article (null pour un nouveau) et sa famille.
+  const [ouverte, setOuverte] = useState<{ article: string | null; famille: Famille } | undefined>(undefined);
   const [magasinChoisi, setMagasin] = useState("");
   const [famille, setFamille] = useState<Famille | "">(familleInitiale);
   const [recherche, setRecherche] = useState("");
@@ -87,9 +89,13 @@ export function Catalogue({
               onChange={(e) => setRecherche(e.target.value)}
               sx={{ flexGrow: 1 }}
             />
-            {fiche.creer && famille === "monture" && (
-              <Button variant="contained" onClick={() => setOuverte(null)} sx={{ whiteSpace: "nowrap" }}>
-                Nouvelle monture
+            {fiche.creer && famille && (
+              <Button
+                variant="contained"
+                onClick={() => setOuverte({ article: null, famille })}
+                sx={{ whiteSpace: "nowrap" }}
+              >
+                {famille === "monture" ? "Nouvelle monture" : "Nouvel article"}
               </Button>
             )}
             {importer && (
@@ -115,9 +121,9 @@ export function Catalogue({
                 {articles.data?.map((article) => (
                   <TableRow
                     key={article.id}
-                    hover={article.famille === "monture"}
-                    onClick={article.famille === "monture" ? () => setOuverte(article.id) : undefined}
-                    sx={article.famille === "monture" ? { cursor: "pointer" } : undefined}
+                    hover
+                    onClick={() => setOuverte({ article: article.id, famille: article.famille })}
+                    sx={{ cursor: "pointer" }}
                   >
                     <TableCell>{article.reference}</TableCell>
                     <TableCell>
@@ -136,13 +142,24 @@ export function Catalogue({
             </Table>
           )}
         </Stack>
-        {ouverte !== undefined && magasin && (
+        {ouverte && magasin && ouverte.famille === "monture" && (
           <FicheMonture
-            article={ouverte}
+            article={ouverte.article}
             magasin={magasin}
             monnaie={monnaie}
             tauxTva={pays?.taux_tva ?? []}
-            lectureSeule={ouverte !== null && !fiche.modifier}
+            lectureSeule={ouverte.article !== null && !fiche.modifier}
+            onFerme={() => setOuverte(undefined)}
+          />
+        )}
+        {ouverte && magasin && ouverte.famille !== "monture" && (
+          <FicheArticle
+            famille={ouverte.famille}
+            article={ouverte.article}
+            magasin={magasin}
+            monnaie={monnaie}
+            tauxTva={pays?.taux_tva ?? []}
+            lectureSeule={ouverte.article !== null && !fiche.modifier}
             onFerme={() => setOuverte(undefined)}
           />
         )}
