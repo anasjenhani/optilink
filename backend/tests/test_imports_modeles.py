@@ -171,6 +171,26 @@ def test_import_des_utilisateurs_avec_plusieurs_profils(admin_magasin, tunis):
     ]
 
 
+def test_import_des_utilisateurs_inactifs(admin_magasin, tunis):
+    contenu = fichier(
+        "identifiant;prenom;nom;mot_de_passe;profil;magasin;actif\n"
+        "sarra;Sarra;Jlassi;Provisoire-2026!;Vendeur;T01;oui\n"
+        "olfa;Olfa;Chartaoui;Provisoire-2026!;Vendeur;T01;Non\n"
+        "rim;Rim;Ayari;Provisoire-2026!;Vendeur;T01;peut-être\n"
+    )
+    erreurs = importer(admin_magasin, contenu, "utilisateurs").json()["erreurs"]
+    assert erreurs == [{"ligne": 4, "message": "actif : « peut-être » ; écrire oui ou non."}]
+
+    contenu = fichier(
+        "identifiant;prenom;nom;mot_de_passe;profil;magasin;actif\n"
+        "sarra;Sarra;Jlassi;Provisoire-2026!;Vendeur;T01;oui\n"
+        "olfa;Olfa;Chartaoui;Provisoire-2026!;Vendeur;T01;Non\n"
+    )
+    assert importer(admin_magasin, contenu, "utilisateurs").status_code == 200
+    assert Utilisateur.objects.get(username="sarra").is_active
+    assert not Utilisateur.objects.get(username="olfa").is_active
+
+
 def test_import_des_utilisateurs_garde_les_garde_fous(admin_magasin, reseau):
     # Un administrateur de magasin ne donne pas de profil sur tout le réseau.
     contenu = fichier(
