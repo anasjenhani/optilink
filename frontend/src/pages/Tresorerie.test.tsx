@@ -84,18 +84,33 @@ function json(donnees: unknown, status = 200) {
 
 afterEach(() => vi.unstubAllGlobals());
 
-function afficher(droits = TOUT) {
-  const envois: { url: string; corps: unknown }[] = [];
+const DEPENSE = {
+  id: "d1",
+  categorie: "transport",
+  motif: "Taxi",
+  beneficiaire: "",
+  montant: "8.000",
+  payee_le: "2026-10-05T10:00:00Z",
+  saisie_par: "caissier",
+  cloture: null,
+};
+
+function afficher(droits = TOUT, depenses: unknown[] = []) {
+  const envois: { url: string; corps: unknown; methode?: string }[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === "DELETE") {
+        envois.push({ url, corps: undefined, methode: "DELETE" });
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
       if (init?.method === "POST" || init?.method === "PATCH") {
         envois.push({ url, corps: JSON.parse(init.body as string) });
         return json(url.endsWith("/valider/") ? { ...CLOTURE, statut: "validee" } : CLOTURE, 201);
       }
       if (url === "/api/v1/magasins/") return json({ results: [TUNIS] });
       if (url.includes("/situation/")) return json(SITUATION);
-      if (url.includes("/depenses/")) return json({ results: [] });
+      if (url.includes("/depenses/")) return json({ results: depenses });
       if (url.includes("/comptes/")) return json([COMPTE]);
       if (url.includes("/operations/")) return json({ results: [] });
       return json({ results: [CLOTURE] });
@@ -189,4 +204,23 @@ test("sans droit de modification, l'onglet Banque n'offre ni correction ni désa
   expect(await screen.findByText("Coffre T01")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Modifier Coffre T01" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Désactiver Coffre T01" })).not.toBeInTheDocument();
+});
+
+test("une dépense pas encore clôturée se corrige ou se supprime", async () => {
+  const envois = afficher(TOUT, [DEPENSE]);
+  fireEvent.click(await screen.findByRole("tab", { name: "Dépenses de caisse" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Modifier Taxi" }));
+  expect(screen.getByLabelText("Montant")).toHaveValue("8.000");
+  fireEvent.change(screen.getByLabelText("Montant"), { target: { value: "6.5" } });
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer la correction" }));
+  await vi.waitFor(() => expect(envois).toHaveLength(1));
+  expect(envois[0]).toEqual({
+    url: "/api/v1/tresorerie/depenses/d1/",
+    corps: { categorie: "transport", motif: "Taxi", beneficiaire: "", montant: "6.5" },
+  });
+
+  fireEvent.click(await screen.findByRole("button", { name: "Supprimer Taxi" }));
+  fireEvent.click(screen.getByRole("button", { name: "Oui" }));
+  await vi.waitFor(() => expect(envois).toHaveLength(2));
+  expect(envois[1]).toEqual({ url: "/api/v1/tresorerie/depenses/d1/", corps: undefined, methode: "DELETE" });
 });

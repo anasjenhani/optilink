@@ -99,6 +99,15 @@ export const saisirDepense = (depense: {
   montant: string;
 }) => appeler<Depense>("/api/v1/tresorerie/depenses/", { methode: "POST", corps: depense });
 
+/** Une dépense se corrige ou se supprime tant que la caisse n'est pas clôturée. */
+export const corrigerDepense = (
+  id: string,
+  correction: { categorie: CategorieDepense; motif: string; beneficiaire: string; montant: string },
+) => appeler<Depense>(`/api/v1/tresorerie/depenses/${id}/`, { methode: "PATCH", corps: correction });
+
+export const supprimerDepense = (id: string) =>
+  appeler<void>(`/api/v1/tresorerie/depenses/${id}/`, { methode: "DELETE" });
+
 export type TypeCompte = "banque" | "coffre" | "caisse_centrale";
 
 export type Compte = {
