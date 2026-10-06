@@ -197,6 +197,7 @@ export const chercherArticles = (
   recherche: string,
   famille: Famille | "" = "",
   typeVente: TypeVente | "" = "",
+  desactives = false,
 ) =>
   appeler<{ results: Article[] }>(
     `/api/v1/articles/?${new URLSearchParams({
@@ -204,6 +205,7 @@ export const chercherArticles = (
       recherche,
       ...(famille && { famille }),
       ...(typeVente && { type_vente: typeVente }),
+      ...(desactives && { desactives: "true" }),
     })}`,
   ).then((page) => page.results);
 

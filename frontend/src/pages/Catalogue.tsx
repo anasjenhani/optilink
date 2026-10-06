@@ -1,6 +1,8 @@
 import Alert from "@mui/material/Alert";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
@@ -41,13 +43,14 @@ export function Catalogue({
   const [magasinChoisi, setMagasin] = useState("");
   const [famille, setFamille] = useState<Famille | "">(familleInitiale);
   const [recherche, setRecherche] = useState("");
+  const [desactives, setDesactives] = useState(false);
   const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
   const magasin = magasinChoisi || magasins.data?.[0]?.id || "";
   const pays = magasins.data?.find((m) => m.id === magasin)?.pays;
   const monnaie = { devise: pays?.devise ?? "TND", decimales: pays?.decimales ?? 3 };
   const articles = useQuery({
-    queryKey: ["catalogue", magasin, famille, recherche],
-    queryFn: () => chercherArticles(magasin, recherche, famille),
+    queryKey: ["catalogue", magasin, famille, recherche, desactives],
+    queryFn: () => chercherArticles(magasin, recherche, famille, "", desactives),
     enabled: Boolean(magasin),
   });
 
@@ -105,6 +108,10 @@ export function Catalogue({
               />
             )}
           </Stack>
+          <FormControlLabel
+            control={<Checkbox size="small" checked={desactives} onChange={(e) => setDesactives(e.target.checked)} />}
+            label="Voir les articles désactivés (pour les réactiver)"
+          />
           {articles.isError && <Alert severity="error">{articles.error.message}</Alert>}
           {articles.data?.length === 0 && <Typography color="text.secondary">Aucun article.</Typography>}
           {Boolean(articles.data?.length) && (

@@ -68,6 +68,10 @@ def test_creation_et_modification_d_un_verre(api, tunis, essilor):
     assert not article.est_actif  # Désactivé, jamais supprimé.
     assert article.verre.photochromique and article.verre.gamme == "Varilux Comfort"
     assert modifie.json()["prix"]["prix_vente_ttc"] == "350.000"
+    # Désactivé : hors du catalogue, mais on le retrouve pour le réactiver.
+    actifs = api.get("/api/v1/articles/", {"famille": "verre"}).json()["results"]
+    desactives = api.get("/api/v1/articles/", {"famille": "verre", "desactives": "true"})
+    assert actifs == [] and [a["id"] for a in desactives.json()["results"]] == [donnees["id"]]
 
 
 def test_creation_d_une_lentille_et_d_un_article_divers(api, tunis, essilor):

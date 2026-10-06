@@ -45,6 +45,11 @@ TYPES_DE_VENTE = {
             ),
             OpenApiParameter("marque", OpenApiTypes.STR, description="Marque (toutes familles)"),
             OpenApiParameter(
+                "desactives",
+                OpenApiTypes.BOOL,
+                description="Les articles désactivés (pour les rouvrir et les réactiver)",
+            ),
+            OpenApiParameter(
                 "type_vente",
                 OpenApiTypes.STR,
                 enum=list(TYPES_DE_VENTE),
@@ -70,7 +75,9 @@ class ArticleViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ["famille"]
 
     def get_queryset(self):
-        articles = Article.objects.filter(est_actif=True).select_related(
+        # Les articles désactivés ne se vendent plus ; ils restent consultables à la demande.
+        actifs = self.request.query_params.get("desactives") != "true"
+        articles = Article.objects.filter(est_actif=actifs).select_related(
             "monture", "verre", "lentille", "fournisseur"
         )
         fournisseur = self.request.query_params.get("fournisseur")
