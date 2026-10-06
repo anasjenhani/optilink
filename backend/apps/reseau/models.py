@@ -1,5 +1,6 @@
 from django.core.validators import RegexValidator
 from django.db import models
+from django.db.models.functions import Lower
 
 from core.managers import ParMagasinManager
 from core.models import ModeleDeBase
@@ -46,6 +47,28 @@ class Pays(models.Model):
         ordering = ["nom"]
         verbose_name = "pays"
         verbose_name_plural = "pays"
+
+    def __str__(self):
+        return self.nom
+
+
+class Ville(models.Model):
+    """Ville proposée dans la liste des fiches (client, fournisseur, société, magasin).
+
+    Les fiches gardent le nom de la ville en texte : la liste impose une écriture unique
+    (« Ariana », pas « ariena ») sans lier les fiches à une ligne qu'on pourrait supprimer.
+    """
+
+    pays = models.ForeignKey(Pays, on_delete=models.PROTECT, related_name="villes")
+    nom = models.CharField(max_length=100)
+    est_active = models.BooleanField(
+        "active", default=True, help_text="Une ville désactivée n'est plus proposée."
+    )
+
+    class Meta:
+        ordering = ["nom"]
+        verbose_name = "ville"
+        constraints = [models.UniqueConstraint(Lower("nom"), "pays", name="ville_unique_par_pays")]
 
     def __str__(self):
         return self.nom

@@ -118,6 +118,10 @@ PRIVILEGES = {
         "reseau.add_tauxtva": "Ajouter un taux de TVA",
         "reseau.change_tauxtva": "Modifier un taux de TVA",
         "reseau.delete_tauxtva": "Supprimer un taux de TVA",
+        "reseau.view_ville": "Voir la liste des villes",
+        "reseau.add_ville": "Ajouter une ville à la liste",
+        "reseau.change_ville": "Modifier une ville de la liste",
+        "reseau.delete_ville": "Supprimer une ville de la liste",
     },
     "Accès et sécurité": {
         "securite.view_utilisateur": "Voir les utilisateurs",

@@ -1,10 +1,12 @@
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.reseau.models import Magasin
+from apps.reseau.villes import valider_ville
 
 from ..models import Client, Organisme
 
@@ -96,6 +98,15 @@ class ClientSerializer(serializers.ModelSerializer):
             attrs.pop("magasin_origine", None)
         if "matricule_fiscal" in attrs:
             attrs["matricule_fiscal"] = attrs["matricule_fiscal"].strip().upper()
+        if attrs.get("ville"):
+            magasin = attrs.get("magasin_origine") or getattr(
+                self.instance, "magasin_origine", None
+            )
+            pays = getattr(magasin, "pays", None)
+            try:
+                attrs["ville"] = valider_ville(attrs["ville"], pays)
+            except DjangoValidationError as erreur:
+                raise serializers.ValidationError({"ville": erreur.messages}) from erreur
         societe = attrs.get("societe", getattr(self.instance, "societe", ""))
         matricule = attrs.get("matricule_fiscal", getattr(self.instance, "matricule_fiscal", ""))
         if matricule and not societe:

@@ -36,6 +36,7 @@ import {
   type Fournisseur,
   type SaisieFournisseur,
 } from "../api/achats";
+import { ChampVille } from "./ChampVille";
 import { BoutonImport } from "./Imports";
 import { BANDEAU, BORDEAUX, BOUTON, useApaise } from "./RechercheClients";
 
@@ -243,7 +244,11 @@ export function FicheFournisseur({
             <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: "wrap" }}>
               {texte("adresse", "Adresse", { largeur: 540, lignes: 2 })}
               {texte("code_postal", "Code postal", { largeur: 140 })}
-              {texte("ville", "Ville")}
+              <ChampVille
+                valeur={fiche.ville ?? ""}
+                changer={(ville) => changer("ville", ville)}
+                lectureSeule={lectureSeule}
+              />
               {texte("telephone", "Téléphone")}
               {texte("telephone_2", "Téléphone 2")}
               {texte("fax", "Fax")}

@@ -92,8 +92,15 @@ PERMISSIONS_CLIENTS_OPTIQUE = {
 # Paramétrage par pays (taux de TVA, timbre, monnaie) : réglé par l'administrateur, consulté
 # par la direction. Les prix de vente suivent la colonne Stock « Complet ».
 PRIX_COMPLET = ["stock.view_prixarticle", "stock.add_prixarticle", "stock.change_prixarticle"]
+PERMISSIONS_VILLES = [
+    "reseau.view_ville",
+    "reseau.add_ville",
+    "reseau.change_ville",
+    "reseau.delete_ville",
+]
 PERMISSIONS_PARAMETRAGE = {
-    "Administrateur": [
+    "Administrateur": PERMISSIONS_VILLES
+    + [
         "reseau.view_pays",
         "reseau.add_pays",
         "reseau.change_pays",
