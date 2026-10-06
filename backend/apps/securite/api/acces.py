@@ -308,7 +308,15 @@ class UtilisateurSerializer(serializers.ModelSerializer):
                 raise PermissionDenied("Vous ne pouvez pas désactiver votre propre compte.")
         utilisateur = super().save(**kwargs)
         if mot_de_passe:
-            utilisateur.set_password(mot_de_passe)
+            # L'import chiffre les mots de passe d'avance (en parallèle) et ne les chiffre pas
+            # du tout pour la vérification, annulée de toute façon : sinon le serveur coupe.
+            chiffres = self.context.get("mots_de_passe_chiffres")
+            if chiffres is None:
+                utilisateur.set_password(mot_de_passe)
+            elif mot_de_passe in chiffres:
+                utilisateur.password = chiffres[mot_de_passe]
+            else:
+                utilisateur.set_unusable_password()
             utilisateur.save(update_fields=["password"])
         if affectations is not None:
             self._enregistrer_affectations(demandeur, utilisateur, affectations)

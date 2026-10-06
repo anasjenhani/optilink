@@ -191,6 +191,46 @@ def test_import_des_utilisateurs_inactifs(admin_magasin, tunis):
     assert not Utilisateur.objects.get(username="olfa").is_active
 
 
+def test_import_des_utilisateurs_ne_chiffre_pas_pendant_la_verification(
+    admin_magasin, tunis, monkeypatch
+):
+    # Chiffrer un mot de passe prend près d'une seconde sur un petit serveur : la vérification
+    # (annulée) ne chiffre rien, l'import chiffre une fois chaque mot de passe.
+    from django.contrib.auth import base_user
+
+    from apps.securite import imports
+
+    appels = []
+    chiffrer = imports.make_password
+
+    def un_a_un(mot, *args):
+        # make_password(None) donne un mot de passe inutilisable, sans calcul.
+        return chiffrer(mot) if mot is None else pytest.fail("chiffré un à un")
+
+    monkeypatch.setattr(base_user, "make_password", un_a_un)
+    monkeypatch.setattr(imports, "make_password", lambda m: appels.append(m) or chiffrer(m))
+    demandeur = Utilisateur.objects.get(username="admin")
+    lignes = [
+        (
+            2,
+            {
+                "identifiant": n,
+                "mot_de_passe": "Provisoire-2026!",
+                "profil": "Vendeur",
+                "magasin": "T01",
+                "prenom": n,
+                "nom": "Test",
+            },
+        )
+        for n in ("sarra", "olfa")
+    ]
+    assert imports.importer_utilisateurs(lignes, demandeur=demandeur, apercu=True).crees == 2
+    assert appels == [] and not Utilisateur.objects.filter(username="sarra").exists()
+    assert imports.importer_utilisateurs(lignes, demandeur=demandeur).crees == 2
+    assert appels == ["Provisoire-2026!"]
+    assert Utilisateur.objects.get(username="olfa").check_password("Provisoire-2026!")
+
+
 def test_import_des_utilisateurs_garde_les_garde_fous(admin_magasin, reseau):
     # Un administrateur de magasin ne donne pas de profil sur tout le réseau.
     contenu = fichier(
