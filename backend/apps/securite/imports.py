@@ -5,8 +5,10 @@ provisoire conforme, identifiant libre, profils et périmètre que le demandeur 
 donner. L'import ne fait que créer : un compte existant se modifie à l'écran.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
+from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Group
 from django.db import transaction
 from rest_framework.exceptions import APIException, ValidationError
@@ -113,7 +115,14 @@ def importer_utilisateurs(lignes, *, demandeur, apercu=False):
     if rapport.erreurs:
         return rapport
 
-    contexte = {"request": SimpleNamespace(user=demandeur)}
+    # Chaque mot de passe coûte près d'une seconde à chiffrer : en parallèle pour l'import,
+    # pas du tout pour la vérification (rien n'est gardé).
+    chiffres = {}
+    if not apercu:
+        mots = list({c["donnees"]["mot_de_passe"] for c in comptes.values()})
+        with ThreadPoolExecutor() as groupe:
+            chiffres = dict(zip(mots, groupe.map(make_password, mots), strict=True))
+    contexte = {"request": SimpleNamespace(user=demandeur), "mots_de_passe_chiffres": chiffres}
     try:
         with transaction.atomic():
             for compte in comptes.values():
