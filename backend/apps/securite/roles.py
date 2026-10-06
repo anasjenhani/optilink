@@ -332,6 +332,11 @@ PERMISSIONS_PRISES_EN_CHARGE = {
     "Comptabilité & Finance": PEC_SUIVI + ["crm.view_organisme"],
 }
 
+# Corbeille : les responsables restaurent ce qui a été supprimé par erreur dans leur
+# périmètre ; vider définitivement reste à l'administrateur.
+CORBEILLE = ["securite.view_elementcorbeille", "securite.restaurer_elementcorbeille"]
+PERMISSIONS_CORBEILLE = {"Responsable de magasin": CORBEILLE}
+
 for _par_role in (
     PERMISSIONS_CAISSE_STOCK,
     PERMISSIONS_CLIENTS_OPTIQUE,
@@ -352,6 +357,7 @@ for _par_role in (
     PERMISSIONS_PILOTAGE,
     PERMISSIONS_PRISES_EN_CHARGE,
     PERMISSIONS_CASSES,
+    PERMISSIONS_CORBEILLE,
 ):
     for _nom, _permissions in _par_role.items():
         ROLES_DE_DEPART[_nom] = ROLES_DE_DEPART[_nom] + _permissions

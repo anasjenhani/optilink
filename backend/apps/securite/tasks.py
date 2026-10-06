@@ -30,3 +30,11 @@ def desactiver_comptes_inactifs():
         )
         noms.append(utilisateur.get_username())
     return noms
+
+
+@shared_task
+def vider_corbeille():
+    """Vide de la corbeille les éléments supprimés depuis plus de CORBEILLE_JOURS jours."""
+    from .corbeille import vider_expires
+
+    return vider_expires()
