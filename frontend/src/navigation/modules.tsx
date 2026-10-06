@@ -11,6 +11,7 @@ import CalendarMonth from "@mui/icons-material/CalendarMonth";
 import CheckCircle from "@mui/icons-material/CheckCircle";
 import CompareArrows from "@mui/icons-material/CompareArrows";
 import CreditCard from "@mui/icons-material/CreditCard";
+import DeleteSweep from "@mui/icons-material/DeleteSweep";
 import Description from "@mui/icons-material/Description";
 import EditNote from "@mui/icons-material/EditNote";
 import EventRepeat from "@mui/icons-material/EventRepeat";
@@ -66,6 +67,7 @@ import { Catalogue } from "../pages/Catalogue";
 import { Clients } from "../pages/Clients";
 import { CassesVerres } from "../pages/CassesVerres";
 import { Commandes } from "../pages/Commandes";
+import { Corbeille } from "../pages/Corbeille";
 import { PrisesEnCharge } from "../pages/PrisesEnCharge";
 import { Recus } from "../pages/Recus";
 import { ResteVendeur } from "../pages/ResteVendeur";
@@ -732,6 +734,21 @@ export function modulesPour(session: EtatSession): Module[] {
                 creerProfil: a("auth.add_group"),
                 modifierProfil: a("auth.change_group"),
                 supprimerProfil: a("auth.delete_group"),
+              }}
+            />
+          )),
+        },
+        {
+          id: "corbeille",
+          categorie: "Sécurité",
+          libelle: "Corbeille",
+          icone: DeleteSweep,
+          couleur: COULEURS.gris,
+          ecran: si(a("securite.view_elementcorbeille"), () => (
+            <Corbeille
+              droits={{
+                restaurer: a("securite.restaurer_elementcorbeille"),
+                vider: a("securite.delete_elementcorbeille"),
               }}
             />
           )),

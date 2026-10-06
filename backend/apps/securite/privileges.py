@@ -134,6 +134,13 @@ PRIVILEGES = {
         "securite.view_evenementsecurite": "Voir le journal des connexions",
         "auditlog.view_logentry": "Voir l'historique des modifications",
     },
+    "Corbeille": {
+        "securite.view_elementcorbeille": (
+            "Voir la corbeille (éléments supprimés que l'on a le droit de créer)"
+        ),
+        "securite.restaurer_elementcorbeille": "Restaurer un élément supprimé par erreur",
+        "securite.delete_elementcorbeille": "Supprimer définitivement un élément de la corbeille",
+    },
 }
 
 CODES = frozenset(code for module in PRIVILEGES.values() for code in module)

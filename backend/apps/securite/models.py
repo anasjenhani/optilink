@@ -138,3 +138,42 @@ class ModificationDroits(LogEntry):
         proxy = True
         verbose_name = "modification des droits"
         verbose_name_plural = "modifications des droits"
+
+
+class ElementCorbeille(models.Model):
+    """Élément supprimé, conservé pour être restauré pendant le délai de grâce.
+
+    ``donnees`` garde l'objet et ce qui a été supprimé avec lui (lignes, fiches liées), au
+    format de sérialisation de Django ; la restauration les recrée avec leurs identifiants.
+    Passé ``expire_le``, la tâche de nuit le supprime définitivement.
+    """
+
+    app_label = models.CharField(max_length=100)
+    modele = models.CharField(max_length=100)
+    type_libelle = models.CharField("type", max_length=150)
+    objet_pk = models.CharField(max_length=64)
+    libelle = models.CharField("élément", max_length=255)
+    # Magasin de l'élément (sans clé étrangère : le magasin lui-même peut être à la corbeille).
+    magasin_id = models.BigIntegerField(null=True, blank=True)
+    nombre_objets = models.PositiveIntegerField(default=1)
+    donnees = models.JSONField()
+    supprime_par = models.ForeignKey(
+        Utilisateur, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    supprime_le = models.DateTimeField(auto_now_add=True, db_index=True)
+    expire_le = models.DateTimeField(db_index=True)
+
+    class Meta:
+        verbose_name = "élément de la corbeille"
+        verbose_name_plural = "corbeille"
+        ordering = ["-supprime_le"]
+        permissions = [("restaurer_elementcorbeille", "Restaurer un élément de la corbeille")]
+
+    def __str__(self):
+        return f"{self.type_libelle} : {self.libelle}"
+
+    @property
+    def permission_ajout(self):
+        """Restaurer, c'est recréer : il faut le droit de créer ce type d'élément (dans son
+        magasin) pour le voir dans la corbeille et le restaurer."""
+        return f"{self.app_label}.add_{self.modele}"

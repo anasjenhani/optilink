@@ -22,6 +22,7 @@ from rest_framework.views import APIView
 
 from apps.reseau.models import Magasin, Societe
 
+from ..corbeille import mettre_a_la_corbeille
 from ..journal import journaliser
 from ..models import Affectation, EvenementSecurite, Utilisateur
 from ..privileges import ADMINISTRATION, CODES, PRIVILEGES
@@ -186,7 +187,7 @@ class ProfilViewSet(viewsets.ModelViewSet):
                 {"detail": "Ce profil est donné à des utilisateurs : retirez-le-leur d'abord."}
             )
         verifier_privileges(self.request.user, _codes(profil.permissions.all()) & CODES)
-        profil.delete()
+        mettre_a_la_corbeille(profil, auteur=self.request.user)
 
 
 # --- Utilisateurs ----------------------------------------------------------------------------

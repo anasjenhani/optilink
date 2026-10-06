@@ -160,6 +160,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.securite.tasks.desactiver_comptes_inactifs",
         "schedule": 24 * 60 * 60,
     },
+    "vider-corbeille": {
+        "task": "apps.securite.tasks.vider_corbeille",
+        "schedule": 24 * 60 * 60,
+    },
 }
 
 REST_FRAMEWORK = {
@@ -210,6 +214,8 @@ SPECTACULAR_SETTINGS = {
 MFA_OBLIGATOIRE = env_bool("MFA_OBLIGATOIRE", True)
 OTP_TOTP_ISSUER = "OptiLink"
 COMPTES_INACTIFS_JOURS = int(env("COMPTES_INACTIFS_JOURS", "90"))
+# Délai de grâce de la corbeille : un élément supprimé se restaure pendant ce nombre de jours.
+CORBEILLE_JOURS = int(env("CORBEILLE_JOURS", "30"))
 
 # Clés de chiffrement des prescriptions (core/chiffrement.py), séparées par des virgules :
 # la première chiffre, les suivantes ne servent qu'à relire pendant une rotation.

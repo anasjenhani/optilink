@@ -1,12 +1,20 @@
-from django.contrib import admin
+from django.conf import settings
+from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.contenttypes.models import ContentType
 from django.utils.html import format_html_join
 
 from core.admin_imports import AvecImport
 
+from .corbeille import RestaurationImpossible, concerne, mettre_a_la_corbeille, restaurer
 from .journal_droits import decrire, libelles_permissions, type_d_objet
-from .models import Affectation, EvenementSecurite, ModificationDroits, Utilisateur
+from .models import (
+    Affectation,
+    ElementCorbeille,
+    EvenementSecurite,
+    ModificationDroits,
+    Utilisateur,
+)
 
 
 class AffectationInline(admin.TabularInline):
@@ -141,6 +149,51 @@ class ModificationDroitsAdmin(admin.ModelAdmin):
     def has_module_permission(self, request):
         return self.has_view_permission(request)
 
+
+class AvecCorbeille:
+    """Suppressions de l'administration : l'élément part à la corbeille, restaurable."""
+
+    def delete_model(self, request, obj):
+        if not concerne(type(obj)):
+            return super().delete_model(request, obj)
+        mettre_a_la_corbeille(obj, auteur=request.user)
+        messages.info(
+            request,
+            f"« {obj} » est dans la corbeille (Sécurité › Corbeille) : restaurable pendant "
+            f"{settings.CORBEILLE_JOURS} jours.",
+        )
+
+    def delete_queryset(self, request, queryset):
+        if not concerne(queryset.model):
+            return super().delete_queryset(request, queryset)
+        for obj in queryset:
+            mettre_a_la_corbeille(obj, auteur=request.user)
+
+
+def brancher_corbeille(site):
+    """Fait passer par la corbeille les suppressions de toutes les pages de l'administration."""
+    for modele, model_admin in site._registry.items():
+        classe = type(model_admin)
+        if concerne(modele) and not issubclass(classe, AvecCorbeille):
+            model_admin.__class__ = type(classe.__name__, (AvecCorbeille, classe), {})
+
+
+@admin.register(ElementCorbeille)
+class ElementCorbeilleAdmin(admin.ModelAdmin):
+    list_display = ("supprime_le", "type_libelle", "libelle", "supprime_par", "expire_le")
+    list_filter = ("type_libelle",)
+    search_fields = ("libelle",)
+    readonly_fields = [f.name for f in ElementCorbeille._meta.fields]
+    actions = ["restaurer_elements"]
+
+    def get_queryset(self, request):
+        elements = super().get_queryset(request).select_related("supprime_par")
+        if request.user.is_superuser:
+            return elements
+        # Chacun ne voit que ce qu'il aurait le droit de recréer.
+        visibles = [e.pk for e in elements if request.user.has_perm(e.permission_ajout, e)]
+        return elements.filter(pk__in=visibles)
+
     def has_add_permission(self, request):
         return False
 
@@ -149,3 +202,18 @@ class ModificationDroitsAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    @admin.action(description="Restaurer les éléments choisis", permissions=["restaurer"])
+    def restaurer_elements(self, request, queryset):
+        restaures = 0
+        for element in queryset:
+            try:
+                restaurer(element)
+                restaures += 1
+            except RestaurationImpossible as erreur:
+                self.message_user(request, f"{element} : {erreur}", messages.ERROR)
+        if restaures:
+            self.message_user(request, f"{restaures} élément(s) restauré(s).", messages.SUCCESS)
+
+    def has_restaurer_permission(self, request):
+        return request.user.has_perm("securite.restaurer_elementcorbeille")
