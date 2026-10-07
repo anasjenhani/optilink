@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from core.admin_imports import AvecImport
+
 from .models import AccesPrescription, Ophtalmologue
 
 # Les ordonnances elles-mêmes ne sont pas dans l'administration : elles ne se lisent que dans
@@ -23,10 +25,11 @@ class AccesPrescriptionAdmin(admin.ModelAdmin):
 
 
 @admin.register(Ophtalmologue)
-class OphtalmologueAdmin(admin.ModelAdmin):
-    list_display = ("nom", "telephone", "ville", "est_actif")
+class OphtalmologueAdmin(AvecImport, admin.ModelAdmin):
+    imports = ("ophtalmologues",)
+    list_display = ("nom", "telephone", "telephone_2", "ville", "anciens_codes", "est_actif")
     list_filter = ("est_actif",)
-    search_fields = ("nom", "cle", "telephone")
+    search_fields = ("nom", "cle", "telephone", "telephone_2", "anciens_codes")
 
     # Les ordonnances gardent le nom du médecin : on le désactive au lieu de le supprimer.
     def has_delete_permission(self, request, obj=None):

@@ -38,7 +38,7 @@ import {
 import { listerMagasins } from "../api/magasins";
 import { enUnites, formater, formaterTexte, versTexte, type Monnaie } from "../api/monnaie";
 import { FicheLentilles, type LentilleChoisie } from "./FicheLentilles";
-import { FicheLunette, type ArticleLunette } from "./FicheLunette";
+import { ChampPeniche, FicheLunette, type ArticleLunette } from "./FicheLunette";
 
 /** Ligne du panier ; celles d'une lunette portent son rang (``lunette``) et leur place. */
 type Ligne = {
@@ -153,6 +153,7 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
     );
   const commandeImposee = lunetteARanger || panier.some((l) => l.article.sur_commande);
   const commande = enCommande || commandeImposee;
+  const maxPeniche = magasins.data?.find((m) => m.id === magasin)?.nombre_peniches;
   const montantAcompte = Math.min(unites(acompte || "0"), total);
 
   const vente = useMutation({
@@ -319,6 +320,9 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
                   saisirOrdonnance: false,
                 }
               }
+              peniche={peniche}
+              onPeniche={setPeniche}
+              maxPeniche={maxPeniche}
               onValider={ajouterLunette}
             />
           ) : (
@@ -560,20 +564,7 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
                 onChange={(e) => setLivraisonPrevue(e.target.value)}
                 slotProps={{ inputLabel: { shrink: true } }}
               />
-              <TextField
-                label="Péniche"
-                type="number"
-                required
-                value={peniche}
-                onChange={(e) => setPeniche(e.target.value)}
-                helperText="N° du bac où ranger la commande"
-                slotProps={{
-                  htmlInput: {
-                    min: 1,
-                    max: magasins.data?.find((m) => m.id === magasin)?.nombre_peniches,
-                  },
-                }}
-              />
+              {!ficheLunette && <ChampPeniche valeur={peniche} onChange={setPeniche} max={maxPeniche} />}
             </Stack>
           )}
 

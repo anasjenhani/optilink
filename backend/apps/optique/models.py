@@ -83,7 +83,17 @@ class Ophtalmologue(models.Model):
     nom = models.CharField(max_length=200, help_text="Nom affiché, par exemple « Dr Ben Salah ».")
     cle = models.CharField(max_length=200, unique=True, editable=False)
     telephone = models.CharField("téléphone", max_length=20, blank=True)
+    telephone_2 = models.CharField("téléphone 2", max_length=20, blank=True)
+    email = models.EmailField("e-mail", blank=True)
+    adresse = models.CharField(max_length=255, blank=True)
     ville = models.CharField(max_length=100, blank=True)
+    anciens_codes = models.CharField(
+        "codes dans l'ancien logiciel",
+        max_length=200,
+        blank=True,
+        help_text="CodeMedecin de l'ancien logiciel, séparés par des virgules s'il y avait des "
+        "doublons regroupés ici.",
+    )
     est_actif = models.BooleanField("actif", default=True)
     cree_le = models.DateTimeField(auto_now_add=True)
 
