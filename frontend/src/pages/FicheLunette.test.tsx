@@ -1,7 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { type ComponentProps, useState } from "react";
 
 import { FicheLunette } from "./FicheLunette";
+
+/** La péniche appartient à la vente (la caisse) : un état autour de la fiche. */
+function AvecPeniche(props: Omit<ComponentProps<typeof FicheLunette>, "peniche" | "onPeniche">) {
+  const [peniche, setPeniche] = useState("");
+  return <FicheLunette {...props} peniche={peniche} onPeniche={setPeniche} />;
+}
 
 const CLIENT = { id: "c1", numero: 42, nom: "Ben Ali", prenom: "Sami" };
 const ORDONNANCE = {
@@ -52,7 +59,7 @@ test("ordonnance reprise, monture et verres scannés, lunette validée avec ses 
   const onValider = vi.fn();
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <FicheLunette
+      <AvecPeniche
         magasin="m"
         client={CLIENT as never}
         monnaie={{ devise: "TND", decimales: 3 }}
@@ -88,6 +95,10 @@ test("ordonnance reprise, monture et verres scannés, lunette validée avec ses 
   expect(screen.getByText(/Total lunette/)).toHaveTextContent("729,500");
 
   fireEvent.click(screen.getByRole("radio", { name: "Progressif" }));
+  // Péniche obligatoire, en haut sous l'observation.
+  fireEvent.click(screen.getByRole("button", { name: "Valider la lunette" }));
+  expect(await screen.findByText("Saisir le numéro de la péniche.")).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText(/PÉNICHE/), { target: { value: "12" } });
   fireEvent.click(screen.getByRole("button", { name: "Valider la lunette" }));
   await waitFor(() => expect(onValider).toHaveBeenCalled());
   const [lunette, articles] = onValider.mock.calls[0];

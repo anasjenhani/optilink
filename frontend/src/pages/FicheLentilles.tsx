@@ -18,6 +18,7 @@ import { useState } from "react";
 import { listerLentillesClient, type Article, type SaisieLentilles } from "../api/caisse";
 import { listerPrescriptions, saisirPrescription, type Client, type MesureOeil } from "../api/clients";
 import { enUnites, formater, type Monnaie } from "../api/monnaie";
+import { ChampOphtalmo } from "./ChampOphtalmo";
 import { Cadre, Champ, ChoixArticle, NOUVELLE, signe } from "./FicheLunette";
 
 /** Lentille d'un œil telle qu'elle part au panier. */
@@ -260,13 +261,7 @@ export function FicheLentilles({
           )}
           {saisieLibre && (
             <Stack direction="row" spacing={1}>
-              <TextField
-                size="small"
-                label="Ophtalmologiste"
-                value={prescripteur}
-                onChange={(e) => setPrescripteur(e.target.value)}
-                sx={{ flex: 1 }}
-              />
+              <ChampOphtalmo valeur={prescripteur} changer={setPrescripteur} />
               <TextField
                 size="small"
                 type="date"

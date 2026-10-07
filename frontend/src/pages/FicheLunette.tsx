@@ -41,6 +41,7 @@ import {
   type Prescription,
 } from "../api/clients";
 import { enUnites, formater, type Monnaie } from "../api/monnaie";
+import { ChampOphtalmo } from "./ChampOphtalmo";
 import { RechercheVerres } from "./RechercheVerres";
 
 /** Article placé dans une lunette (monture, verre d'un œil ou supplément). */
@@ -428,6 +429,9 @@ export function FicheLunette({
   numero,
   solaireParDefaut = false,
   droits,
+  peniche,
+  onPeniche,
+  maxPeniche,
   onValider,
 }: {
   magasin: string;
@@ -440,6 +444,10 @@ export function FicheLunette({
     voirOrdonnances: boolean;
     saisirOrdonnance: boolean;
   };
+  /** Bac où ranger la commande : un par vente, obligatoire pour valider la lunette. */
+  peniche: string;
+  onPeniche: (peniche: string) => void;
+  maxPeniche?: number;
   onValider: (lunette: SaisieLunette, articles: ArticleLunette[]) => void;
 }) {
   const ordonnances = useQuery({
@@ -536,6 +544,7 @@ export function FicheLunette({
           ? "Choisir l'ordonnance du client, ou saisir une nouvelle ordonnance."
           : "Choisir d'abord le client : la correction va sur sa fiche.",
       );
+    if (!peniche) return setErreur("Saisir le numéro de la péniche.");
     if (saisieLibre && (!prescripteur || !dateOrdonnance || !od.sphere || !og.sphere))
       return setErreur("Nouvelle ordonnance : ophtalmologiste, date et sphère de chaque œil.");
     setEnvoi(true);
@@ -616,13 +625,7 @@ export function FicheLunette({
           )}
           {saisieLibre && (
             <Stack direction="row" spacing={1}>
-              <TextField
-                size="small"
-                label="Ophtalmologiste"
-                value={prescripteur}
-                onChange={(e) => setPrescripteur(e.target.value)}
-                sx={{ flex: 1 }}
-              />
+              <ChampOphtalmo valeur={prescripteur} changer={setPrescripteur} />
               <TextField
                 size="small"
                 type="date"
@@ -651,15 +654,17 @@ export function FicheLunette({
             label="Inadaptation"
           />
         </Stack>
-        <TextField
-          size="small"
-          label="Obs."
-          multiline
-          minRows={2}
-          value={observation}
-          onChange={(e) => setObservation(e.target.value)}
-          sx={{ flex: 1 }}
-        />
+        <Stack spacing={1.5} sx={{ flex: 1 }}>
+          <TextField
+            size="small"
+            label="Obs."
+            multiline
+            minRows={2}
+            value={observation}
+            onChange={(e) => setObservation(e.target.value)}
+          />
+          <ChampPeniche valeur={peniche} onChange={onPeniche} max={maxPeniche} />
+        </Stack>
       </Stack>
 
       <Stack direction={{ xs: "column", lg: "row" }} spacing={2}>
@@ -792,5 +797,34 @@ export function FicheLunette({
         </Stack>
       )}
     </Stack>
+  );
+}
+
+/** Numéro de la péniche (bac où ranger la commande) : en rouge gras, obligatoire. */
+export function ChampPeniche({
+  valeur,
+  onChange,
+  max,
+}: {
+  valeur: string;
+  onChange: (valeur: string) => void;
+  max?: number;
+}) {
+  return (
+    <TextField
+      size="small"
+      label="PÉNICHE"
+      type="number"
+      required
+      value={valeur}
+      onChange={(e) => onChange(e.target.value)}
+      error={!valeur}
+      helperText="N° du bac où ranger la commande"
+      slotProps={{
+        inputLabel: { sx: { color: "error.main", fontWeight: 700, "&.Mui-focused": { color: "error.main" } } },
+        htmlInput: { min: 1, max, style: { fontWeight: 700, color: "#c62828" } },
+      }}
+      sx={{ maxWidth: 260 }}
+    />
   );
 }

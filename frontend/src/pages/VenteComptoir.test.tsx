@@ -111,6 +111,6 @@ test("lunettes optiques : la péniche se saisit dès l'ouverture de la fiche lun
   fireEvent.click((await screen.findByText("BEN ALI SAMI")).closest("tr")!);
 
   fireEvent.click(screen.getByRole("button", { name: /Lunettes optiques/ }));
-  expect(await screen.findByLabelText(/Péniche/)).toBeInTheDocument();
+  expect(await screen.findByLabelText(/PÉNICHE/)).toBeInTheDocument();
   expect(screen.getByRole("checkbox", { name: /Commande/ })).toBeChecked();
 });
