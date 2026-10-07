@@ -29,6 +29,7 @@ from .models import (
     Lentille,
     Monture,
     MouvementStock,
+    PlageVerre,
     PrixArticle,
     Verre,
     stock_disponible,
@@ -184,6 +185,8 @@ FICHES = {
     Article.Famille.LENTILLE: Lentille,
 }
 
+# Plage de puissances d'un verre : une ligne par plage, même référence répétée.
+COLONNES_PLAGE = ["sphere_debut", "sphere_fin", "cylindre_debut", "cylindre_fin"]
 # Colonnes du modèle d'import, dans l'ordre du fichier modèle.
 COLONNES_CATALOGUE = [
     "reference",
@@ -216,6 +219,9 @@ COLONNES_CATALOGUE = [
     "photochromique",
     "teinte",
     "diametre",
+    "fabrication",
+    "diametre_commercial",
+    *COLONNES_PLAGE,
     "renouvellement",
     "rayon",
     "puissance",
@@ -243,6 +249,10 @@ COLONNES_VERRES = [
     "photochromique",
     "teinte",
     "diametre",
+    "fabrication",
+    "diametre_commercial",
+    *COLONNES_PLAGE,
+    "prix_achat_ht",
 ]
 
 
@@ -294,21 +304,39 @@ def importer_catalogue(lignes, *, pays, apercu=False, famille=None):
         str(f.code): f for f in Fournisseur.objects.exclude(code=None)
     }
     taux = {t.taux: t for t in TauxTva.objects.filter(pays=pays)}
-    vues = {}
+    vues, plages = {}, {}
     try:
         with transaction.atomic():
             for numero, ligne in lignes:
                 reference = ligne.get("reference", "")
+                avec_plage = any(ligne.get(nom, "") for nom in COLONNES_PLAGE)
                 if reference in vues:
-                    rapport.erreur(
-                        numero, f"Référence {reference} déjà en ligne {vues[reference]}."
-                    )
+                    if not avec_plage:
+                        rapport.erreur(
+                            numero, f"Référence {reference} déjà en ligne {vues[reference]}."
+                        )
+                        continue
+                    # Ligne suivante d'un même verre : une plage de puissances de plus.
+                    article = Article.objects.filter(reference=reference).first()
+                    if article is None:
+                        rapport.erreur(
+                            numero, f"{reference} : corriger d'abord la ligne {vues[reference]}."
+                        )
+                        continue
+                    try:
+                        with transaction.atomic():
+                            _importer_plage(article, ligne, pays, plages)
+                    except ValidationError as erreur:
+                        rapport.erreur(numero, _message(erreur))
                     continue
                 vues[reference] = numero
                 existant = Article.objects.filter(reference=reference).first()
                 try:
                     with transaction.atomic():
                         cree = _importer_article(ligne, pays, fournisseurs, taux, famille)
+                        if avec_plage:
+                            article = Article.objects.get(reference=reference)
+                            _importer_plage(article, ligne, pays, plages)
                 except ValidationError as erreur:
                     rapport.erreur(numero, _message(erreur))
                     continue
@@ -403,6 +431,36 @@ def _importer_article(ligne, pays, fournisseurs, taux, imposee=None):
         tarif.full_clean()
         tarif.save()
     return cree
+
+
+def _importer_plage(article, ligne, pays, plages):
+    """Ajoute une plage de puissances au verre ; les plages d'avant (même pays) sont remplacées
+    par celles du fichier. ``plages`` compte les plages déjà lues de chaque verre."""
+    if article.famille != Article.Famille.VERRE:
+        raise ValidationError("sphere_debut : les plages de puissances ne vont qu'avec un verre.")
+    if article.pk not in plages:
+        PlageVerre.objects.filter(article=article, pays=pays).delete()
+        plages[article.pk] = 0
+    valeurs = {nom: _decimal(ligne.get(nom, ""), nom) for nom in COLONNES_PLAGE}
+    if valeurs["sphere_debut"] is None or valeurs["sphere_fin"] is None:
+        raise ValidationError("sphere_debut et sphere_fin : obligatoires pour une plage.")
+    prix = _decimal(ligne.get("prix_ttc", ""), "prix_ttc")
+    if prix is None:
+        raise ValidationError("prix_ttc : obligatoire pour une plage de puissances.")
+    plages[article.pk] += 1
+    plage = PlageVerre(
+        article=article,
+        pays=pays,
+        ordre=plages[article.pk],
+        sphere_debut=valeurs["sphere_debut"],
+        sphere_fin=valeurs["sphere_fin"],
+        cylindre_debut=valeurs["cylindre_debut"] or 0,
+        cylindre_fin=valeurs["cylindre_fin"] or 0,
+        prix_achat_ht=_decimal(ligne.get("prix_achat_ht", ""), "prix_achat_ht"),
+        prix_vente_ttc=prix,
+    )
+    plage.full_clean()
+    plage.save()
 
 
 def importer_stock(lignes, *, magasin, utilisateur, piece="", apercu=False):

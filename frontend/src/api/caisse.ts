@@ -16,6 +16,8 @@ export type Article = {
   taux_tva: string;
   devise: string;
   stock: number | null;
+  /** Verre pris dans une plage de puissances (recherche des verres) : prix de la plage. */
+  plage?: number | null;
 };
 
 export type Famille = "monture" | "verre" | "lentille" | "divers" | "supplement";
@@ -169,6 +171,8 @@ export type SaisieVente = {
     role?: RoleLigne;
     numero_lot?: string;
     date_peremption?: string;
+    /** Verre : plage de puissances choisie, dont le prix s'applique. */
+    plage?: number;
   }[];
   paiements: { mode: ModePaiement; montant: string }[];
   /** Paires de lunettes ; leurs articles sont dans ``lignes`` (``lunette`` = rang dans cette liste). */
@@ -208,6 +212,40 @@ export const chercherArticles = (
       ...(desactives && { desactives: "true" }),
     })}`,
   ).then((page) => page.results);
+
+/** Ligne de la recherche des verres : une plage de puissances d'un verre et son prix. */
+export type VerreTrouve = {
+  article: string;
+  plage: number | null;
+  reference: string;
+  designation: string;
+  fournisseur: string;
+  sphere_debut: string | null;
+  sphere_fin: string | null;
+  cylindre_debut: string | null;
+  cylindre_fin: string | null;
+  diametre: string;
+  indice: string | null;
+  prix_vente_ttc: string | null;
+  /** Stock du magasin ; null pour un verre sur commande. */
+  quantite: number | null;
+};
+
+export type SectionVerres = "stock_fournisseur" | "prescription" | "magasin";
+
+export const rechercherVerres = (
+  magasin: string,
+  designation: string,
+  correction: { sphere?: string; cylindre?: string } = {},
+) =>
+  appeler<Record<SectionVerres, VerreTrouve[]>>(
+    `/api/v1/articles/recherche-verres/?${new URLSearchParams({
+      magasin,
+      designation,
+      ...(correction.sphere ? { sphere: correction.sphere } : {}),
+      ...(correction.cylindre ? { cylindre: correction.cylindre } : {}),
+    })}`,
+  );
 
 export const encaisser = (saisie: SaisieVente) => appeler<Vente>("/api/v1/ventes/", { methode: "POST", corps: saisie });
 

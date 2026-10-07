@@ -15,6 +15,7 @@ import { useEffect, useState } from "react";
 
 import {
   type FicheArticle as Fiche,
+  FABRICATIONS_VERRE,
   GEOMETRIES,
   MATIERES_VERRE,
   RENOUVELLEMENTS,
@@ -37,6 +38,8 @@ type Champ = {
   options?: readonly { valeur: string; libelle: string }[];
   requis?: boolean;
   largeur?: number;
+  /** Valeur d'un nouvel article. */
+  defaut?: string;
 };
 
 /** Caractéristiques propres aux verres et aux lentilles, dans l'ordre de la fiche. */
@@ -50,6 +53,16 @@ const CHAMPS: Partial<Record<FamilleArticle, Champ[]>> = {
     { cle: "traitements", label: "Traitements", nature: "texte", largeur: 260 },
     { cle: "teinte", label: "Teinte", nature: "texte", largeur: 160 },
     { cle: "diametre", label: "Diamètre", nature: "entier", largeur: 110 },
+    { cle: "diametre_commercial", label: "Diamètre commercial", nature: "texte", largeur: 170 },
+    {
+      cle: "fabrication",
+      label: "Verre sur commande",
+      nature: "texte",
+      options: FABRICATIONS_VERRE,
+      requis: true,
+      largeur: 260,
+      defaut: "prescription",
+    },
     { cle: "photochromique", label: "Photochromique", nature: "case" },
   ],
   lentille: [
@@ -63,7 +76,7 @@ const CHAMPS: Partial<Record<FamilleArticle, Champ[]>> = {
       requis: true,
       largeur: 170,
     },
-    { cle: "type", label: "Type", nature: "texte", options: TYPES_LENTILLE, largeur: 150 },
+    { cle: "type", label: "Type", nature: "texte", options: TYPES_LENTILLE, largeur: 150, defaut: "spherique" },
     { cle: "rayon", label: "Rayon", nature: "decimal", largeur: 100 },
     { cle: "diametre", label: "Diamètre", nature: "decimal", largeur: 100 },
     { cle: "puissance", label: "Puissance", nature: "decimal", largeur: 110 },
@@ -89,7 +102,7 @@ const DESIGNATIONS: Partial<Record<FamilleArticle, string>> = {
 type Saisie = Record<string, string | boolean>;
 
 const vide = (champs: Champ[]): Saisie =>
-  Object.fromEntries(champs.map((c) => [c.cle, c.nature === "case" ? false : c.cle === "type" ? "spherique" : ""]));
+  Object.fromEntries(champs.map((c) => [c.cle, c.nature === "case" ? false : (c.defaut ?? "")]));
 
 /**
  * Fiche d'un verre, d'une lentille ou d'un article divers, sur le modèle de la fiche monture : en-tête,

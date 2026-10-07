@@ -159,6 +159,7 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
           ...(l.lentilles !== undefined ? { lentilles: l.lentilles, role: l.role } : {}),
           ...(l.numero_lot ? { numero_lot: l.numero_lot } : {}),
           ...(l.date_peremption ? { date_peremption: l.date_peremption } : {}),
+          ...(l.article.plage ? { plage: l.article.plage } : {}),
         })),
         ...(lunettes.length ? { lunettes } : {}),
         ...(jeuxLentilles.length ? { lentilles: jeuxLentilles } : {}),

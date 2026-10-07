@@ -12,6 +12,7 @@ from .models import (
     LigneTransfert,
     Monture,
     MouvementStock,
+    PlageVerre,
     PrixArticle,
     TransfertStock,
     Verre,
@@ -40,6 +41,22 @@ class VerreInline(admin.StackedInline):
         ("geometrie", "indice", "matiere"),
         "traitements",
         ("photochromique", "teinte", "diametre"),
+        ("fabrication", "diametre_commercial"),
+    )
+
+
+class PlageVerreInline(admin.TabularInline):
+    model = PlageVerre
+    extra = 1
+    fields = (
+        "pays",
+        "ordre",
+        "sphere_debut",
+        "sphere_fin",
+        "cylindre_debut",
+        "cylindre_fin",
+        "prix_achat_ht",
+        "prix_vente_ttc",
     )
 
 
@@ -94,6 +111,8 @@ class ArticleAdmin(AvecImport, admin.ModelAdmin):
         if obj is None:
             return [*CARACTERISTIQUES.values(), PrixArticleInline]
         fiche = CARACTERISTIQUES.get(obj.famille)
+        if obj.famille == Article.Famille.VERRE:
+            return [fiche, PrixArticleInline, PlageVerreInline]
         return [fiche, PrixArticleInline] if fiche else [PrixArticleInline]
 
     @admin.display(description="marque")

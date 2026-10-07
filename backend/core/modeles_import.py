@@ -34,6 +34,19 @@ _COMMUN_ARTICLES = {
     "tva": "Taux de TVA du prix de vente (7, 13, 19…).",
 }
 
+_AIDE_PLAGES = {
+    "fabrication": "Verre sur commande : « stock » (stock fournisseur) ou « prescription » "
+    "(RX, importation, par défaut).",
+    "diametre_commercial": "Diamètre commercial (65/70, 70/75…).",
+    "sphere_debut": "Plage de puissances : sphère de début. Une ligne par plage, en répétant "
+    "la référence ; prix_ttc est alors le prix de la plage. Les plages du fichier remplacent "
+    "celles déjà enregistrées pour ce verre.",
+    "sphere_fin": "Plage de puissances : sphère de fin.",
+    "cylindre_debut": "Plage de puissances : cylindre de début (0 si vide).",
+    "cylindre_fin": "Plage de puissances : cylindre de fin (0 si vide).",
+    "prix_achat_ht": "Prix d'achat HT avant remise (de la plage s'il y en a une).",
+}
+
 MODELES = {
     "verres": Modele(
         titre="Verres",
@@ -49,8 +62,37 @@ MODELES = {
             "photochromique": "oui ou non.",
             "teinte": "Teinte éventuelle.",
             "diametre": "Diamètre en mm.",
-        },
+        }
+        | _AIDE_PLAGES,
         exemples=[
+            {
+                "reference": "VER-ST-156",
+                "libelle": "RELAX 400 ASP 1.56 BLANC",
+                "fournisseur": "TN OPTIC",
+                "sur_commande": "oui",
+                "prix_ttc": "92,859",
+                "tva": "19",
+                "geometrie": "Unifocal",
+                "indice": "1,56",
+                "fabrication": "stock",
+                "diametre_commercial": "65",
+                "sphere_debut": "-2,75",
+                "sphere_fin": "4",
+                "cylindre_debut": "0",
+                "cylindre_fin": "3",
+            },
+            {
+                "reference": "VER-ST-156",
+                "libelle": "RELAX 400 ASP 1.56 BLANC",
+                "fournisseur": "TN OPTIC",
+                "prix_ttc": "98,573",
+                "tva": "19",
+                "geometrie": "Unifocal",
+                "sphere_debut": "-4",
+                "sphere_fin": "0",
+                "cylindre_debut": "0",
+                "cylindre_fin": "3",
+            },
             {
                 "reference": "VER-PR-016",
                 "libelle": "Verre progressif 1.6 antireflet",
@@ -66,7 +108,7 @@ MODELES = {
                 "traitements": "Antireflet",
                 "photochromique": "non",
                 "diametre": "70",
-            }
+            },
         ],
     ),
     "catalogue": Modele(
@@ -85,7 +127,8 @@ MODELES = {
             "forme": "Ronde, rectangle, papillon…",
             "tranche_age": "Adulte, Junior, Enfant ou Bébé.",
             "calibre": "Taille (mm).",
-        },
+        }
+        | _AIDE_PLAGES,
         exemples=[
             {
                 "reference": "MON-RB5154",

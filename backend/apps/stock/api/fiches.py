@@ -90,6 +90,8 @@ class VerreSerializer(serializers.ModelSerializer):
             "photochromique",
             "teinte",
             "diametre",
+            "diametre_commercial",
+            "fabrication",
         ]
 
 

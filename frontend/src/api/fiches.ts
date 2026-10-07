@@ -77,6 +77,11 @@ export const RENOUVELLEMENTS = [
   { valeur: "annuelle", libelle: "Annuelle" },
 ] as const;
 
+export const FABRICATIONS_VERRE = [
+  { valeur: "prescription", libelle: "Prescription (RX, importation)" },
+  { valeur: "stock", libelle: "Stock fournisseur" },
+] as const;
+
 export const TYPES_LENTILLE = [
   { valeur: "spherique", libelle: "Sphérique" },
   { valeur: "torique", libelle: "Torique" },
@@ -94,6 +99,8 @@ export type FicheVerre = {
   photochromique: boolean;
   teinte: string;
   diametre: number | null;
+  diametre_commercial: string;
+  fabrication: "stock" | "prescription";
 };
 
 export type FicheLentille = {
