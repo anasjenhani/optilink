@@ -41,6 +41,7 @@ import {
   type Prescription,
 } from "../api/clients";
 import { enUnites, formater, type Monnaie } from "../api/monnaie";
+import { ChampOphtalmo } from "./ChampOphtalmo";
 import { RechercheVerres } from "./RechercheVerres";
 
 /** Article placé dans une lunette (monture, verre d'un œil ou supplément). */
@@ -616,13 +617,7 @@ export function FicheLunette({
           )}
           {saisieLibre && (
             <Stack direction="row" spacing={1}>
-              <TextField
-                size="small"
-                label="Ophtalmologiste"
-                value={prescripteur}
-                onChange={(e) => setPrescripteur(e.target.value)}
-                sx={{ flex: 1 }}
-              />
+              <ChampOphtalmo valeur={prescripteur} changer={setPrescripteur} />
               <TextField
                 size="small"
                 type="date"

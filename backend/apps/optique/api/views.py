@@ -10,8 +10,9 @@ from rest_framework.response import Response
 from apps.crm.models import Client
 from apps.securite.journal import adresse_ip
 
-from ..models import AccesPrescription, Prescription
-from .serializers import PrescriptionSerializer
+from ..models import AccesPrescription, Ophtalmologue, Prescription
+from ..ophtalmologues import cle_ophtalmologue
+from .serializers import OphtalmologueSerializer, PrescriptionSerializer
 
 
 @extend_schema_view(
@@ -88,3 +89,33 @@ class PrescriptionViewSet(
         with transaction.atomic():
             prescription = serializer.save(saisie_par=self.request.user)
             self._journaliser([prescription], AccesPrescription.Action.SAISIE)
+
+
+@extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "recherche", OpenApiTypes.STR, description="Nom (sans « Dr », accents ni casse)"
+            )
+        ]
+    )
+)
+class OphtalmologueViewSet(mixins.CreateModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
+    """Liste des ophtalmologistes à choisir sur une ordonnance ; un ajout refuse un doublon.
+
+    La liste se tient aussi dans /admin/ (Ventes › Ophtalmologistes).
+    """
+
+    serializer_class = OphtalmologueSerializer
+    pagination_class = None
+    permissions_requises = {
+        "list": "optique.view_prescription",
+        "create": "optique.add_prescription",
+    }
+
+    def get_queryset(self):
+        medecins = Ophtalmologue.objects.filter(est_actif=True)
+        recherche = cle_ophtalmologue(self.request.query_params.get("recherche", ""))
+        for mot in recherche.split():
+            medecins = medecins.filter(cle__contains=mot)
+        return medecins[:50]

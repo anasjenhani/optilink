@@ -71,3 +71,41 @@ class AccesPrescription(models.Model):
 
     def __str__(self):
         return f"{self.get_action_display()} {self.horodatage:%d/%m/%Y %H:%M}"
+
+
+class Ophtalmologue(models.Model):
+    """Ophtalmologiste qui prescrit les ordonnances : une seule fiche par médecin.
+
+    ``cle`` est le nom sans « Dr », accents, casse ni ponctuation : « Dr Ben Salah » et
+    « BEN-SALAH » sont le même médecin, ce qui empêche les doublons.
+    """
+
+    nom = models.CharField(max_length=200, help_text="Nom affiché, par exemple « Dr Ben Salah ».")
+    cle = models.CharField(max_length=200, unique=True, editable=False)
+    telephone = models.CharField("téléphone", max_length=20, blank=True)
+    ville = models.CharField(max_length=100, blank=True)
+    est_actif = models.BooleanField("actif", default=True)
+    cree_le = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["nom"]
+        verbose_name = "ophtalmologiste"
+
+    def __str__(self):
+        return self.nom
+
+    def save(self, *args, **kwargs):
+        from .ophtalmologues import cle_ophtalmologue
+
+        self.nom = " ".join(self.nom.split())
+        self.cle = cle_ophtalmologue(self.nom)
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        from .ophtalmologues import ophtalmologue_existant
+
+        existant = ophtalmologue_existant(self.nom)
+        if existant is not None and existant.pk != self.pk:
+            raise ValidationError({"nom": f"{existant.nom} est déjà dans la liste."})

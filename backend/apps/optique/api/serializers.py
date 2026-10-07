@@ -6,7 +6,12 @@ from rest_framework import serializers
 from apps.crm.models import Client
 from apps.reseau.models import Magasin
 
-from ..models import Prescription
+from ..models import Ophtalmologue, Prescription
+from ..ophtalmologues import (
+    cle_ophtalmologue,
+    ophtalmologue_de_l_ordonnance,
+    ophtalmologue_existant,
+)
 
 QUART = Decimal("0.25")
 
@@ -114,9 +119,36 @@ class PrescriptionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Une ordonnance ne peut pas être datée du futur.")
         return valeur
 
+    def validate_prescripteur(self, valeur):
+        if not cle_ophtalmologue(valeur):
+            raise serializers.ValidationError("Nom de l'ophtalmologiste à préciser.")
+        return valeur
+
     def create(self, validated_data):
         mesures = MesuresSerializer(validated_data.pop("mesures")).data
+        # Le médecin est écrit comme dans la liste (et y entre s'il n'y était pas).
+        validated_data["prescripteur"] = ophtalmologue_de_l_ordonnance(
+            validated_data["prescripteur"]
+        ).nom
         prescription = Prescription(**validated_data)
         prescription.mesures = mesures
         prescription.save()
         return prescription
+
+
+class OphtalmologueSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Ophtalmologue
+        fields = ["id", "nom", "telephone", "ville", "est_actif"]
+        read_only_fields = ["est_actif"]
+
+    def validate_nom(self, valeur):
+        valeur = " ".join(valeur.split())
+        if not cle_ophtalmologue(valeur):
+            raise serializers.ValidationError("Nom de l'ophtalmologiste à préciser.")
+        existant = ophtalmologue_existant(valeur)
+        if existant is not None and existant.pk != getattr(self.instance, "pk", None):
+            raise serializers.ValidationError(
+                f"{existant.nom} est déjà dans la liste des ophtalmologistes."
+            )
+        return valeur
