@@ -15,6 +15,7 @@ import { Connexion } from "./auth/Connexion";
 import { VerificationMfa } from "./auth/VerificationMfa";
 import { Espace } from "./navigation/Espace";
 import { Accueil } from "./pages/Accueil";
+import logo from "./assets/logo-optilink.png";
 
 function Contenu({ session }: { session: EtatSession }) {
   const queryClient = useQueryClient();
@@ -48,11 +49,11 @@ export function App() {
 
   return (
     <>
-      <AppBar position="static">
+      <AppBar position="static" color="inherit" elevation={0} sx={{ borderBottom: 1, borderColor: "divider" }}>
         <Toolbar>
-          <Typography variant="h6" component="h1" sx={{ flexGrow: 1 }}>
-            OptiLink
-          </Typography>
+          <Box component="h1" sx={{ m: 0, flexGrow: 1, lineHeight: 0 }}>
+            <Box component="img" src={logo} alt="OptiLink" sx={{ height: 44 }} />
+          </Box>
           {session.data?.utilisateur && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <Typography>{session.data.utilisateur.nom_complet}</Typography>

@@ -1,7 +1,12 @@
 {% extends "admin/base.html" %}
+{% load static %}
 {% comment %}Administration d'OptiLink : bleu lapis-lazuli et onglets horizontaux.{% endcomment %}
 
 {% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrahead %}{{ block.super }}
+<link rel="icon" type="image/png" href="{% static 'optilink/favicon.png' %}">
+{% endblock %}
 
 {% block extrastyle %}{{ block.super }}
 <style>
@@ -27,6 +32,9 @@
   }
   #header { background: linear-gradient(180deg, #4a82bd 0%, #26619c 55%, #1d4e80 100%); }
   #site-name a, #site-name a:link, #site-name a:visited { font-weight: 600; color: #fff; }
+  #site-name a { display: inline-flex; align-items: center; gap: 14px; }
+  /* Logo sur fond blanc : le bleu marine du logo ne se lit pas sur le bandeau bleu. */
+  #site-name .logo { height: 34px; padding: 4px 10px; background: #fff; border-radius: 6px; }
   .onglets {
     display: flex; flex-wrap: wrap; gap: 2px; margin: 0; padding: 0 20px;
     background: #f4f4f4; border-bottom: 2px solid var(--primary); list-style: none;
@@ -56,7 +64,7 @@
 {% endblock %}
 
 {% block branding %}
-<div id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('Django administration') }}</a></div>
+<div id="site-name"><a href="{% url 'admin:index' %}"><img class="logo" src="{% static 'optilink/logo.png' %}" alt="OptiLink"> Administration</a></div>
 {% if user.is_anonymous %}{% include "admin/color_theme_toggle.html" %}{% endif %}
 {% endblock %}
 
