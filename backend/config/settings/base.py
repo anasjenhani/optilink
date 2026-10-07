@@ -63,6 +63,7 @@ MIDDLEWARE = [
     "django_otp.middleware.OTPMiddleware",
     "auditlog.middleware.AuditlogMiddleware",
     "core.middleware.PerimetreMagasinMiddleware",
+    "apps.securite.presence.PresenceMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -239,6 +240,8 @@ STOCK_ALERTE_SEUIL = int(env("STOCK_ALERTE_SEUIL", "1"))
 # Journal d'audit : le manager de base évite que le filtre de périmètre masque l'état précédent.
 AUDITLOG_USE_BASE_MANAGER = True
 
+# Un compte est affiché « connecté » s'il a utilisé OptiLink depuis moins de ce délai.
+PRESENCE_MINUTES = int(env("PRESENCE_MINUTES", "15"))
 SESSION_COOKIE_AGE = int(env("SESSION_DUREE_SECONDES", str(10 * 60 * 60)))
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_HTTPONLY = True

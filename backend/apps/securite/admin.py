@@ -4,12 +4,30 @@ from django import forms
 from django.conf import settings
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
+from django.utils import timezone
 
 from apps.reseau.models import Magasin
 from core.admin_imports import AvecImport
 
 from .corbeille import RestaurationImpossible, concerne, mettre_a_la_corbeille, restaurer
 from .models import Affectation, ElementCorbeille, EvenementSecurite, Utilisateur
+from .presence import dernieres_activites
+
+
+class FiltreConnectes(admin.SimpleListFilter):
+    title = "connexion"
+    parameter_name = "connecte"
+
+    def lookups(self, request, model_admin):
+        return [("oui", "Connectés maintenant"), ("non", "Non connectés")]
+
+    def queryset(self, request, queryset):
+        if self.value() not in ("oui", "non"):
+            return queryset
+        connectes = dernieres_activites(queryset.values_list("pk", flat=True))
+        if self.value() == "oui":
+            return queryset.filter(pk__in=connectes)
+        return queryset.exclude(pk__in=connectes)
 
 
 class AffectationForm(forms.ModelForm):
@@ -69,15 +87,24 @@ class UtilisateurAdmin(AvecImport, UserAdmin):
         "first_name",
         "last_name",
         "profils",
+        "connecte",
         "is_active",
         "is_staff",
         "last_login",
     )
     list_filter = (
+        FiltreConnectes,
         "is_active",
         ("affectations__role", admin.RelatedOnlyFieldListFilter),
         "is_staff",
     )
+
+    @admin.display(description="connecté")
+    def connecte(self, utilisateur):
+        heure = dernieres_activites([utilisateur.pk]).get(utilisateur.pk)
+        if heure is None:
+            return "—"
+        return f"oui (vu à {timezone.localtime(heure):%H:%M})"
 
     def get_queryset(self, request):
         return (

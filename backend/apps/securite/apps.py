@@ -11,7 +11,7 @@ class SecuriteConfig(AppConfig):
         from auditlog.registry import auditlog
         from django.contrib.auth.models import Group
 
-        from . import signaux  # noqa: F401
+        from . import presence, signaux  # noqa: F401
         from .models import Affectation, Utilisateur
         from .roles import initialiser_roles
 
