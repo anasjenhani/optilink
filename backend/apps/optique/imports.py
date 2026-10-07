@@ -15,10 +15,11 @@ from django.db import transaction
 from apps.reseau.villes import ville_importee
 from apps.stock.imports import Rapport, _Annuler, _message
 
-from .models import Ophtalmologue
+from .models import Ophtalmologue, prochain_code_ophtalmologue
 from .ophtalmologues import cle_ophtalmologue
 
 COLONNES_OPHTALMOLOGUES = [
+    "code",
     "ancien_code",
     "nom",
     "prenom",
@@ -31,7 +32,7 @@ COLONNES_OPHTALMOLOGUES = [
 
 # Colonnes de l'ancien logiciel (normalisées), par ordre de préférence.
 SYNONYMES = {
-    "ancien_code": ["codemedecin", "code_medecin", "code"],
+    "ancien_code": ["codemedecin", "code_medecin"],
     "telephone": ["telcabinet", "tel_cabinet", "tel"],
     "telephone_2": ["telportable1", "telportable2", "teldomicile", "gsm", "portable"],
 }
@@ -68,11 +69,22 @@ def importer_ophtalmologues(lignes, *, apercu=False):
     if lignes and "nom" not in lignes[0][1]:
         rapport.erreur(1, "Colonne obligatoire absente : nom.")
         return rapport
-    vus = {}
+    vus, codes = {}, {}
     try:
         with transaction.atomic():
+            # Les codes du fichier font foi : un médecin qui portait l'un d'eux en reçoit un
+            # nouveau à la fin de l'import.
+            du_fichier = {_colonnes(b)["code"] for _, b in lignes} - {""}
+            Ophtalmologue.objects.filter(code__in=du_fichier).update(code=None)
             for numero, brute in lignes:
                 ligne = _colonnes(brute)
+                if ligne["code"] in codes:
+                    rapport.erreur(
+                        numero, f"code : {ligne['code']} déjà en ligne {codes[ligne['code']]}."
+                    )
+                    continue
+                if ligne["code"]:
+                    codes[ligne["code"]] = numero
                 nom = nom_affiche(ligne["nom"], ligne["prenom"])
                 cle = cle_ophtalmologue(nom)
                 if not cle:
@@ -105,6 +117,9 @@ def importer_ophtalmologues(lignes, *, apercu=False):
                         numero, f"{medecin.nom} est déjà dans la liste : sa fiche est complétée."
                     )
                 vus.setdefault(cle, numero)
+            for medecin in Ophtalmologue.objects.filter(code=None).order_by("pk"):
+                medecin.code = prochain_code_ophtalmologue()
+                medecin.save(update_fields=["code"])
             if rapport.erreurs or apercu:
                 raise _Annuler
     except _Annuler:
@@ -124,6 +139,8 @@ def _importer(cle, nom, ligne):
             setattr(medecin, champ, valeur)
     if medecin.telephone_2 == medecin.telephone:
         medecin.telephone_2 = ""
+    if ligne["code"]:
+        medecin.code = ligne["code"]
     if ligne["ancien_code"]:
         codes = [c for c in medecin.anciens_codes.split(", ") if c]
         if ligne["ancien_code"] not in codes:

@@ -268,6 +268,8 @@ MODELES = {
         colonnes=COLONNES_OPHTALMOLOGUES,
         obligatoires={"nom"},
         aide={
+            "code": "Code du médecin dans OptiLink (001, 002…) ; il ne peut appartenir qu'à "
+            "un seul médecin.",
             "ancien_code": "Code du médecin dans l'ancien logiciel (CodeMedecin), gardé pour "
             "reprendre ses anciennes ordonnances.",
             "nom": "Nom de famille (ou nom complet). Un médecin déjà dans la liste, même écrit "
@@ -280,6 +282,7 @@ MODELES = {
         },
         exemples=[
             {
+                "code": "001",
                 "ancien_code": "001",
                 "nom": "Belhaj",
                 "prenom": "Taieb",
