@@ -1,7 +1,6 @@
 import base64
 import io
 
-from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.db import transaction
 from django.utils.decorators import method_decorator
@@ -19,7 +18,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from core.permissions import mfa_verifiee
+from core.permissions import mfa_requise, mfa_verifiee
 
 from ..journal import journaliser
 from ..models import EvenementSecurite
@@ -39,9 +38,9 @@ NOM_CODES_SECOURS = "Codes de secours"
 def etat_mfa(user):
     if mfa_verifiee(user):
         return "verifiee"
-    if user_has_device(user):
-        return "a_verifier"
-    return "a_activer" if settings.MFA_OBLIGATOIRE else "non_requise"
+    if not mfa_requise(user):
+        return "non_requise"
+    return "a_verifier" if user_has_device(user) else "a_activer"
 
 
 def etat_session(request):

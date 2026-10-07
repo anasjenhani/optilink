@@ -9,9 +9,10 @@ MOT_DE_PASSE = "Un-mot-de-passe-solide-2026"
 
 
 @pytest.fixture
-def opticien(db, reseau, role):
+def opticien(db, reseau, role, settings):
     from apps.securite.models import Affectation
 
+    settings.MFA_PROFILS = [role.name]  # Profil soumis au code OTP dans ces tests.
     utilisateur = Utilisateur.objects.create_user("opticien", password=MOT_DE_PASSE)
     Affectation.objects.create(
         utilisateur=utilisateur, role=role, portee="magasin", magasin=reseau["lille"]
@@ -66,6 +67,27 @@ def test_premiere_connexion_impose_l_activation_mfa(opticien):
     assert session["mfa"] == "a_activer"
     assert session["utilisateur"]["permissions"] == []
     assert client.get("/api/v1/magasins/").status_code == 403
+
+
+def test_profil_hors_mfa_profils_se_connecte_avec_le_mot_de_passe(opticien, settings):
+    settings.MFA_PROFILS = ["Administrateur Global"]
+    client = APIClient()
+    session = connecter(client).json()
+
+    assert session["mfa"] == "non_requise"
+    assert "reseau.view_magasin" in session["utilisateur"]["permissions"]
+    assert client.get("/api/v1/magasins/").status_code == 200
+
+
+def test_compte_d_administration_doit_toujours_activer_le_code(opticien, settings):
+    settings.MFA_PROFILS = []
+    opticien.is_staff = True
+    opticien.save()
+    client = APIClient()
+
+    assert connecter(client).json()["mfa"] == "a_activer"
+    assert client.get("/api/v1/magasins/").status_code == 403
+    assert client.get("/admin/").status_code == 302  # /admin/ exige toujours le code.
 
 
 def test_activation_mfa_ouvre_l_acces_et_donne_des_codes_de_secours(opticien):
