@@ -109,9 +109,34 @@ def test_import_du_fichier_medecin_de_l_ancien_logiciel(creer_utilisateur, clien
         "BELVEDAIRE",
     )
     assert rekik.anciens_codes == "081, 083"
+    # Code OptiLink attribué à la suite : 001, 002…
+    assert sorted(o.code for o in medecins.values()) == ["001", "002", "003", "004"]
     assert medecins["NASRI DHAHAK Henda"].anciens_codes == "027, 088"
     assert medecins["Dr Zribi Wajdi"].telephone == "74406706"
     assert medecins["Dr Zribi Wajdi"].telephone_2 == "74406004"
     # Sans téléphone du cabinet, le portable devient le téléphone principal.
     assert medecins["MKHININI Naoufel"].telephone == "36151952"
     assert medecins["MKHININI Naoufel"].ville == ""
+
+
+def test_code_sequentiel_et_colonne_code(creer_utilisateur, client_de):
+    from apps.optique.imports import importer_ophtalmologues
+
+    ali = Ophtalmologue.objects.create(nom="Dr Ali")
+    assert ali.code == "001"
+    lignes = [
+        (2, {"code": "010", "nom": "Mrad", "prenom": "Ahmed"}),
+        (3, {"code": "", "nom": "Toumi", "prenom": "Zouheir"}),
+    ]
+    rapport = importer_ophtalmologues(lignes)
+    assert rapport.erreurs == []
+    assert Ophtalmologue.objects.get(cle="ahmed mrad").code == "010"
+    assert Ophtalmologue.objects.get(cle="toumi zouheir").code == "011"
+    # Les codes du fichier font foi : Mrad perd le 010 et reçoit le code suivant.
+    rapport = importer_ophtalmologues(
+        [(2, {"code": "010", "nom": "Autre", "prenom": "X"}), (3, {"code": "010", "nom": "Y"})]
+    )
+    assert rapport.erreurs == [{"ligne": 3, "message": "code : 010 déjà en ligne 2."}]
+    importer_ophtalmologues([(2, {"code": "010", "nom": "Autre", "prenom": "X"})])
+    assert Ophtalmologue.objects.get(cle="autre x").code == "010"
+    assert Ophtalmologue.objects.get(cle="ahmed mrad").code == "012"

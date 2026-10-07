@@ -27,9 +27,17 @@ class AccesPrescriptionAdmin(admin.ModelAdmin):
 @admin.register(Ophtalmologue)
 class OphtalmologueAdmin(AvecImport, admin.ModelAdmin):
     imports = ("ophtalmologues",)
-    list_display = ("nom", "telephone", "telephone_2", "ville", "anciens_codes", "est_actif")
+    list_display = (
+        "code",
+        "nom",
+        "telephone",
+        "telephone_2",
+        "ville",
+        "anciens_codes",
+        "est_actif",
+    )
     list_filter = ("est_actif",)
-    search_fields = ("nom", "cle", "telephone", "telephone_2", "anciens_codes")
+    search_fields = ("code", "nom", "cle", "telephone", "telephone_2", "anciens_codes")
 
     # Les ordonnances gardent le nom du médecin : on le désactive au lieu de le supprimer.
     def has_delete_permission(self, request, obj=None):

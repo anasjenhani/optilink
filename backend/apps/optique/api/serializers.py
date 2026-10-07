@@ -139,8 +139,8 @@ class PrescriptionSerializer(serializers.ModelSerializer):
 class OphtalmologueSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ophtalmologue
-        fields = ["id", "nom", "telephone", "ville", "est_actif"]
-        read_only_fields = ["est_actif"]
+        fields = ["id", "code", "nom", "telephone", "ville", "est_actif"]
+        read_only_fields = ["code", "est_actif"]
 
     def validate_nom(self, valeur):
         valeur = " ".join(valeur.split())

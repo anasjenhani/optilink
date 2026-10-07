@@ -73,6 +73,12 @@ class AccesPrescription(models.Model):
         return f"{self.get_action_display()} {self.horodatage:%d/%m/%Y %H:%M}"
 
 
+def prochain_code_ophtalmologue():
+    """Code suivant le plus grand code numérique : 001, 002… (sur 3 chiffres au moins)."""
+    codes = Ophtalmologue.objects.filter(code__regex=r"^[0-9]+$").values_list("code", flat=True)
+    return f"{max((int(c) for c in codes), default=0) + 1:03d}"
+
+
 class Ophtalmologue(models.Model):
     """Ophtalmologiste qui prescrit les ordonnances : une seule fiche par médecin.
 
@@ -80,6 +86,9 @@ class Ophtalmologue(models.Model):
     « BEN-SALAH » sont le même médecin, ce qui empêche les doublons.
     """
 
+    code = models.CharField(
+        max_length=10, unique=True, null=True, blank=True, help_text="Code du médecin : 001, 002…"
+    )
     nom = models.CharField(max_length=200, help_text="Nom affiché, par exemple « Dr Ben Salah ».")
     cle = models.CharField(max_length=200, unique=True, editable=False)
     telephone = models.CharField("téléphone", max_length=20, blank=True)
@@ -108,6 +117,9 @@ class Ophtalmologue(models.Model):
         from .ophtalmologues import cle_ophtalmologue
 
         self.nom = " ".join(self.nom.split())
+        self.code = (self.code or "").strip() or None
+        if self.code is None and self.pk is None:
+            self.code = prochain_code_ophtalmologue()
         self.cle = cle_ophtalmologue(self.nom)
         super().save(*args, **kwargs)
 
