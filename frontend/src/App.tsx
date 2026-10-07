@@ -53,7 +53,7 @@ export function App() {
         position="static"
         color="inherit"
         elevation={0}
-        sx={{ bgcolor: "#f6f5f1", borderBottom: 1, borderColor: "divider" }}
+        sx={{ bgcolor: "#dff3ec", borderBottom: 1, borderColor: "divider" }}
       >
         <Toolbar>
           <Box component="h1" sx={{ m: 0, flexGrow: 1, lineHeight: 0 }}>
