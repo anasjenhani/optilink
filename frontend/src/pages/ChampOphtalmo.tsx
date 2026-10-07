@@ -1,6 +1,6 @@
 import Autocomplete from "@mui/material/Autocomplete";
 import TextField from "@mui/material/TextField";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { ajouterOphtalmologue, chercherOphtalmologues } from "../api/ophtalmologues";
@@ -30,6 +30,8 @@ export function ChampOphtalmo({
   const medecins = useQuery({
     queryKey: ["ophtalmologues", recherche],
     queryFn: () => chercherOphtalmologues(recherche),
+    // Pendant la nouvelle recherche, la liste précédente reste affichée (pas de clignotement).
+    placeholderData: keepPreviousData,
   });
   const ajout = useMutation({
     mutationFn: ajouterOphtalmologue,
