@@ -1,9 +1,13 @@
+import json
+
+from django import forms
 from django.conf import settings
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.contenttypes.models import ContentType
 from django.utils.html import format_html_join
 
+from apps.reseau.models import Magasin
 from core.admin_imports import AvecImport
 
 from .corbeille import RestaurationImpossible, concerne, mettre_a_la_corbeille, restaurer
@@ -17,9 +21,44 @@ from .models import (
 )
 
 
+class AffectationForm(forms.ModelForm):
+    """Portée magasin : la société affichée est celle du magasin, remplie d'office.
+
+    L'écran la remplit dès le choix du magasin (affectations.js). Seul le magasin est
+    enregistré : la société suit donc le magasin s'il change un jour de société.
+    """
+
+    class Meta:
+        model = Affectation
+        fields = ["role", "portee", "magasin", "societe", "debut", "fin"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "magasin" in self.fields:
+            societes = {
+                str(pk): str(societe or "")
+                for pk, societe in Magasin.tous.values_list("pk", "societe_id")
+            }
+            self.fields["magasin"].widget.attrs["data-societes"] = json.dumps(societes)
+        instance = self.instance
+        if instance.portee == Affectation.Portee.MAGASIN and instance.magasin_id:
+            self.initial["societe"] = instance.magasin.societe_id
+
+    def clean(self):
+        donnees = super().clean()
+        if donnees.get("portee") == Affectation.Portee.MAGASIN:
+            donnees["societe"] = None
+            self.instance.societe = None
+        return donnees
+
+
 class AffectationInline(admin.TabularInline):
     model = Affectation
+    form = AffectationForm
     extra = 0
+
+    class Media:
+        js = ("securite/affectations.js",)
 
 
 @admin.register(Utilisateur)
@@ -34,6 +73,7 @@ class UtilisateurAdmin(AvecImport, UserAdmin):
         ("Dates", {"fields": ("last_login", "date_joined")}),
     )
     readonly_fields = ("last_login", "date_joined")
+    list_display = ("username", "first_name", "last_name", "is_active", "is_staff", "last_login")
     list_filter = ("is_active", "is_staff", "is_superuser")
 
     # Un compte garde son historique d'audit : on le désactive, on ne le supprime pas.
