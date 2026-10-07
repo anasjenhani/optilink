@@ -610,7 +610,7 @@ export function Devis({ droits }: { droits: DroitsDevis }) {
                       </TextField>
                       <FormControlLabel
                         control={<Checkbox checked={enCommande} onChange={(e) => setEnCommande(e.target.checked)} />}
-                        label="En commande (verres à commander)"
+                        label="En commande (verres à commander, lunette optique ou applique : péniche)"
                       />
                       {enCommande && (
                         <>
