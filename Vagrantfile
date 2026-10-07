@@ -35,5 +35,5 @@ Vagrant.configure("2") do |config|
   end
 
   # Le code est copié de /vagrant vers /opt/optilink, puis Docker et OptiLink sont installés.
-  config.vm.provision "shell", path: "deploy/qualification/provision.sh", env: { "OPTILINK_IP" => IP }
+  config.vm.provision "shell", path: "scripts/provision-qualification.sh", env: { "OPTILINK_IP" => IP }
 end

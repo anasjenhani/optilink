@@ -1,10 +1,10 @@
 #!/bin/sh
 # États de la base de qualification : photographier la base sous un nom, puis y revenir.
 #
-#   ./etats-base.sh sauver NOM ["commentaire"]   photographie la base actuelle
-#   ./etats-base.sh lister                       liste les états enregistrés
-#   ./etats-base.sh restaurer NOM                remet la base dans l'état NOM
-#   ./etats-base.sh supprimer NOM                efface l'état NOM
+#   ./scripts/etats-base.sh sauver NOM ["commentaire"]   photographie la base actuelle
+#   ./scripts/etats-base.sh lister                       liste les états enregistrés
+#   ./scripts/etats-base.sh restaurer NOM                remet la base dans l'état NOM
+#   ./scripts/etats-base.sh supprimer NOM                efface l'état NOM
 #
 # Les états sont rangés dans ./sauvegardes/etats (NOM.dump et NOM.txt). Avant chaque
 # restauration, l'état courant est d'abord photographié sous « avant-restauration-<date> » :
@@ -12,7 +12,7 @@
 # À lancer dans le dossier optilink du serveur, OptiLink démarré.
 set -eu
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 COMPOSE=${COMPOSE:-"docker compose -f docker-compose.yml -f docker-compose.qualif.yml"}
 DOSSIER=sauvegardes/etats
 
@@ -55,7 +55,7 @@ sauver() {
 
 lister() {
     if ! ls "$DOSSIER"/*.dump > /dev/null 2>&1; then
-        echo "Aucun état enregistré. Pour en créer un : ./etats-base.sh sauver NOM"
+        echo "Aucun état enregistré. Pour en créer un : ./scripts/etats-base.sh sauver NOM"
         return
     fi
     printf '%-38s %-17s %s\n' "NOM" "DATE" "COMMENTAIRE"
@@ -70,7 +70,7 @@ lister() {
 restaurer() {
     nom_valide "$1"
     if [ ! -e "$DOSSIER/$1.dump" ]; then
-        echo "L'état « $1 » n'existe pas. ./etats-base.sh lister montre ceux qui existent." >&2
+        echo "L'état « $1 » n'existe pas. ./scripts/etats-base.sh lister montre ceux qui existent." >&2
         exit 1
     fi
     if [ "${OUI:-}" != "1" ]; then

@@ -183,7 +183,7 @@ Environnement d'essai sur **un seul serveur** (2 cœurs, 4 Go de mémoire, 80 Go
 
 ### Avec Vagrant (VirtualBox ou VMware Workstation)
 
-Le `Vagrantfile` crée la machine virtuelle dans VirtualBox, ou dans VMware Workstation avec `--provider vmware_desktop` (Ubuntu 24.04, 2 cœurs, 4 Go, carte « Bridged » à adresse fixe) et y lance `deploy/qualification/provision.sh`, qui installe Docker depuis son dépôt officiel, génère les secrets (`.env`) et un certificat auto-signé, ouvre le pare-feu (SSH, 80, 443) et démarre OptiLink. Le script se relance sans risque (`vagrant provision`) : secrets et certificat sont gardés. Il sert aussi sur un Ubuntu installé à la main : `sudo OPTILINK_SOURCE=. OPTILINK_IP=192.168.1.50 bash deploy/qualification/provision.sh`.
+Le `Vagrantfile` crée la machine virtuelle dans VirtualBox, ou dans VMware Workstation avec `--provider vmware_desktop` (Ubuntu 24.04, 2 cœurs, 4 Go, carte « Bridged » à adresse fixe) et y lance `scripts/provision-qualification.sh`, qui installe Docker depuis son dépôt officiel, génère les secrets (`.env`) et un certificat auto-signé, ouvre le pare-feu (SSH, 80, 443) et démarre OptiLink. Le script se relance sans risque (`vagrant provision`) : secrets et certificat sont gardés. Il sert aussi sur un Ubuntu installé à la main : `sudo OPTILINK_SOURCE=. OPTILINK_IP=192.168.1.50 bash scripts/provision-qualification.sh`.
 
 1. Sur le PC Windows : `winget install --id Oracle.VirtualBox -e` et `winget install --id Hashicorp.Vagrant -e`, puis redémarrage. Avec VMware Workstation à la place de VirtualBox : `winget install --id Hashicorp.VagrantVMwareUtility -e` et `vagrant plugin install vagrant-vmware-desktop`.
 2. Dans le dossier d'OptiLink : `$env:OPTILINK_IP = "192.168.1.50"` (une adresse libre du réseau du magasin), puis `vagrant up --provider virtualbox`. Vagrant demande sur quelle carte réseau du PC faire le pont.
@@ -194,13 +194,15 @@ Restaurer une sauvegarde : `docker compose -f docker-compose.yml -f docker-compo
 
 ### États de la base pour les essais
 
-`./etats-base.sh` photographie la base sous un nom et la remet dans n'importe quel état enregistré, pour rejouer un essai à partir des mêmes données :
+Tous les scripts à lancer à la main sont rangés dans `scripts/`, chacun expliqué dans `scripts/README.md`.
+
+`./scripts/etats-base.sh` photographie la base sous un nom et la remet dans n'importe quel état enregistré, pour rejouer un essai à partir des mêmes données :
 
 ```bash
-./etats-base.sh sauver avant-essai-caisse "catalogue et 3 clients"
-./etats-base.sh lister
-./etats-base.sh restaurer avant-essai-caisse
-./etats-base.sh supprimer avant-essai-caisse
+./scripts/etats-base.sh sauver avant-essai-caisse "catalogue et 3 clients"
+./scripts/etats-base.sh lister
+./scripts/etats-base.sh restaurer avant-essai-caisse
+./scripts/etats-base.sh supprimer avant-essai-caisse
 ```
 
 Les états vont dans `./sauvegardes/etats`. Une restauration arrête l'application quelques secondes et photographie d'abord l'état courant (`avant-restauration-<date>`), ce qui permet de l'annuler. Les comptes, mots de passe et MFA reviennent eux aussi à l'état restauré.

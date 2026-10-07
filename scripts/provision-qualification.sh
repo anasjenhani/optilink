@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Installe OptiLink en qualification sur Ubuntu 24.04 : appelé par « vagrant up » (Vagrantfile),
-# ou à la main sur un serveur déjà installé : sudo OPTILINK_IP=192.168.1.50 bash provision.sh
+# ou à la main sur un serveur déjà installé : sudo OPTILINK_IP=192.168.1.50 bash scripts/provision-qualification.sh
 # Relançable sans risque : les secrets et le certificat déjà créés sont gardés.
 set -euo pipefail
 
