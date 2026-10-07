@@ -64,8 +64,38 @@ class UtilisateurAdmin(AvecImport, UserAdmin):
         ("Dates", {"fields": ("last_login", "date_joined")}),
     )
     readonly_fields = ("last_login", "date_joined")
-    list_display = ("username", "first_name", "last_name", "is_active", "is_staff", "last_login")
-    list_filter = ("is_active", "is_staff", "is_superuser")
+    list_display = (
+        "username",
+        "first_name",
+        "last_name",
+        "profils",
+        "is_active",
+        "is_staff",
+        "last_login",
+    )
+    list_filter = (
+        "is_active",
+        ("affectations__role", admin.RelatedOnlyFieldListFilter),
+        "is_staff",
+    )
+
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .prefetch_related(
+                "affectations__role", "affectations__magasin", "affectations__societe"
+            )
+        )
+
+    @admin.display(description="profils")
+    def profils(self, utilisateur):
+        """« Vendeur (1, C) » : chaque profil avec les magasins ou sociétés où il s'applique."""
+        perimetres = {}
+        for a in utilisateur.affectations.all():
+            cible = a.magasin.code if a.magasin else a.societe or "tout le réseau"
+            perimetres.setdefault(a.role.name, []).append(str(cible))
+        return " ; ".join(f"{p} ({', '.join(sorted(c))})" for p, c in sorted(perimetres.items()))
 
     # Un compte garde son historique d'audit : on le désactive, on ne le supprime pas.
     def has_delete_permission(self, request, obj=None):

@@ -44,8 +44,13 @@ def test_la_societe_suit_le_magasin_de_l_affectation(creer_utilisateur, client_d
     assert inline.initial["societe"] == tunis.societe_id
 
 
-def test_la_liste_des_utilisateurs_montre_l_etat(creer_utilisateur, client_de):
+def test_la_liste_des_utilisateurs_montre_l_etat_et_les_profils(
+    creer_utilisateur, client_de, tunis
+):
     navigateur = _admin(creer_utilisateur, client_de)
-    Utilisateur.objects.create_user("sabrine", is_active=False)
+    sabrine = Utilisateur.objects.create_user("sabrine", is_active=False)
+    vendeur = Group.objects.get(name="Vendeur")
+    Affectation.objects.create(utilisateur=sabrine, role=vendeur, portee="magasin", magasin=tunis)
     page = navigateur.get("/admin/securite/utilisateur/").content.decode()
     assert "column-is_active" in page and 'alt="False"' in page
+    assert "Vendeur (T01)" in page
