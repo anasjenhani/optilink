@@ -5,6 +5,7 @@ from django.conf import settings
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.contenttypes.models import ContentType
+from django.utils import timezone
 from django.utils.html import format_html_join
 
 from apps.reseau.models import Magasin
@@ -19,6 +20,23 @@ from .models import (
     ModificationDroits,
     Utilisateur,
 )
+from .presence import dernieres_activites
+
+
+class FiltreConnectes(admin.SimpleListFilter):
+    title = "connexion"
+    parameter_name = "connecte"
+
+    def lookups(self, request, model_admin):
+        return [("oui", "Connectés maintenant"), ("non", "Non connectés")]
+
+    def queryset(self, request, queryset):
+        if self.value() not in ("oui", "non"):
+            return queryset
+        connectes = dernieres_activites(queryset.values_list("pk", flat=True))
+        if self.value() == "oui":
+            return queryset.filter(pk__in=connectes)
+        return queryset.exclude(pk__in=connectes)
 
 
 class AffectationForm(forms.ModelForm):
@@ -73,8 +91,47 @@ class UtilisateurAdmin(AvecImport, UserAdmin):
         ("Dates", {"fields": ("last_login", "date_joined")}),
     )
     readonly_fields = ("last_login", "date_joined")
-    list_display = ("username", "first_name", "last_name", "is_active", "is_staff", "last_login")
-    list_filter = ("is_active", "is_staff", "is_superuser")
+    list_display = (
+        "username",
+        "first_name",
+        "last_name",
+        "profils",
+        "connecte",
+        "is_active",
+        "is_staff",
+        "last_login",
+    )
+    list_filter = (
+        FiltreConnectes,
+        "is_active",
+        ("affectations__role", admin.RelatedOnlyFieldListFilter),
+        "is_staff",
+    )
+
+    @admin.display(description="connecté")
+    def connecte(self, utilisateur):
+        heure = dernieres_activites([utilisateur.pk]).get(utilisateur.pk)
+        if heure is None:
+            return "—"
+        return f"oui (vu à {timezone.localtime(heure):%H:%M})"
+
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .prefetch_related(
+                "affectations__role", "affectations__magasin", "affectations__societe"
+            )
+        )
+
+    @admin.display(description="profils")
+    def profils(self, utilisateur):
+        """« Vendeur (1, C) » : chaque profil avec les magasins ou sociétés où il s'applique."""
+        perimetres = {}
+        for a in utilisateur.affectations.all():
+            cible = a.magasin.code if a.magasin else a.societe or "tout le réseau"
+            perimetres.setdefault(a.role.name, []).append(str(cible))
+        return " ; ".join(f"{p} ({', '.join(sorted(c))})" for p, c in sorted(perimetres.items()))
 
     # Un compte garde son historique d'audit : on le désactive, on ne le supprime pas.
     def has_delete_permission(self, request, obj=None):

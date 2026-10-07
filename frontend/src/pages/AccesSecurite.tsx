@@ -125,6 +125,7 @@ function Utilisateurs({ droits }: { droits: DroitsAcces }) {
                   variant={u.actif ? "filled" : "outlined"}
                   label={u.actif ? "Actif" : "Inactif"}
                 />
+                {u.connecte && <Chip size="small" color="info" label="Connecté" sx={{ ml: 0.5 }} />}
               </TableCell>
               <TableCell>
                 <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: "wrap" }}>

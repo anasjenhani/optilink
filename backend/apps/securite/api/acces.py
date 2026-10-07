@@ -25,6 +25,7 @@ from apps.reseau.models import Magasin, Societe
 from ..corbeille import mettre_a_la_corbeille
 from ..journal import journaliser
 from ..models import Affectation, EvenementSecurite, Utilisateur
+from ..presence import est_connecte
 from ..privileges import ADMINISTRATION, CODES, PRIVILEGES
 
 
@@ -250,6 +251,7 @@ class UtilisateurSerializer(serializers.ModelSerializer):
     )
     derniere_connexion = serializers.DateTimeField(source="last_login", read_only=True)
     mfa_active = serializers.SerializerMethodField()
+    connecte = serializers.SerializerMethodField()
     administrateur_technique = serializers.BooleanField(source="is_superuser", read_only=True)
     affectations = AffectationSerializer(many=True, required=False)
 
@@ -265,9 +267,14 @@ class UtilisateurSerializer(serializers.ModelSerializer):
             "mot_de_passe",
             "derniere_connexion",
             "mfa_active",
+            "connecte",
             "administrateur_technique",
             "affectations",
         ]
+
+    def get_connecte(self, utilisateur) -> bool:
+        """A utilisé OptiLink ces dernières minutes (voir apps.securite.presence)."""
+        return est_connecte(utilisateur)
 
     def get_mfa_active(self, utilisateur) -> bool:
         return TOTPDevice.objects.filter(user=utilisateur, confirmed=True).exists()
