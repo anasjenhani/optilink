@@ -8,7 +8,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from apps.reseau.models import Magasin
-from apps.stock.models import Article, MouvementStock, PlageVerre, PrixArticle
+from apps.stock.models import Article, Monture, MouvementStock, PlageVerre, PrixArticle
 
 from .models import (
     PREFIXES,
@@ -192,6 +192,18 @@ def _verifier_peniche(magasin, peniche):
         raise VenteInvalide(f"La péniche {peniche} contient déjà une commande en cours.")
 
 
+def _lunette_a_ranger(article):
+    """Monture de lunette optique ou applique : préparée à l'atelier, elle attend dans une
+    péniche ; la vente est donc une commande. Une lunette solaire se vend tout de suite."""
+    if article.famille != Article.Famille.MONTURE:
+        return False
+    fiche = getattr(article, "monture", None)
+    return fiche is not None and fiche.categorie in (
+        Monture.Categorie.OPTIQUE,
+        Monture.Categorie.APPLIQUE,
+    )
+
+
 @transaction.atomic
 def enregistrer_vente(
     *,
@@ -263,6 +275,12 @@ def enregistrer_vente(
                 )
         elif stocks.get(article.pk, 0) < quantites[article.pk]:
             raise VenteInvalide(f"Stock insuffisant pour {article.reference}.")
+
+    if not commande and any(_lunette_a_ranger(ligne["article"]) for ligne in lignes):
+        raise VenteInvalide(
+            "Une lunette optique ou applique se vend en commande, rangée dans une péniche : "
+            "saisir le numéro de la péniche."
+        )
 
     pays = magasin.pays
     detail = _chiffrer(pays, lignes)
