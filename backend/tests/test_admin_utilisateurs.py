@@ -4,6 +4,7 @@ from django.contrib.auth.models import Group
 
 from apps.reseau.models import Societe
 from apps.securite.models import Affectation, Utilisateur
+from apps.securite.presence import est_connecte
 
 
 def _admin(creer_utilisateur, client_de):
@@ -54,3 +55,17 @@ def test_la_liste_des_utilisateurs_montre_l_etat_et_les_profils(
     page = navigateur.get("/admin/securite/utilisateur/").content.decode()
     assert "column-is_active" in page and 'alt="False"' in page
     assert "Vendeur (T01)" in page
+
+
+def test_utilisateurs_connectes(creer_utilisateur, client_de, tunis):
+    navigateur = _admin(creer_utilisateur, client_de)
+    navigateur.get("/admin/")  # Anas utilise OptiLink : il est connecté.
+    Utilisateur.objects.create_user("sabrine")
+
+    connectes = navigateur.get("/admin/securite/utilisateur/?connecte=oui").context["cl"]
+    assert [u.username for u in connectes.result_list] == ["anas"]
+    page = navigateur.get("/admin/securite/utilisateur/").content.decode()
+    assert "oui (vu à" in page
+
+    navigateur.post("/api/v1/auth/deconnexion/")
+    assert not est_connecte(Utilisateur.objects.get(username="anas"))
