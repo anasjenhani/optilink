@@ -103,6 +103,7 @@ function Utilisateurs({ droits }: { droits: DroitsAcces }) {
         <TableHead>
           <TableRow>
             <TableCell>Utilisateur</TableCell>
+            <TableCell>État</TableCell>
             <TableCell>Profils</TableCell>
             <TableCell>Double authentification</TableCell>
             <TableCell />
@@ -115,8 +116,15 @@ function Utilisateurs({ droits }: { droits: DroitsAcces }) {
                 {[u.prenom, u.nom].filter(Boolean).join(" ") || u.identifiant}
                 <Typography variant="body2" color="text.secondary">
                   {u.identifiant}
-                  {!u.actif && " · désactivé"}
                 </Typography>
+              </TableCell>
+              <TableCell>
+                <Chip
+                  size="small"
+                  color={u.actif ? "success" : "default"}
+                  variant={u.actif ? "filled" : "outlined"}
+                  label={u.actif ? "Actif" : "Inactif"}
+                />
               </TableCell>
               <TableCell>
                 <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: "wrap" }}>
