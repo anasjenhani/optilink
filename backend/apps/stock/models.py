@@ -203,8 +203,21 @@ class Verre(Caracteristiques):
         POLYCARBONATE = "polycarbonate", "Polycarbonate"
         MINERAL = "mineral", "Minéral"
 
+    class Fabrication(models.TextChoices):
+        STOCK = "stock", "Verre de stock fournisseur"
+        PRESCRIPTION = "prescription", "Verre de prescription (RX, importation)"
+
     article = models.OneToOneField(
         Article, on_delete=models.CASCADE, primary_key=True, related_name="verre"
+    )
+    fabrication = models.CharField(
+        max_length=20,
+        choices=Fabrication.choices,
+        default=Fabrication.PRESCRIPTION,
+        help_text=(
+            "Verre sur commande : pris dans le stock du fournisseur, ou fabriqué à la "
+            "prescription. Un verre vendu sur le stock du magasin n'est pas sur commande."
+        ),
     )
     gamme = models.CharField(max_length=100, blank=True, help_text="Nom commercial du verre.")
     geometrie = models.CharField("géométrie", max_length=20, choices=Geometrie.choices)
@@ -218,6 +231,9 @@ class Verre(Caracteristiques):
     photochromique = models.BooleanField(default=False)
     teinte = models.CharField(max_length=60, blank=True)
     diametre = models.PositiveSmallIntegerField("diamètre", null=True, blank=True, help_text="mm")
+    diametre_commercial = models.CharField(
+        "diamètre commercial", max_length=20, blank=True, help_text="65/70, 70/75…"
+    )
 
     class Meta:
         verbose_name = "caractéristiques du verre"
@@ -319,6 +335,74 @@ class PrixArticle(models.Model):
             raise ValidationError(
                 {"prix_vente_ttc": f"{self.pays.devise} : {self.pays.decimales} décimales au plus."}
             )
+
+
+def _puissance(aide):
+    return models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("-40")), MaxValueValidator(Decimal("40"))],
+        help_text=aide,
+    )
+
+
+class PlageVerre(models.Model):
+    """Puissances qu'un verre couvre (sphère et cylindre de début et de fin) et son prix.
+
+    Un verre a souvent plusieurs plages, chacune à son prix : plus la correction est forte,
+    plus le verre est cher. Le prix de la plage remplace celui de l'article à la vente.
+    Le cylindre se compare en valeur absolue (cylindre positif ou négatif).
+    """
+
+    article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name="plages")
+    pays = models.ForeignKey("reseau.Pays", on_delete=models.PROTECT, related_name="+")
+    ordre = models.PositiveSmallIntegerField(default=1)
+    sphere_debut = _puissance("Sphère la plus basse.")
+    sphere_fin = _puissance("Sphère la plus haute.")
+    cylindre_debut = _puissance("Cylindre le plus faible.")
+    cylindre_fin = _puissance("Cylindre le plus fort.")
+    prix_achat_ht = models.DecimalField(
+        "prix d'achat HT",
+        max_digits=14,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    prix_vente_ttc = models.DecimalField(
+        max_digits=14, decimal_places=3, validators=[MinValueValidator(Decimal("0"))]
+    )
+
+    class Meta:
+        ordering = ["article", "ordre", "sphere_debut"]
+        verbose_name = "plage de puissances"
+        verbose_name_plural = "plages de puissances et prix"
+
+    def __str__(self):
+        return (
+            f"{self.article.reference} sph {self.sphere_debut}/{self.sphere_fin} "
+            f"cyl {self.cylindre_debut}/{self.cylindre_fin}"
+        )
+
+    def clean(self):
+        if self.article_id and self.article.famille != Article.Famille.VERRE:
+            raise ValidationError("Les plages de puissances vont avec un verre.")
+        if None not in (self.sphere_debut, self.sphere_fin) and self.sphere_debut > self.sphere_fin:
+            raise ValidationError({"sphere_fin": "La sphère de fin est plus petite que le début."})
+        if None not in (self.cylindre_debut, self.cylindre_fin) and abs(self.cylindre_debut) > abs(
+            self.cylindre_fin
+        ):
+            raise ValidationError(
+                {"cylindre_fin": "Le cylindre de fin est plus faible que le début."}
+            )
+
+    def couvre(self, sphere=None, cylindre=None):
+        """La plage convient à cette correction (une valeur absente ne filtre pas)."""
+        if sphere is not None and not self.sphere_debut <= sphere <= self.sphere_fin:
+            return False
+        return cylindre is None or abs(self.cylindre_debut) <= abs(cylindre) <= abs(
+            self.cylindre_fin
+        )
 
 
 class MouvementStock(models.Model):

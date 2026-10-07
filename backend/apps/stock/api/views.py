@@ -1,5 +1,6 @@
 import uuid
 from datetime import date
+from decimal import Decimal, InvalidOperation
 
 from django.db.models import (
     CharField,
@@ -16,12 +17,15 @@ from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
-from rest_framework import mixins, viewsets
+from rest_framework import mixins, serializers, viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.response import Response
 
 from apps.reseau.models import Magasin
 
 from ..models import Article, MouvementStock, PrixArticle
+from ..recherche_verres import rechercher_verres
 from .serializers import ArticleSerializer, MouvementStockSerializer
 
 # Le vendeur choisit d'abord ce qu'il vend ; chaque type correspond à des familles d'articles.
@@ -33,6 +37,66 @@ TYPES_DE_VENTE = {
     "lentille": Q(famille=Article.Famille.LENTILLE) | Q(famille=Article.Famille.DIVERS),
     "produit": Q(famille=Article.Famille.DIVERS),
 }
+
+
+class LigneRechercheVerreSerializer(serializers.Serializer):
+    article = serializers.UUIDField()
+    plage = serializers.IntegerField(
+        allow_null=True, help_text="Plage de puissances à envoyer avec la ligne de vente."
+    )
+    reference = serializers.CharField()
+    designation = serializers.CharField()
+    fournisseur = serializers.CharField()
+    sphere_debut = serializers.DecimalField(max_digits=5, decimal_places=2, allow_null=True)
+    sphere_fin = serializers.DecimalField(max_digits=5, decimal_places=2, allow_null=True)
+    cylindre_debut = serializers.DecimalField(max_digits=5, decimal_places=2, allow_null=True)
+    cylindre_fin = serializers.DecimalField(max_digits=5, decimal_places=2, allow_null=True)
+    diametre = serializers.CharField(allow_blank=True)
+    indice = serializers.DecimalField(max_digits=4, decimal_places=3, allow_null=True)
+    prix_vente_ttc = serializers.DecimalField(max_digits=14, decimal_places=3, allow_null=True)
+    quantite = serializers.IntegerField(
+        allow_null=True, help_text="Stock du magasin (verres du magasin seulement)."
+    )
+
+
+class RechercheVerresSerializer(serializers.Serializer):
+    stock_fournisseur = LigneRechercheVerreSerializer(many=True)
+    prescription = LigneRechercheVerreSerializer(many=True)
+    magasin = LigneRechercheVerreSerializer(many=True)
+
+
+class _RechercheVerres:
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("magasin", OpenApiTypes.UUID, required=True),
+            OpenApiParameter("designation", OpenApiTypes.STR, description="Mots de la désignation"),
+            OpenApiParameter("sphere", OpenApiTypes.DECIMAL, description="Sphère de l'œil"),
+            OpenApiParameter("cylindre", OpenApiTypes.DECIMAL, description="Cylindre de l'œil"),
+        ],
+        responses=RechercheVerresSerializer,
+    )
+    @action(detail=False, url_path="recherche-verres")
+    def recherche_verres(self, request):
+        """Verres de stock fournisseur, de prescription et du magasin, plage par plage."""
+        parametres = request.query_params
+        try:
+            magasin = Magasin.objects.select_related("pays").get(
+                public_id=uuid.UUID(parametres.get("magasin", ""))
+            )
+        except (ValueError, Magasin.DoesNotExist):
+            raise ValidationError({"magasin": "Magasin inconnu."}) from None
+        correction = {}
+        for nom in ("sphere", "cylindre"):
+            texte = parametres.get(nom, "").strip().replace(",", ".")
+            if texte:
+                try:
+                    correction[nom] = Decimal(texte)
+                except InvalidOperation:
+                    raise ValidationError({nom: "Nombre attendu."}) from None
+        resultat = rechercher_verres(
+            magasin, texte=parametres.get("designation", "").strip(), **correction
+        )
+        return Response(RechercheVerresSerializer(resultat).data)
 
 
 @extend_schema_view(
@@ -67,7 +131,7 @@ TYPES_DE_VENTE = {
         ]
     )
 )
-class ArticleViewSet(viewsets.ReadOnlyModelViewSet):
+class ArticleViewSet(_RechercheVerres, viewsets.ReadOnlyModelViewSet):
     """Catalogue ; avec ``?magasin=``, chaque article porte son stock dans ce magasin."""
 
     serializer_class = ArticleSerializer

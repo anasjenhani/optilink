@@ -1,4 +1,5 @@
 import ContentCopy from "@mui/icons-material/ContentCopy";
+import Search from "@mui/icons-material/Search";
 import Alert from "@mui/material/Alert";
 import Autocomplete from "@mui/material/Autocomplete";
 import Box from "@mui/material/Box";
@@ -40,6 +41,7 @@ import {
   type Prescription,
 } from "../api/clients";
 import { enUnites, formater, type Monnaie } from "../api/monnaie";
+import { RechercheVerres } from "./RechercheVerres";
 
 /** Article placé dans une lunette (monture, verre d'un œil ou supplément). */
 export type ArticleLunette = {
@@ -80,7 +82,8 @@ function pres(c: Correction) {
   return { ...c, sphere: (sphere > 0 ? "+" : "") + sphere.toFixed(2) };
 }
 
-export const signe = (valeur: string) => (valeur && Number(valeur) > 0 && !valeur.startsWith("+") ? `+${valeur}` : valeur);
+export const signe = (valeur: string) =>
+  valeur && Number(valeur) > 0 && !valeur.startsWith("+") ? `+${valeur}` : valeur;
 const ou = (valeur: string) => (valeur.trim() === "" ? null : valeur.trim());
 
 /** Code-barres tapé ou lu à la douchette (qui finit par Entrée) : l'article est choisi aussitôt. */
@@ -316,6 +319,7 @@ function Verre({
   onRemise,
   peutRemiser,
   copier,
+  correction,
 }: {
   titre: string;
   magasin: string;
@@ -328,8 +332,11 @@ function Verre({
   onRemise: (r: string) => void;
   peutRemiser: boolean;
   copier?: () => void;
+  /** Correction de l'œil : la recherche ne garde que les plages de verres qui la couvrent. */
+  correction: Correction;
 }) {
   const [ajout, setAjout] = useState<Article | null>(null);
+  const [recherche, setRecherche] = useState(false);
   const unites = (a: Article | null) => (a ? enUnites(a.prix_vente_ttc, monnaie.decimales) : 0);
   const prixTraitement = supplements.reduce((s, a) => s + unites(a), 0);
   const total = Math.round((unites(verre) + prixTraitement) * (1 - Number(remise || 0) / 100));
@@ -345,6 +352,11 @@ function Verre({
             onChange={onVerre}
             monnaie={monnaie}
           />
+          <Tooltip title="Recherche des verres : stock fournisseur, prescription et stock du magasin">
+            <IconButton aria-label={`Rechercher le ${titre.toLowerCase()}`} onClick={() => setRecherche(true)}>
+              <Search />
+            </IconButton>
+          </Tooltip>
           {copier && (
             <Tooltip title="Même verre et mêmes suppléments que l'œil droit">
               <IconButton aria-label="Copier le verre droit" onClick={copier}>
@@ -385,7 +397,21 @@ function Verre({
           {peutRemiser && <Champ label="Rem. %" valeur={remise} onChange={onRemise} largeur={80} />}
           <Champ label="Total" valeur={formater(total, monnaie)} largeur={128} lectureSeule />
         </Stack>
+        {verre?.plage && (
+          <Typography variant="caption" color="text.secondary">
+            {verre.description}
+          </Typography>
+        )}
       </Stack>
+      <RechercheVerres
+        ouvert={recherche}
+        titre={titre}
+        magasin={magasin}
+        monnaie={monnaie}
+        correction={{ sphere: correction.sphere, cylindre: correction.cylindre }}
+        onChoisir={onVerre}
+        onFerme={() => setRecherche(false)}
+      />
     </Cadre>
   );
 }
@@ -696,6 +722,7 @@ export function FicheLunette({
           remise={remiseD}
           onRemise={setRemiseD}
           peutRemiser={droits.remise}
+          correction={od}
         />
         <Verre
           titre="Verre gauche"
@@ -709,6 +736,7 @@ export function FicheLunette({
           onRemise={setRemiseG}
           peutRemiser={droits.remise}
           copier={verreD ? copierVerreDroit : undefined}
+          correction={og}
         />
       </Stack>
 
