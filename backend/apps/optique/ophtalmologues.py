@@ -7,12 +7,16 @@ from django.core.exceptions import ValidationError
 
 
 def cle_ophtalmologue(nom):
-    """« Dr. Ben-Salah » → « ben salah » : sans titre, accents, casse ni ponctuation."""
+    """« Dr. Ben-Salah Ali » → « ali ben salah » : sans titre, accents, casse ni ponctuation.
+
+    Les mots sont triés : « Nasri Dhahak Henda » et « Dhahak Nasri Henda », ou un nom et un
+    prénom inversés, sont le même médecin.
+    """
     texte = unicodedata.normalize("NFKD", str(nom or "")).encode("ascii", "ignore").decode()
     mots = re.sub(r"[^a-z0-9]+", " ", texte.lower()).split()
     while mots and mots[0] in {"dr", "docteur", "doctor", "pr", "professeur"}:
         mots.pop(0)
-    return " ".join(mots)
+    return " ".join(sorted(mots))
 
 
 def ophtalmologue_existant(nom):

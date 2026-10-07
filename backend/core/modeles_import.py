@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from apps.achats.imports import COLONNES_FOURNISSEURS, COLONNES_RECEPTIONS
 from apps.crm.imports import COLONNES_CLIENTS
+from apps.optique.imports import COLONNES_OPHTALMOLOGUES
 from apps.securite.imports import COLONNES_UTILISATEURS
 from apps.stock.imports import COLONNES_CATALOGUE, COLONNES_STOCK, COLONNES_VERRES
 
@@ -260,6 +261,33 @@ MODELES = {
                 "quantite": "1",
                 "prix_achat_ht": "180,000",
             },
+        ],
+    ),
+    "ophtalmologues": Modele(
+        titre="Ophtalmologistes",
+        colonnes=COLONNES_OPHTALMOLOGUES,
+        obligatoires={"nom"},
+        aide={
+            "ancien_code": "Code du médecin dans l'ancien logiciel (CodeMedecin), gardé pour "
+            "reprendre ses anciennes ordonnances.",
+            "nom": "Nom de famille (ou nom complet). Un médecin déjà dans la liste, même écrit "
+            "autrement (Dr, accents, majuscules, nom et prénom inversés), n'est pas recréé : "
+            "sa fiche est complétée.",
+            "prenom": "Prénom.",
+            "telephone": "Téléphone du cabinet.",
+            "telephone_2": "Portable.",
+            "ville": "Ville (Tunis, Ariana…).",
+        },
+        exemples=[
+            {
+                "ancien_code": "001",
+                "nom": "Belhaj",
+                "prenom": "Taieb",
+                "telephone": "71860266",
+                "telephone_2": "24344866",
+                "adresse": "Clinique du Lac",
+                "ville": "Tunis",
+            }
         ],
     ),
     "utilisateurs": Modele(
