@@ -102,3 +102,15 @@ test("nouveau client : la fiche s'ouvre ; sans le droit, seul le client de passa
   fireEvent.click(screen.getByRole("button", { name: "Client de passage" }));
   expect(screen.getByRole("button", { name: /Produits et accessoires/ })).toBeInTheDocument();
 });
+
+test("lunettes optiques : la péniche se saisit dès l'ouverture de la fiche lunette", async () => {
+  const appels = simuler();
+  afficher();
+  fireEvent.change(screen.getByLabelText("Filtrer N° Fiche"), { target: { value: "42" } });
+  await waitFor(() => expect(appels.some((a) => a.url.includes("fiche=42"))).toBe(true));
+  fireEvent.click((await screen.findByText("BEN ALI SAMI")).closest("tr")!);
+
+  fireEvent.click(screen.getByRole("button", { name: /Lunettes optiques/ }));
+  expect(await screen.findByLabelText(/Péniche/)).toBeInTheDocument();
+  expect(screen.getByRole("checkbox", { name: /Commande/ })).toBeChecked();
+});

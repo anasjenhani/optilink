@@ -143,11 +143,14 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
     Math.round(unites(l.article.prix_vente_ttc) * l.quantite * (1 - Number(l.remise_pct || 0) / 100));
   const total = panier.reduce((somme, l) => somme + totalLigne(l), 0);
   // Verres commandés au fournisseur, ou lunette optique ou applique à préparer : commande et péniche.
-  const lunetteARanger = panier.some(
-    (l) =>
-      l.article.famille === "monture" &&
-      ["optique", "applique"].includes(String(l.article.caracteristiques?.categorie ?? "")),
-  );
+  // Vente « Lunettes optiques » : la péniche se saisit dès le départ, avant même la première lunette.
+  const lunetteARanger =
+    ficheLunette ||
+    panier.some(
+      (l) =>
+        l.article.famille === "monture" &&
+        ["optique", "applique"].includes(String(l.article.caracteristiques?.categorie ?? "")),
+    );
   const commandeImposee = lunetteARanger || panier.some((l) => l.article.sur_commande);
   const commande = enCommande || commandeImposee;
   const montantAcompte = Math.min(unites(acompte || "0"), total);
