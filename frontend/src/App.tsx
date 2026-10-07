@@ -49,7 +49,12 @@ export function App() {
 
   return (
     <>
-      <AppBar position="static" color="inherit" elevation={0} sx={{ borderBottom: 1, borderColor: "divider" }}>
+      <AppBar
+        position="static"
+        color="inherit"
+        elevation={0}
+        sx={{ bgcolor: "#f1e3b8", borderBottom: 1, borderColor: "divider" }}
+      >
         <Toolbar>
           <Box component="h1" sx={{ m: 0, flexGrow: 1, lineHeight: 0 }}>
             <Box component="img" src={logo} alt="OptiLink" sx={{ height: 44 }} />
