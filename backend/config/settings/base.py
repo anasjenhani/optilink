@@ -212,6 +212,13 @@ SPECTACULAR_SETTINGS = {
 
 # Sécurité : MFA, sessions et comptes.
 MFA_OBLIGATOIRE = env_bool("MFA_OBLIGATOIRE", True)
+# Profils qui exigent le code de l'application d'authentification, en plus des comptes qui
+# ouvrent /admin/ (toujours exigé). Les autres profils : mot de passe seul.
+MFA_PROFILS = [
+    p.strip()
+    for p in env("MFA_PROFILS", "Administrateur Global,Administrateur").split(",")
+    if p.strip()
+]
 OTP_TOTP_ISSUER = "OptiLink"
 COMPTES_INACTIFS_JOURS = int(env("COMPTES_INACTIFS_JOURS", "90"))
 # Délai de grâce de la corbeille : un élément supprimé se restaure pendant ce nombre de jours.
