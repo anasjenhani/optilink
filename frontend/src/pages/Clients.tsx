@@ -29,6 +29,7 @@ import {
 } from "../api/clients";
 import { listerMagasins } from "../api/magasins";
 import { listerOrganismes } from "../api/prisesEnCharge";
+import { ChampOphtalmo } from "./ChampOphtalmo";
 import { ChampVille } from "./ChampVille";
 
 type Droits = {
@@ -321,12 +322,7 @@ function NouvelleOrdonnance({ client, onSaisie }: { client: Client; onSaisie: ()
         />
       </Stack>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-        <TextField
-          size="small"
-          label="Prescripteur"
-          value={prescripteur}
-          onChange={(e) => setPrescripteur(e.target.value)}
-        />
+        <ChampOphtalmo valeur={prescripteur} changer={setPrescripteur} label="Prescripteur" largeur={260} />
         <TextField
           size="small"
           label={libelleIdentifiant}

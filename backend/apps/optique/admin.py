@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AccesPrescription
+from .models import AccesPrescription, Ophtalmologue
 
 # Les ordonnances elles-mêmes ne sont pas dans l'administration : elles ne se lisent que dans
 # l'application, où chaque consultation est journalisée.
@@ -18,5 +18,16 @@ class AccesPrescriptionAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
 
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Ophtalmologue)
+class OphtalmologueAdmin(admin.ModelAdmin):
+    list_display = ("nom", "telephone", "ville", "est_actif")
+    list_filter = ("est_actif",)
+    search_fields = ("nom", "cle", "telephone")
+
+    # Les ordonnances gardent le nom du médecin : on le désactive au lieu de le supprimer.
     def has_delete_permission(self, request, obj=None):
         return False
