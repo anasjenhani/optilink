@@ -48,6 +48,11 @@ class LigneSaisieSerializer(serializers.Serializer):
     )
     numero_lot = serializers.CharField(required=False, allow_blank=True, max_length=40)
     date_peremption = serializers.DateField(required=False, allow_null=True)
+    plage = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="Verre : plage de puissances choisie dans la recherche ; son prix s'applique.",
+    )
 
 
 def _mesure_mm(aide):

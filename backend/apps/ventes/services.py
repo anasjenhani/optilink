@@ -8,7 +8,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from apps.reseau.models import Magasin
-from apps.stock.models import Article, MouvementStock, PrixArticle
+from apps.stock.models import Article, MouvementStock, PlageVerre, PrixArticle
 
 from .models import (
     PREFIXES,
@@ -71,6 +71,8 @@ def _chiffrer(pays, lignes):
             pays=pays, article__in=a_tarifer
         )
     }
+    # Un verre choisi dans une plage de puissances prend le prix de la plage.
+    plages = PlageVerre.objects.in_bulk([ligne["plage"] for ligne in lignes if ligne.get("plage")])
     detail = []
     for ligne in lignes:
         article, quantite = ligne["article"], ligne["quantite"]
@@ -81,6 +83,14 @@ def _chiffrer(pays, lignes):
             if tarif is None:
                 raise VenteInvalide(f"L'article {article.reference} n'a pas de prix en {pays}.")
             prix, taux = tarif.prix_vente_ttc, tarif.tva.taux
+            if ligne.get("plage"):
+                plage = plages.get(ligne["plage"])
+                if plage is None or plage.article_id != article.pk or plage.pays_id != pays.pk:
+                    raise VenteInvalide(
+                        f"La plage de puissances choisie ne correspond pas au verre "
+                        f"{article.reference}."
+                    )
+                prix = plage.prix_vente_ttc
         remise = ligne.get("remise_pct") or Decimal("0")
         total_ttc = arrondir(prix * quantite * (1 - remise / 100), pays.decimales)
         total_ht = arrondir(total_ttc / (1 + taux / 100), pays.decimales)
