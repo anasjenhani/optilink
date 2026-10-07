@@ -96,6 +96,21 @@ class ClientSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if self.instance is not None:
             attrs.pop("magasin_origine", None)
+        # Nom, prénom et téléphone obligatoires à la création ; une fiche reprise de l'ancien
+        # logiciel sans téléphone reste modifiable, mais un téléphone ne s'efface plus.
+        manquants = {}
+        for champ, libelle in (("nom", "Le nom"), ("prenom", "Le prénom")):
+            if champ in attrs:
+                attrs[champ] = attrs[champ].strip()
+                if not attrs[champ]:
+                    manquants[champ] = f"{libelle} est obligatoire."
+        if "telephone" in attrs:
+            attrs["telephone"] = attrs["telephone"].strip()
+        telephone = attrs.get("telephone", getattr(self.instance, "telephone", ""))
+        if not telephone and (self.instance is None or self.instance.telephone):
+            manquants["telephone"] = "Le numéro de téléphone est obligatoire."
+        if manquants:
+            raise serializers.ValidationError(manquants)
         if "matricule_fiscal" in attrs:
             attrs["matricule_fiscal"] = attrs["matricule_fiscal"].strip().upper()
         if attrs.get("ville"):

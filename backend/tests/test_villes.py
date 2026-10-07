@@ -27,7 +27,12 @@ def test_la_liste_de_depart_et_l_api(affecter, client_de, tunis):
 
 def test_la_ville_d_un_client_vient_de_la_liste(affecter, client_de, tunis, reseau):
     api = client_de(affecter("vendeur", *CLIENTS, portee="reseau"))
-    corps = {"nom": "Ben Salah", "prenom": "Amel", "magasin_origine": str(tunis.public_id)}
+    corps = {
+        "nom": "Ben Salah",
+        "prenom": "Amel",
+        "telephone": "98000000",
+        "magasin_origine": str(tunis.public_id),
+    }
     cree = api.post("/api/v1/clients/", {**corps, "ville": "ariena"})
     assert cree.status_code == 400 and "liste des villes" in cree.json()["ville"][0]
     cree = api.post("/api/v1/clients/", {**corps, "ville": "  l aouina "})
@@ -36,6 +41,7 @@ def test_la_ville_d_un_client_vient_de_la_liste(affecter, client_de, tunis, rese
     lille = {
         "nom": "Durand",
         "prenom": "Paul",
+        "telephone": "0320000000",
         "ville": "Lille",
         "magasin_origine": str(reseau["lille"].public_id),
     }

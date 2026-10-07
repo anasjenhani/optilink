@@ -29,6 +29,14 @@ class ClientAdmin(AvecListeVilles, AvecImport, admin.ModelAdmin):
         "matricule_fiscal",
     )
 
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        # Nouveau client : nom, prénom et téléphone obligatoires (les fiches reprises de
+        # l'ancien logiciel sans téléphone restent modifiables).
+        if obj is None and "telephone" in form.base_fields:
+            form.base_fields["telephone"].required = True
+        return form
+
     # Un client garde son historique d'achats et ses ordonnances : on le désactive.
     def has_delete_permission(self, request, obj=None):
         return False

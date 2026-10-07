@@ -142,7 +142,16 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
   const totalLigne = (l: Ligne) =>
     Math.round(unites(l.article.prix_vente_ttc) * l.quantite * (1 - Number(l.remise_pct || 0) / 100));
   const total = panier.reduce((somme, l) => somme + totalLigne(l), 0);
-  const commandeImposee = panier.some((l) => l.article.sur_commande);
+  // Verres commandés au fournisseur, ou lunette optique ou applique à préparer : commande et péniche.
+  // Vente « Lunettes optiques » : la péniche se saisit dès le départ, avant même la première lunette.
+  const lunetteARanger =
+    ficheLunette ||
+    panier.some(
+      (l) =>
+        l.article.famille === "monture" &&
+        ["optique", "applique"].includes(String(l.article.caracteristiques?.categorie ?? "")),
+    );
+  const commandeImposee = lunetteARanger || panier.some((l) => l.article.sur_commande);
   const commande = enCommande || commandeImposee;
   const montantAcompte = Math.min(unites(acompte || "0"), total);
 
@@ -528,9 +537,11 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
               />
             }
             label={
-              commandeImposee
+              panier.some((l) => l.article.sur_commande)
                 ? "Commande : verres commandés au fournisseur, solde à la livraison"
-                : "Commande : acompte maintenant, solde à la livraison"
+                : lunetteARanger
+                  ? "Commande : lunette optique ou applique rangée dans une péniche, solde à la livraison"
+                  : "Commande : acompte maintenant, solde à la livraison"
             }
           />
           {commande && (

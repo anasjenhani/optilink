@@ -110,11 +110,17 @@ export function FicheClient({ client, onEnregistre }: { client?: Client; onEnreg
   });
   const organismes = useQuery({ queryKey: ["organismes"], queryFn: listerOrganismes });
   const choisirMagasin = useCallback((id: string) => setSaisie((s) => ({ ...s, magasin_origine: id })), []);
-  const champ = (nom: Exclude<keyof SaisieFiche, "accepte_relances" | "civilite">, label: string, type = "text") => (
+  const champ = (
+    nom: Exclude<keyof SaisieFiche, "accepte_relances" | "civilite">,
+    label: string,
+    type = "text",
+    requis = false,
+  ) => (
     <TextField
       size="small"
       type={type}
       label={label}
+      required={requis}
       value={saisie[nom]}
       onChange={(e) => setSaisie({ ...saisie, [nom]: e.target.value })}
       slotProps={type === "date" ? { inputLabel: { shrink: true } } : undefined}
@@ -141,12 +147,12 @@ export function FicheClient({ client, onEnregistre }: { client?: Client; onEnreg
           <MenuItem value="mme">Mme</MenuItem>
           <MenuItem value="m">M.</MenuItem>
         </TextField>
-        {champ("nom", "Nom")}
-        {champ("prenom", "Prénom")}
+        {champ("nom", "Nom", "text", true)}
+        {champ("prenom", "Prénom", "text", true)}
         {champ("date_naissance", "Date de naissance", "date")}
       </Stack>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-        {champ("telephone", "Téléphone 1")}
+        {champ("telephone", "Téléphone 1", "text", !client)}
         {champ("telephone_2", "Téléphone 2")}
         {champ("email", "E-mail")}
       </Stack>

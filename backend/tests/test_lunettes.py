@@ -7,7 +7,7 @@ import pytest
 
 from apps.crm.models import Client
 from apps.optique.models import Prescription
-from apps.stock.models import Article, PrixArticle
+from apps.stock.models import Article, Monture, PrixArticle
 
 from .conftest import tva
 from .test_commandes import peniche, verre  # noqa: F401  (fixture)
@@ -256,3 +256,44 @@ def test_lentilles_droite_gauche_avec_lot_et_peremption(opticien, client_de, tun
     refus = api.post("/api/v1/ventes/", corps, format="json")
     assert refus.status_code == 400
     assert "ordonnance de lentilles" in refus.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    ("categorie", "attendu"), [("optique", 400), ("applique", 400), ("solaire", 201)]
+)
+def test_une_lunette_optique_ou_applique_va_dans_une_peniche(
+    opticien, client_de, tunis, monture, categorie, attendu
+):
+    Monture.objects.create(article=monture, categorie=categorie)
+    api = client_de(opticien)
+    vente = {
+        "magasin": str(tunis.public_id),
+        "lignes": [{"article": str(monture.public_id), "quantite": 1}],
+        "paiements": [{"mode": "especes", "montant": "289.500"}],
+    }
+    reponse = api.post("/api/v1/ventes/", vente, format="json")
+    assert reponse.status_code == attendu, reponse.json()
+    if attendu == 400:
+        assert "péniche" in str(reponse.json())
+        commande = {**vente, "commande": True, "peniche": peniche()}
+        assert api.post("/api/v1/ventes/", commande, format="json").status_code == 201
+
+
+def test_une_vente_contient_plusieurs_lunettes(
+    opticien,
+    client_de,
+    tunis,
+    monture,
+    verre,  # noqa: F811
+    antireflet,
+    amel,
+):
+    prescription = ordonnance(amel, tunis, opticien)
+    corps = saisie(tunis, amel, monture, verre, antireflet, prescription)
+    corps["lunettes"].append(dict(corps["lunettes"][0]))
+    corps["lignes"] += [
+        {**ligne, "lunette": 1} for ligne in corps["lignes"] if ligne["role"] != "monture"
+    ]
+    reponse = client_de(opticien).post("/api/v1/ventes/", corps, format="json")
+    assert reponse.status_code == 201, reponse.json()
+    assert len(reponse.json()["lunettes"]) == 2

@@ -83,10 +83,12 @@ test("notation d'un œil sans cylindre", () => {
 test("crée un client professionnel avec sa société", async () => {
   const { corps } = afficher(false);
   fireEvent.click(screen.getByRole("button", { name: "Nouveau client" }));
-  const remplir = (label: string, valeur: string) =>
+  const remplir = (label: string | RegExp, valeur: string) =>
     fireEvent.change(screen.getByLabelText(label), { target: { value: valeur } });
-  remplir("Nom", "Ben Salah");
-  remplir("Prénom", "Karim");
+  // Champs obligatoires : leur libellé porte un astérisque.
+  remplir(/^Nom \*/, "Ben Salah");
+  remplir(/^Prénom \*/, "Karim");
+  remplir(/^Téléphone 1 \*/, "71123456");
   remplir("Téléphone 2", "98123456");
   remplir("Adresse", "12 rue de Marseille");
   expect(screen.queryByLabelText("Matricule fiscal")).not.toBeInTheDocument();
@@ -97,7 +99,13 @@ test("crée un client professionnel avec sa société", async () => {
   expect(await screen.findByText("Optique Services SARL · MF 1234567/A/M/000")).toBeInTheDocument();
   expect(corps[0]).toMatchObject({
     methode: "POST",
-    saisie: { nom: "Ben Salah", telephone_2: "98123456", societe: "Optique Services SARL", date_naissance: null },
+    saisie: {
+      nom: "Ben Salah",
+      telephone: "71123456",
+      telephone_2: "98123456",
+      societe: "Optique Services SARL",
+      date_naissance: null,
+    },
   });
 });
 
