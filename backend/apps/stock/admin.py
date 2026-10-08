@@ -6,14 +6,20 @@ from core.admin_imports import AvecImport
 from .admin_saisie import saisir_inventaire, saisir_transfert
 from .models import (
     Article,
+    CouleurVerre,
+    DiametreVerre,
+    FamilleVerre,
     Inventaire,
     Lentille,
     LigneInventaire,
     LigneTransfert,
+    MarqueMonture,
+    MatiereVerre,
     Monture,
     MouvementStock,
     PlageVerre,
     PrixArticle,
+    SousFamilleVerre,
     TransfertStock,
     Verre,
 )
@@ -42,7 +48,9 @@ class VerreInline(admin.StackedInline):
         "traitements",
         ("photochromique", "teinte", "diametre"),
         ("fabrication", "diametre_commercial"),
+        ("famille_verre", "sous_famille", "couleur"),
     )
+    autocomplete_fields = ("famille_verre", "sous_famille", "couleur")
 
 
 class PlageVerreInline(admin.TabularInline):
@@ -204,3 +212,70 @@ class InventaireAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+# Listes de référence des verres et des montures : on désactive au lieu de supprimer (les
+# verres déjà créés gardent leur famille, leur sous-famille et leur couleur).
+class _ListeAdmin(AvecImport, admin.ModelAdmin):
+    list_filter = ("est_actif",)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(MarqueMonture)
+class MarqueMontureAdmin(_ListeAdmin):
+    imports = ("marques_montures",)
+    list_display = ("code", "libelle", "est_actif")
+    search_fields = ("code", "libelle")
+
+
+@admin.register(MatiereVerre)
+class MatiereVerreAdmin(_ListeAdmin):
+    imports = ("matieres_verres",)
+    list_display = ("code", "libelle", "est_actif")
+    search_fields = ("code", "libelle")
+
+
+class SousFamilleInline(admin.TabularInline):
+    model = SousFamilleVerre
+    fields = ("code", "libelle", "foyer", "est_actif")
+    extra = 0
+    show_change_link = True
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(FamilleVerre)
+class FamilleVerreAdmin(_ListeAdmin):
+    imports = ("familles_verres",)
+    list_display = ("code", "libelle", "fournisseur", "foyer", "est_actif")
+    list_filter = ("est_actif", "foyer", "fournisseur")
+    search_fields = ("code", "libelle")
+    inlines = [SousFamilleInline]
+
+
+@admin.register(SousFamilleVerre)
+class SousFamilleVerreAdmin(_ListeAdmin):
+    imports = ("sous_familles_verres",)
+    list_display = ("code", "libelle", "famille", "foyer", "est_actif")
+    list_filter = ("est_actif", "foyer", "famille__fournisseur")
+    search_fields = ("code", "libelle", "famille__libelle")
+    autocomplete_fields = ("famille",)
+
+
+@admin.register(CouleurVerre)
+class CouleurVerreAdmin(_ListeAdmin):
+    imports = ("couleurs_verres",)
+    list_display = ("code", "libelle", "fournisseur", "famille_couleur", "est_actif")
+    list_filter = ("est_actif", "famille_couleur", "fournisseur")
+    search_fields = ("code", "libelle")
+
+
+@admin.register(DiametreVerre)
+class DiametreVerreAdmin(_ListeAdmin):
+    imports = ("diametres_verres",)
+    list_display = ("code", "diametre_commercial", "diametre_reel", "fournisseur", "est_actif")
+    list_filter = ("est_actif", "fournisseur")
+    search_fields = ("code", "diametre_commercial")
