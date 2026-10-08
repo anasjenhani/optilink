@@ -234,6 +234,15 @@ class Verre(Caracteristiques):
     diametre_commercial = models.CharField(
         "diamètre commercial", max_length=20, blank=True, help_text="65/70, 70/75…"
     )
+    famille_verre = models.ForeignKey(
+        "FamilleVerre", on_delete=models.PROTECT, null=True, blank=True, related_name="verres"
+    )
+    sous_famille = models.ForeignKey(
+        "SousFamilleVerre", on_delete=models.PROTECT, null=True, blank=True, related_name="verres"
+    )
+    couleur = models.ForeignKey(
+        "CouleurVerre", on_delete=models.PROTECT, null=True, blank=True, related_name="verres"
+    )
 
     class Meta:
         verbose_name = "caractéristiques du verre"
@@ -241,6 +250,21 @@ class Verre(Caracteristiques):
 
     def __str__(self):
         return str(self.article)
+
+    def clean(self):
+        super().clean()
+        if self.sous_famille_id:
+            if self.famille_verre_id is None:
+                self.famille_verre = self.sous_famille.famille
+            elif self.sous_famille.famille_id != self.famille_verre_id:
+                raise ValidationError(
+                    {"sous_famille": "Cette sous-famille n'appartient pas à la famille choisie."}
+                )
+        fournisseur = self.article.fournisseur_id if self.article_id else None
+        for champ in ("famille_verre", "couleur"):
+            ref = getattr(self, champ)
+            if ref is not None and fournisseur and ref.fournisseur_id not in (None, fournisseur):
+                raise ValidationError({champ: f"{ref} est chez un autre fournisseur que le verre."})
 
 
 class Lentille(Caracteristiques):
@@ -619,3 +643,129 @@ def stock_disponible(magasin, article):
         total=Sum("quantite")
     )["total"]
     return total or 0
+
+
+# Listes de référence des verres et des montures (tables de l'ancien logiciel : familles,
+# sous-familles, couleurs, diamètres, matières, marques de monture). Un verre se choisit en
+# descendant : fournisseur → famille → sous-famille, puis couleur et diamètre du fournisseur.
+
+
+class _Reference(models.Model):
+    code = models.CharField(
+        max_length=20, unique=True, help_text="Code (repris de l'ancien logiciel)."
+    )
+    est_actif = models.BooleanField("actif", default=True)
+
+    class Meta:
+        abstract = True
+
+
+class Foyer(models.TextChoices):
+    UNIFOCAL = "unifocal", "Unifocal"
+    BIFOCAL = "bifocal", "Bifocal"
+    PROGRESSIF = "progressif", "Progressif"
+
+
+class MarqueMonture(_Reference):
+    libelle = models.CharField("libellé", max_length=100, unique=True)
+
+    class Meta:
+        ordering = ["libelle"]
+        verbose_name = "marque de monture"
+        verbose_name_plural = "marques de monture"
+
+    def __str__(self):
+        return self.libelle
+
+
+class MatiereVerre(_Reference):
+    libelle = models.CharField("libellé", max_length=100)
+
+    class Meta:
+        ordering = ["libelle"]
+        verbose_name = "matière de verre"
+        verbose_name_plural = "matières de verre"
+
+    def __str__(self):
+        return self.libelle
+
+
+class FamilleVerre(_Reference):
+    """Famille (« marque ») de verres d'un fournisseur : Varilux, Relaxy, Hilux…"""
+
+    fournisseur = models.ForeignKey(
+        "achats.Fournisseur", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    libelle = models.CharField("libellé", max_length=100)
+    foyer = models.CharField(max_length=20, choices=Foyer.choices, blank=True)
+
+    class Meta:
+        ordering = ["fournisseur__nom", "libelle"]
+        verbose_name = "famille de verres"
+        verbose_name_plural = "familles de verres"
+
+    def __str__(self):
+        return self.libelle
+
+
+class SousFamilleVerre(_Reference):
+    """Sous-famille d'une famille de verres : matière, finesse ou design (ORGA-CR, SuperFin…)."""
+
+    famille = models.ForeignKey(
+        FamilleVerre, on_delete=models.PROTECT, related_name="sous_familles"
+    )
+    libelle = models.CharField("libellé", max_length=100)
+    foyer = models.CharField(
+        max_length=20, choices=Foyer.choices, blank=True, help_text="Vide : celui de la famille."
+    )
+
+    class Meta:
+        ordering = ["famille__libelle", "libelle"]
+        verbose_name = "sous-famille de verres"
+        verbose_name_plural = "sous-familles de verres"
+
+    def __str__(self):
+        return f"{self.famille} · {self.libelle}"
+
+    def clean(self):
+        if self.est_actif and self.famille_id and not self.famille.est_actif:
+            raise ValidationError({"est_actif": "La famille de cette sous-famille est inactive."})
+
+
+class CouleurVerre(_Reference):
+    class FamilleCouleur(models.TextChoices):
+        BLANC = "blanc", "Blanc"
+        SOLAIRE = "solaire", "Solaire (teinté)"
+        PHOTOCHROMIQUE = "photochromique", "Photochromique"
+        POLARISANT = "polarisant", "Polarisant"
+        MIROIR = "miroir", "Miroir"
+
+    fournisseur = models.ForeignKey(
+        "achats.Fournisseur", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    libelle = models.CharField("libellé", max_length=100)
+    famille_couleur = models.CharField(max_length=20, choices=FamilleCouleur.choices, blank=True)
+
+    class Meta:
+        ordering = ["fournisseur__nom", "libelle"]
+        verbose_name = "couleur de verre"
+        verbose_name_plural = "couleurs de verre"
+
+    def __str__(self):
+        return self.libelle
+
+
+class DiametreVerre(_Reference):
+    fournisseur = models.ForeignKey(
+        "achats.Fournisseur", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    diametre_reel = models.CharField("diamètre réel", max_length=20)
+    diametre_commercial = models.CharField("diamètre commercial", max_length=20)
+
+    class Meta:
+        ordering = ["fournisseur__nom", "diametre_commercial"]
+        verbose_name = "diamètre de verre"
+        verbose_name_plural = "diamètres de verre"
+
+    def __str__(self):
+        return self.diametre_commercial

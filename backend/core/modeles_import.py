@@ -13,6 +13,7 @@ from apps.crm.imports import COLONNES_CLIENTS
 from apps.optique.imports import COLONNES_OPHTALMOLOGUES
 from apps.securite.imports import COLONNES_UTILISATEURS
 from apps.stock.imports import COLONNES_CATALOGUE, COLONNES_STOCK, COLONNES_VERRES
+from apps.stock.imports_referentiels import LISTES
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,9 @@ _AIDE_PLAGES = {
     "fabrication": "Verre sur commande : « stock » (stock fournisseur) ou « prescription » "
     "(RX, importation, par défaut).",
     "diametre_commercial": "Diamètre commercial (65/70, 70/75…).",
+    "famille_verre": "Code ou nom d'une famille de verres déjà importée (Varilux Comfort…).",
+    "sous_famille": "Code d'une sous-famille de cette famille (sinon la famille suffit).",
+    "couleur": "Code ou nom d'une couleur de verre du fournisseur.",
     "sphere_debut": "Plage de puissances : sphère de début. Une ligne par plage, en répétant "
     "la référence ; prix_ttc est alors le prix de la plage. Les plages du fichier remplacent "
     "celles déjà enregistrées pour ce verre.",
@@ -371,3 +375,56 @@ def fichier_xlsx(modele):
     sortie = io.BytesIO()
     classeur.save(sortie)
     return sortie.getvalue()
+
+
+_AIDE_LISTES = {
+    "code": "Code de l'élément ; réimporter le même code le met à jour.",
+    "actif": "oui ou non (oui par défaut).",
+    "fournisseur": "Code ou raison sociale d'un fournisseur déjà créé.",
+    "famille": "Code d'une famille de verres déjà importée.",
+    "foyer": "Unifocal, Bifocal ou Progressif (sous-famille : vide = celui de la famille).",
+    "famille_couleur": "Blanc, Solaire, Photochromique, Polarisant ou Miroir.",
+}
+_TITRES_LISTES = {
+    "marques_montures": ("Marques de monture", {"code": "RB", "libelle": "RAY BAN"}),
+    "matieres_verres": ("Matières de verre", {"code": "24", "libelle": "ORMIX"}),
+    "familles_verres": (
+        "Familles de verres",
+        {
+            "code": "27FV93",
+            "fournisseur": "SICOM",
+            "libelle": "VARILUX COMFORT",
+            "foyer": "Progressif",
+        },
+    ),
+    "sous_familles_verres": (
+        "Sous-familles de verres",
+        {"code": "27SFV441", "famille": "27FV93", "libelle": "SPHERO"},
+    ),
+    "couleurs_verres": (
+        "Couleurs de verre",
+        {
+            "code": "27CO29",
+            "fournisseur": "SICOM",
+            "libelle": "TR VII Gris",
+            "famille_couleur": "Photochromique",
+        },
+    ),
+    "diametres_verres": (
+        "Diamètres de verre",
+        {
+            "code": "27D24",
+            "fournisseur": "SICOM",
+            "diametre_reel": "75/80",
+            "diametre_commercial": "75/80",
+        },
+    ),
+}
+for _quoi, (_titre, _exemple) in _TITRES_LISTES.items():
+    MODELES[_quoi] = Modele(
+        titre=_titre,
+        colonnes=LISTES[_quoi].colonnes,
+        obligatoires=LISTES[_quoi].obligatoires,
+        aide={c: a for c, a in _AIDE_LISTES.items() if c in LISTES[_quoi].colonnes},
+        exemples=[_exemple],
+    )

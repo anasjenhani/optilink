@@ -31,6 +31,7 @@ from apps.stock.imports import (
     jeton_de_verification,
     lire_tableau,
 )
+from apps.stock.imports_referentiels import LISTES, importer_liste
 from apps.stock.models import Article
 
 from .modeles_import import MODELES, fichier_csv, fichier_xlsx
@@ -114,6 +115,17 @@ TRAITEMENTS = {
         ),
     ),
 }
+
+
+def _traitement_liste(quoi):
+    modele = LISTES[quoi].modele._meta.model_name
+    return Traitement(
+        (f"stock.add_{modele}", f"stock.change_{modele}"),
+        lambda lignes, m, u, piece, apercu: importer_liste(quoi, lignes, apercu=apercu),
+    )
+
+
+TRAITEMENTS |= {quoi: _traitement_liste(quoi) for quoi in LISTES}
 
 
 def _magasins(utilisateur, traitement):
