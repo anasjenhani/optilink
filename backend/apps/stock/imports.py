@@ -251,9 +251,27 @@ COLONNES_VERRES = [
     "diametre",
     "fabrication",
     "diametre_commercial",
+    "famille_verre",
+    "sous_famille",
+    "couleur",
     *COLONNES_PLAGE,
     "prix_achat_ht",
 ]
+
+
+def _reference(modele, texte, nom):
+    """Élément d'une liste de référence (famille, sous-famille, couleur…) par code ou libellé."""
+    if texte == "":
+        return None
+    trouve = (
+        modele.objects.filter(code=texte).first()
+        or modele.objects.filter(libelle__iexact=texte).first()
+    )
+    if trouve is None:
+        raise ValidationError(
+            f"{nom} : « {texte} » absent de la liste ({modele._meta.verbose_name_plural})."
+        )
+    return trouve
 
 
 def _valeurs_fiche(modele, ligne):
@@ -266,7 +284,9 @@ def _valeurs_fiche(modele, ligne):
         texte = ligne[nom]
         if texte == "" and not champ.blank:
             continue  # Case vide : valeur par défaut, ou valeur déjà enregistrée.
-        if champ.choices:
+        if champ.is_relation:
+            valeurs[nom] = _reference(champ.related_model, texte, nom)
+        elif champ.choices:
             valeurs[nom] = _choix(texte, champ.choices, nom)
         elif champ.get_internal_type() == "BooleanField":
             valeurs[nom] = _booleen(texte)
