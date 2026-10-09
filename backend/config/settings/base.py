@@ -208,6 +208,8 @@ SPECTACULAR_SETTINGS = {
         "StatutTransfertEnum": "apps.stock.models.TransfertStock.Statut",
         "StatutInventaireEnum": "apps.stock.models.Inventaire.Statut",
         "CategorieMontureEnum": "apps.stock.models.Monture.Categorie",
+        "EtapeSavEnum": "apps.ventes.models.DossierSav.Etape",
+        "ModeReglementBordereauEnum": "apps.ventes.models.BordereauPec.Mode",
     },
 }
 

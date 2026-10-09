@@ -2,8 +2,11 @@ from django.contrib import admin
 
 from .models import (
     Avoir,
+    BordereauPec,
     Devis,
+    DossierSav,
     EtapeCommande,
+    EvenementSav,
     Facture,
     LigneAvoir,
     LigneDevis,
@@ -156,3 +159,35 @@ class EtapeCommandeAdmin(Consultation):
 
     def get_queryset(self, request):
         return EtapeCommande.objects.select_related("vente", "par")
+
+
+@admin.register(BordereauPec)
+class BordereauPecAdmin(Consultation):
+    list_display = ("numero", "magasin", "organisme", "statut", "envoye_le", "regle_le")
+    list_filter = ("statut", "organisme")
+    search_fields = ("numero", "reference_reglement")
+
+    def get_queryset(self, request):
+        return BordereauPec.objects.select_related("magasin", "organisme")
+
+
+class EvenementSavInline(admin.TabularInline):
+    model = EvenementSav
+    extra = 0
+    fields = ("le", "etape", "commentaire", "par")
+    readonly_fields = fields
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(DossierSav)
+class DossierSavAdmin(Consultation):
+    list_display = ("numero", "magasin", "client", "designation", "motif", "etape", "cree_le")
+    list_filter = ("etape", "motif", "sous_garantie")
+    search_fields = ("numero", "designation", "client__nom", "client__prenom")
+    inlines = [EvenementSavInline]
+
+    def get_queryset(self, request):
+        return DossierSav.objects.select_related("magasin", "client")

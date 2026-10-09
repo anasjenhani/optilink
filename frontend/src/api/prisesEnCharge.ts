@@ -1,10 +1,10 @@
 import { appeler } from "./client";
 
-/** CNAM, assurance ou mutuelle qui prend en charge une partie des lunettes. */
+/** CNAM, assurance, mutuelle ou convention qui prend en charge une partie des lunettes. */
 export type Organisme = {
   id: string;
   nom: string;
-  type: "caisse" | "assurance" | "mutuelle";
+  type: "caisse" | "assurance" | "mutuelle" | "convention";
   type_libelle: string;
   pays: string;
 };
@@ -31,6 +31,10 @@ export type PriseEnCharge = {
   numero_dossier: string;
   statut: StatutPec;
   statut_libelle: string;
+  /** Numéro du bordereau qui l'a envoyée à l'organisme ; son règlement s'y saisit. */
+  bordereau: string | null;
+  montant_regle: string | null;
+  motif_rejet: string;
   cree_le: string;
 };
 
