@@ -76,6 +76,7 @@ def etat(inventaire):
                 "comptee": True,
                 "ecart": ligne.ecart or 0,
                 "observation": ligne.observation,
+                "date_peremption": ligne.date_peremption,
             }
             for ligne in lignes
         ]
@@ -91,6 +92,7 @@ def etat(inventaire):
                 "comptee": True,
                 "ecart": ligne.quantite_comptee - theorique,
                 "observation": ligne.observation,
+                "date_peremption": ligne.date_peremption,
             }
         )
     for article in Article.objects.filter(pk__in=theoriques).order_by("reference"):
@@ -103,6 +105,7 @@ def etat(inventaire):
                 "comptee": False,
                 "ecart": -theorique,
                 "observation": "",
+                "date_peremption": None,
             }
         )
     return resultat
@@ -165,11 +168,17 @@ def trouver_article(code):
     return article
 
 
+_GARDER = object()
+
+
 @transaction.atomic
-def compter(inventaire, article, *, quantite, remplacer=False, observation=None):
+def compter(
+    inventaire, article, *, quantite, remplacer=False, observation=None, date_peremption=_GARDER
+):
     """Ajoute ``quantite`` au compté de l'article, ou la met à la place si ``remplacer``.
 
     Pendant la vérification, c'est la correction d'une quantité (recomptage) par le responsable.
+    ``date_peremption`` (lentilles) : la plus proche des boîtes comptées ; None l'efface.
     """
     inventaire = Inventaire.tous.select_for_update().get(pk=inventaire.pk)
     _exiger(inventaire, *OUVERTS)
@@ -189,6 +198,11 @@ def compter(inventaire, article, *, quantite, remplacer=False, observation=None)
     if observation is not None:
         ligne.observation = observation[:200]
         champs.append("observation")
+    if date_peremption is not _GARDER:
+        if date_peremption is not None and article.famille != Article.Famille.LENTILLE:
+            raise InventaireImpossible("La date de péremption se saisit pour les lentilles.")
+        ligne.date_peremption = date_peremption
+        champs.append("date_peremption")
     ligne.save(update_fields=champs)
     return ligne
 

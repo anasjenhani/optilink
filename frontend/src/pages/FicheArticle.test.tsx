@@ -27,8 +27,10 @@ const LENTILLE = {
   monture: null,
   verre: null,
   lentille: {
+    categorie: "optique",
     marque: "Acuvue",
     modele: "Oasys",
+    couleur: "",
     renouvellement: "bimensuelle",
     type: "torique",
     rayon: "8.6",
@@ -137,6 +139,7 @@ test("modifie une lentille et la désactive au lieu de la supprimer", async () =
   expect(screen.queryByRole("button", { name: /Supprimer/ })).not.toBeInTheDocument();
 
   fireEvent.change(screen.getByLabelText("Puissance"), { target: { value: "-3,50" } });
+  fireEvent.change(screen.getByLabelText("Couleur"), { target: { value: "Ocean Blue" } });
   fireEvent.click(screen.getByRole("checkbox", { name: "Actif" }));
   fireEvent.keyDown(window, { key: "F4" });
 
@@ -146,7 +149,15 @@ test("modifie une lentille et la désactive au lieu de la supprimer", async () =
     corps: {
       famille: "lentille",
       est_actif: false,
-      lentille: { renouvellement: "bimensuelle", type: "torique", puissance: "-3.50", cylindre: null, axe: 180 },
+      lentille: {
+        categorie: "optique",
+        couleur: "Ocean Blue",
+        renouvellement: "bimensuelle",
+        type: "torique",
+        puissance: "-3.50",
+        cylindre: null,
+        axe: 180,
+      },
       nouveau_prix: { taux_tva: "7", prix_vente_ttc: "85.000" },
     },
   });

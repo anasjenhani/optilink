@@ -13,7 +13,8 @@ from django.utils import timezone
 from apps.ventes.models import TypeDocument
 from apps.ventes.services import _aujourd_hui, _numero, _prochain_numero
 
-from .models import LigneTransfert, MouvementStock, TransfertStock, stock_disponible
+from .models import Article, LigneTransfert, MouvementStock, TransfertStock, stock_disponible
+from .peremptions import a_envoyer
 
 
 class TransfertImpossible(Exception):
@@ -59,7 +60,16 @@ def envoyer_transfert(*, magasin, destination, lignes, auteur, observation=""):
         envoye_par=auteur,
     )
     for article, quantite in quantites.items():
-        LigneTransfert.objects.create(transfert=transfert, article=article, quantite=quantite)
+        LigneTransfert.objects.create(
+            transfert=transfert,
+            article=article,
+            quantite=quantite,
+            peremptions=(
+                a_envoyer(magasin, article, quantite)
+                if article.famille == Article.Famille.LENTILLE
+                else []
+            ),
+        )
         MouvementStock.tous.create(
             magasin=magasin,
             article=article,

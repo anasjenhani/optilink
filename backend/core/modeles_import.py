@@ -125,7 +125,8 @@ MODELES = {
             "famille": "Monture, Verre, Lentille, Divers ou Supplément verre.",
             "prix_achat_ht": "Prix d'achat HT avant remise (avec prix_ttc).",
             "categorie": "Montures : Lunette Optique (par défaut), Lunette Solaire ou Lunette "
-            "Applique.",
+            "Applique. Lentilles : Lentille optique (par défaut) ou Lentille solaire.",
+            "couleur": "Couleur de la monture, ou de la lentille (vide si transparente).",
             "matiere": "Montures : Acétate, Titane, Acier, TR90, Corne, Bois ou Métal. "
             "Verres : Organique, Polycarbonate ou Minéral.",
             "type": "Montures : Cerclée, Semi-cerclée ou Percée (vide = aucun).",

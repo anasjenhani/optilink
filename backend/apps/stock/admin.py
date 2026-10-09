@@ -75,7 +75,7 @@ class PlageVerreInline(admin.TabularInline):
 class LentilleInline(admin.StackedInline):
     model = Lentille
     fields = (
-        ("marque", "modele"),
+        ("categorie", "marque", "modele", "couleur"),
         ("renouvellement", "type", "lentilles_par_boite"),
         ("rayon", "diametre"),
         ("puissance", "cylindre", "axe", "addition"),

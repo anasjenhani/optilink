@@ -117,3 +117,21 @@ export const lireStockADate = (filtres: {
   if (filtres.recherche.trim()) params.set("recherche", filtres.recherche.trim());
   return appeler<StockADate>(`/api/v1/stock-a-date/?${params}`);
 };
+
+export type EtatPeremption = "perimee" | "proche" | "inconnue" | "ok";
+
+export type PeremptionLentille = {
+  article: string;
+  reference: string;
+  libelle: string;
+  stock: number;
+  prochaine: string | null;
+  etat: EtatPeremption;
+  /** Pièces en stock par date (date vide : inconnue, à dater au prochain inventaire). */
+  lots: { date: string | null; quantite: number }[];
+};
+
+export const lirePeremptions = (magasin: string, jours: number) =>
+  appeler<PeremptionLentille[]>(
+    `/api/v1/peremptions-lentilles/?${new URLSearchParams({ magasin, jours: String(jours) })}`,
+  );
