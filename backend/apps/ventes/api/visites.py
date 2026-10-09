@@ -22,9 +22,7 @@ class VenteFiltre(django_filters.FilterSet):
     vendeur = django_filters.CharFilter(field_name="vendeur__username")
     du = django_filters.DateFilter(field_name="cree_le__date", lookup_expr="gte")
     au = django_filters.DateFilter(field_name="cree_le__date", lookup_expr="lte")
-    facturee = django_filters.BooleanFilter(
-        field_name="facture", lookup_expr="isnull", exclude=True
-    )
+    facturee = django_filters.BooleanFilter(method="filtrer_facturee")
     recherche = django_filters.CharFilter(
         method="chercher", help_text="N° de visite, nom, prénom, téléphone ou n° de fiche client."
     )
@@ -32,6 +30,13 @@ class VenteFiltre(django_filters.FilterSet):
     class Meta:
         model = Vente
         fields = []
+
+    def filtrer_facturee(self, queryset, name, valeur):
+        # Facture de la vente seule, ou facture groupée / récapitulative du mois.
+        facturee = Q(facture__isnull=False) | Q(facture_groupee__isnull=False)
+        if valeur is None:
+            return queryset
+        return queryset.filter(facturee) if valeur else queryset.exclude(facturee)
 
     def chercher(self, queryset, name, valeur):
         valeur = valeur.strip()

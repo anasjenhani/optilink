@@ -211,6 +211,7 @@ SPECTACULAR_SETTINGS = {
         "EtapeSavEnum": "apps.ventes.models.DossierSav.Etape",
         "ModeReglementBordereauEnum": "apps.ventes.models.BordereauPec.Mode",
         "ModeReglementFournisseurEnum": "apps.achats.models.ReglementFournisseur.Mode",
+        "TypeFactureGroupeeEnum": "apps.ventes.models.FactureGroupee.Type",
     },
 }
 

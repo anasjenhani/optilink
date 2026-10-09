@@ -476,7 +476,7 @@ def generer_facture(*, vente, client, emetteur, mode_paiement_timbre=""):
     de la facture (``mode_paiement_timbre``). Une vente n'a qu'une facture.
     """
     vente = Vente.tous.select_for_update().select_related("magasin__pays").get(pk=vente.pk)
-    if Facture.tous.filter(vente=vente).exists():
+    if Facture.tous.filter(vente=vente).exists() or vente.facture_groupee_id:
         raise FactureImpossible(f"La vente {vente.numero} est déjà facturée.")
     if Avoir.tous.filter(vente=vente).exists():
         raise FactureImpossible(
@@ -484,6 +484,9 @@ def generer_facture(*, vente, client, emetteur, mode_paiement_timbre=""):
         )
     if client is None:
         raise FactureImpossible("Une facture est établie au nom d'un client.")
+    from .facturation import verifier_mois_ouvert
+
+    verifier_mois_ouvert(vente)
     reste = vente.reste_a_payer
     if reste > 0:
         raise FactureImpossible(
@@ -716,6 +719,7 @@ def _emettre(*, vente, retours, motif, emetteur, mode_remboursement, annulation)
         sequence=sequence,
         vente=vente,
         facture=Facture.tous.filter(vente=vente).first(),
+        facture_groupee_id=vente.facture_groupee_id,
         client=vente.client,
         annulation=annulation,
         motif=motif.strip(),

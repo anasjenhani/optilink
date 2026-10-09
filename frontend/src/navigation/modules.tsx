@@ -77,6 +77,7 @@ import { Recus } from "../pages/Recus";
 import { ReglementsFournisseurs } from "../pages/ReglementsFournisseurs";
 import { ResteVendeur } from "../pages/ResteVendeur";
 import { Devis } from "../pages/Devis";
+import { ClotureMois, FacturationGroupee } from "../pages/FacturationGroupee";
 import { Factures } from "../pages/Factures";
 import { Fournisseurs } from "../pages/Fournisseurs";
 import { Imports } from "../pages/Imports";
@@ -781,10 +782,34 @@ export function modulesPour(session: EtatSession): Module[] {
           )),
         },
         aVenir("ca-previsionnel", "CA Prévisionnel", TableChart, COULEURS.bleu),
-        aVenir("cloture-mois", "Clôture Mois", Lock, COULEURS.brun),
-        aVenir("facturation-vc", "Facturation Vente Comptoir", FactCheck, COULEURS.vert),
-        aVenir("preparation-facturation", "Préparation Facturation", EditNote, COULEURS.violet),
-        aVenir("facturation-visite", "Facturation Visite", FactCheck, COULEURS.violet),
+        {
+          id: "cloture-mois",
+          libelle: "Clôture Mois",
+          icone: Lock,
+          couleur: COULEURS.brun,
+          ecran: si(a("ventes.add_cloturemois"), () => <ClotureMois cloturer />),
+        },
+        {
+          id: "facturation-vc",
+          libelle: "Facturation Vente Comptoir",
+          icone: FactCheck,
+          couleur: COULEURS.vert,
+          ecran: si(a("ventes.add_facturegroupee"), () => <FacturationGroupee comptoir />),
+        },
+        {
+          id: "preparation-facturation",
+          libelle: "Préparation Facturation",
+          icone: EditNote,
+          couleur: COULEURS.violet,
+          ecran: si(a("ventes.view_cloturemois"), () => <ClotureMois />),
+        },
+        {
+          id: "facturation-visite",
+          libelle: "Facturation Visite",
+          icone: FactCheck,
+          couleur: COULEURS.violet,
+          ecran: si(a("ventes.add_facturegroupee"), () => <FacturationGroupee />),
+        },
         aVenir("avoir-financier", "Avoir Financier", Undo, COULEURS.rouge),
       ],
     },

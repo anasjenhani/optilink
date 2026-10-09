@@ -43,6 +43,10 @@ PRIVILEGES = {
         "ventes.add_facture": "Établir une facture",
         "ventes.view_avoir": "Voir les avoirs",
         "ventes.add_avoir": "Établir un avoir ou annuler une vente",
+        "ventes.view_facturegroupee": "Voir les factures groupées et récapitulatives",
+        "ventes.add_facturegroupee": "Facturer plusieurs visites ou ventes comptoir ensemble",
+        "ventes.view_cloturemois": "Voir les mois clôturés",
+        "ventes.add_cloturemois": "Clôturer le mois (facture récapitulative)",
     },
     "Clients et ordonnances": {
         "crm.view_client": "Voir les clients",
