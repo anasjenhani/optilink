@@ -364,6 +364,19 @@ PERMISSIONS_SAV = {
     "Comptabilité & Finance": ["ventes.view_dossiersav"],
 }
 
+# Règlements fournisseurs : saisis et suivis par la finance (échéancier, retenue à la source).
+REGLEMENTS_FOURNISSEURS = [
+    "achats.view_reglementfournisseur",
+    "achats.add_reglementfournisseur",
+    "achats.change_reglementfournisseur",
+    "achats.delete_reglementfournisseur",
+]
+PERMISSIONS_REGLEMENTS_FOURNISSEURS = {
+    "Comptabilité & Finance": REGLEMENTS_FOURNISSEURS,
+    "Responsable de magasin": ["achats.view_reglementfournisseur"],
+    "Achats & Gestionnaire de Stock": ["achats.view_reglementfournisseur"],
+}
+
 # Corbeille : les responsables restaurent ce qui a été supprimé par erreur dans leur
 # périmètre ; vider définitivement reste à l'administrateur.
 CORBEILLE = ["securite.view_elementcorbeille", "securite.restaurer_elementcorbeille"]
@@ -391,6 +404,7 @@ for _par_role in (
     PERMISSIONS_CASSES,
     PERMISSIONS_BORDEREAUX,
     PERMISSIONS_SAV,
+    PERMISSIONS_REGLEMENTS_FOURNISSEURS,
     PERMISSIONS_CORBEILLE,
 ):
     for _nom, _permissions in _par_role.items():

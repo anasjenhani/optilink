@@ -39,6 +39,7 @@ test("les modules sont des onglets horizontaux, Vente d'abord", () => {
     "Vente",
     "Stock",
     "Règlement",
+    "Règlement Fournisseur",
     "Caisse",
     "SAV",
     "Facture",

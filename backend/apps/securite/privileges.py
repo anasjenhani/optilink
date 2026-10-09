@@ -112,6 +112,14 @@ PRIVILEGES = {
         "achats.view_casseverre": "Voir les casses de verres",
         "achats.add_casseverre": "Déclarer une casse de verre (verre à recommander)",
     },
+    "Règlements fournisseurs": {
+        "achats.view_reglementfournisseur": "Voir les règlements fournisseurs et l'échéancier",
+        "achats.add_reglementfournisseur": (
+            "Régler un fournisseur (factures, avances, retenue à la source)"
+        ),
+        "achats.change_reglementfournisseur": "Marquer un chèque ou une traite comme débité",
+        "achats.delete_reglementfournisseur": "Annuler un règlement fournisseur",
+    },
     "Sociétés, magasins et pays": {
         "reseau.view_societe": "Voir les sociétés",
         "reseau.add_societe": "Créer une société",
