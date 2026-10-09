@@ -440,6 +440,8 @@ class MouvementStock(models.Model):
         RETOUR_FOURNISSEUR = "retour_fournisseur", "Retour au fournisseur"
         TRANSFERT_SORTIE = "transfert_sortie", "Transfert envoyé"
         TRANSFERT_ENTREE = "transfert_entree", "Transfert reçu"
+        SORTIE = "sortie", "Bon de sortie"
+        CASSE = "casse", "Sortie casse"
 
     magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
     article = models.ForeignKey(Article, on_delete=models.PROTECT, related_name="mouvements")
@@ -540,6 +542,138 @@ class LigneTransfert(models.Model):
     class Meta:
         verbose_name = "ligne de transfert"
         verbose_name_plural = "lignes de transfert"
+
+    def __str__(self):
+        return f"{self.quantite} × {self.article}"
+
+
+class BonSortie(ModeleDeBase):
+    """Sortie de stock sans vente : usage interne, cadeau, échantillon… ou casse (article cassé,
+    défectueux, perdu). Validé à la saisie : les articles sortent tout de suite du stock."""
+
+    class Type(models.TextChoices):
+        SORTIE = "sortie", "Bon de sortie"
+        CASSE = "casse", "Sortie casse"
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    type = models.CharField(max_length=10, choices=Type.choices, default=Type.SORTIE)
+    motif = models.CharField(max_length=200)
+    observation = models.TextField(blank=True)
+    cree_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-annee", "-sequence"]
+        verbose_name = "bon de sortie"
+        verbose_name_plural = "bons de sortie"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="bon_sortie_sans_doublon"
+            )
+        ]
+
+    def __str__(self):
+        return self.numero
+
+
+class LigneSortie(models.Model):
+    bon = models.ForeignKey(BonSortie, on_delete=models.CASCADE, related_name="lignes")
+    article = models.ForeignKey(Article, on_delete=models.PROTECT, related_name="+")
+    quantite = models.PositiveIntegerField("quantité")
+
+    class Meta:
+        verbose_name = "ligne de sortie"
+        verbose_name_plural = "lignes de sortie"
+
+    def __str__(self):
+        return f"{self.quantite} × {self.article}"
+
+
+class DemandeTransfert(ModeleDeBase):
+    """Un magasin demande des articles à un autre (au dépôt central : demande d'alimentation).
+
+    Le magasin sollicité la sert par un transfert (quantités ajustables à ce qu'il a), ou la
+    refuse avec un motif.
+    """
+
+    class Statut(models.TextChoices):
+        EN_ATTENTE = "en_attente", "En attente"
+        SERVIE = "servie", "Servie"
+        REFUSEE = "refusee", "Refusée"
+        ANNULEE = "annulee", "Annulée"
+
+    magasin = models.ForeignKey(
+        "reseau.Magasin",
+        on_delete=models.PROTECT,
+        related_name="+",
+        verbose_name="magasin demandeur",
+    )
+    aupres_de = models.ForeignKey(
+        "reseau.Magasin",
+        on_delete=models.PROTECT,
+        related_name="+",
+        verbose_name="magasin sollicité",
+    )
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    statut = models.CharField(max_length=12, choices=Statut.choices, default=Statut.EN_ATTENTE)
+    observation = models.TextField(blank=True)
+    demandee_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+    traitee_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    traitee_le = models.DateTimeField(null=True, blank=True)
+    motif_refus = models.CharField(max_length=200, blank=True)
+    transfert = models.OneToOneField(
+        TransfertStock,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="demande",
+        help_text="Transfert qui a servi la demande.",
+    )
+
+    # Deux magasins par demande : le périmètre est filtré par l'API et par la RLS.
+    objects = models.Manager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-annee", "-sequence"]
+        verbose_name = "demande de transfert"
+        verbose_name_plural = "demandes de transfert"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="demande_transfert_sans_doublon"
+            ),
+            models.CheckConstraint(
+                name="demande_a_un_autre_magasin",
+                condition=~models.Q(aupres_de=models.F("magasin")),
+            ),
+        ]
+
+    def __str__(self):
+        return self.numero
+
+
+class LigneDemandeTransfert(models.Model):
+    demande = models.ForeignKey(DemandeTransfert, on_delete=models.CASCADE, related_name="lignes")
+    article = models.ForeignKey(Article, on_delete=models.PROTECT, related_name="+")
+    quantite = models.PositiveIntegerField("quantité demandée")
+    quantite_servie = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "ligne de demande de transfert"
+        verbose_name_plural = "lignes de demande de transfert"
 
     def __str__(self):
         return f"{self.quantite} × {self.article}"

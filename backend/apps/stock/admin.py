@@ -6,12 +6,16 @@ from core.admin_imports import AvecImport
 from .admin_saisie import saisir_inventaire, saisir_transfert
 from .models import (
     Article,
+    BonSortie,
     CouleurVerre,
+    DemandeTransfert,
     DiametreVerre,
     FamilleVerre,
     Inventaire,
     Lentille,
+    LigneDemandeTransfert,
     LigneInventaire,
+    LigneSortie,
     LigneTransfert,
     MarqueMonture,
     MatiereVerre,
@@ -279,3 +283,46 @@ class DiametreVerreAdmin(_ListeAdmin):
     list_display = ("code", "diametre_commercial", "diametre_reel", "fournisseur", "est_actif")
     list_filter = ("est_actif", "fournisseur")
     search_fields = ("code", "diametre_commercial")
+
+
+class LectureSeule:
+    """Saisis et traités depuis l'application, consultés ici."""
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class LigneSortieInline(LectureSeule, admin.TabularInline):
+    model = LigneSortie
+
+
+@admin.register(BonSortie)
+class BonSortieAdmin(LectureSeule, admin.ModelAdmin):
+    list_display = ("numero", "cree_le", "magasin", "type", "motif")
+    list_filter = ("type", "magasin")
+    search_fields = ("numero", "motif")
+    inlines = [LigneSortieInline]
+
+    def get_queryset(self, request):
+        return BonSortie.tous.select_related("magasin")
+
+
+class LigneDemandeInline(LectureSeule, admin.TabularInline):
+    model = LigneDemandeTransfert
+
+
+@admin.register(DemandeTransfert)
+class DemandeTransfertAdmin(LectureSeule, admin.ModelAdmin):
+    list_display = ("numero", "cree_le", "magasin", "aupres_de", "statut", "transfert")
+    list_filter = ("statut", "magasin", "aupres_de")
+    search_fields = ("numero",)
+    inlines = [LigneDemandeInline]
+
+    def get_queryset(self, request):
+        return DemandeTransfert.tous.select_related("magasin", "aupres_de", "transfert")

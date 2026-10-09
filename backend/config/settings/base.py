@@ -212,6 +212,7 @@ SPECTACULAR_SETTINGS = {
         "ModeReglementBordereauEnum": "apps.ventes.models.BordereauPec.Mode",
         "ModeReglementFournisseurEnum": "apps.achats.models.ReglementFournisseur.Mode",
         "TypeFactureGroupeeEnum": "apps.ventes.models.FactureGroupee.Type",
+        "TypeBonSortieEnum": "apps.stock.models.BonSortie.Type",
     },
 }
 

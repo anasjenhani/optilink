@@ -83,6 +83,7 @@ import { ResteVendeur } from "../pages/ResteVendeur";
 import { Devis } from "../pages/Devis";
 import { ClotureMois, FacturationGroupee } from "../pages/FacturationGroupee";
 import { Factures } from "../pages/Factures";
+import { BonSortie, DemandesTransfert, Reassort, StockALaDate } from "../pages/SortiesStock";
 import { Statistiques } from "../pages/Statistiques";
 import { Fournisseurs } from "../pages/Fournisseurs";
 import { Imports } from "../pages/Imports";
@@ -521,7 +522,13 @@ export function modulesPour(session: EtatSession): Module[] {
             />
           )),
         },
-        aVenir("stock-date", "Stock à la Date", CalendarMonth, COULEURS.vert),
+        {
+          id: "stock-date",
+          libelle: "Stock à la Date",
+          icone: CalendarMonth,
+          couleur: COULEURS.vert,
+          ecran: si(a("stock.view_article"), () => <StockALaDate />),
+        },
         aVenir("config-stock", "Config Stock", Widgets, COULEURS.brun),
         aVenir("stock-depense", "Stock Article Dépense", Inventory2, COULEURS.jaune),
         {
@@ -532,11 +539,49 @@ export function modulesPour(session: EtatSession): Module[] {
           ecran: si(a("stock.view_mouvementstock"), () => <MouvementsStock />),
         },
         aVenir("stock-total", "Stock Total", Widgets, COULEURS.orange),
-        aVenir("bon-sortie", "Bon Sortie", ArrowUpward, COULEURS.vert),
-        aVenir("demande-transfert", "Demande Transfert", CompareArrows, COULEURS.bleu),
-        aVenir("demande-alimentation", "Demande Alimentation", MoveDown, COULEURS.bleu),
-        aVenir("bon-sortie-casse", "Bon Sortie Casse", ArrowUpward, COULEURS.vert),
-        aVenir("reassort", "Réassort", EventRepeat, COULEURS.orange),
+        {
+          id: "bon-sortie",
+          libelle: "Bon Sortie",
+          icone: ArrowUpward,
+          couleur: COULEURS.vert,
+          ecran: si(a("stock.add_bonsortie"), () => <BonSortie />),
+        },
+        {
+          id: "demande-transfert",
+          libelle: "Demande Transfert",
+          icone: CompareArrows,
+          couleur: COULEURS.bleu,
+          ecran: si(a("stock.view_demandetransfert"), () => (
+            <DemandesTransfert demander={a("stock.add_demandetransfert")} servir={a("stock.change_demandetransfert")} />
+          )),
+        },
+        {
+          id: "demande-alimentation",
+          libelle: "Demande Alimentation",
+          icone: MoveDown,
+          couleur: COULEURS.bleu,
+          ecran: si(a("stock.view_demandetransfert"), () => (
+            <DemandesTransfert
+              alimentation
+              demander={a("stock.add_demandetransfert")}
+              servir={a("stock.change_demandetransfert")}
+            />
+          )),
+        },
+        {
+          id: "bon-sortie-casse",
+          libelle: "Bon Sortie Casse",
+          icone: ArrowUpward,
+          couleur: COULEURS.vert,
+          ecran: si(a("stock.add_bonsortie"), () => <BonSortie casse />),
+        },
+        {
+          id: "reassort",
+          libelle: "Réassort",
+          icone: EventRepeat,
+          couleur: COULEURS.orange,
+          ecran: si(a("stock.add_demandetransfert"), () => <Reassort />),
+        },
         aVenir("comparaison", "Comparaison", CompareArrows, COULEURS.gris),
       ],
     },

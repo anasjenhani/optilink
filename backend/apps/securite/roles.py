@@ -401,6 +401,18 @@ PERMISSIONS_FACTURATION_GROUPEE = {
     ],
 }
 
+# Bons de sortie et sorties casse : le responsable et le stock. Demandes de transfert : tout le
+# magasin peut demander ; servir ou refuser revient au magasin sollicité (responsable, stock).
+SORTIES = ["stock.view_bonsortie", "stock.add_bonsortie"]
+DEMANDER = ["stock.view_demandetransfert", "stock.add_demandetransfert"]
+TRAITER = DEMANDER + ["stock.change_demandetransfert"]
+PERMISSIONS_SORTIES_DEMANDES = {
+    "Responsable de magasin": SORTIES + TRAITER,
+    "Achats & Gestionnaire de Stock": SORTIES + TRAITER,
+    "Opticien": DEMANDER,
+    "Vendeur": DEMANDER,
+}
+
 # Corbeille : les responsables restaurent ce qui a été supprimé par erreur dans leur
 # périmètre ; vider définitivement reste à l'administrateur.
 CORBEILLE = ["securite.view_elementcorbeille", "securite.restaurer_elementcorbeille"]
@@ -431,6 +443,7 @@ for _par_role in (
     PERMISSIONS_REGLEMENTS_FOURNISSEURS,
     PERMISSIONS_CREDIT_IMPAYES,
     PERMISSIONS_FACTURATION_GROUPEE,
+    PERMISSIONS_SORTIES_DEMANDES,
     PERMISSIONS_CORBEILLE,
 ):
     for _nom, _permissions in _par_role.items():
