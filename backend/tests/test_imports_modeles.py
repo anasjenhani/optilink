@@ -107,7 +107,7 @@ def test_import_des_verres_par_code_fournisseur(acheteur, tunis):
     )
     reponse = importer(acheteur, autre, "verres")
     assert reponse.json()["erreurs"][0]["message"] == (
-        "famille : ce fichier n'importe que des verres."
+        "famille : ce fichier n'importe que la famille Verre."
     )
 
 

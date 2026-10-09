@@ -75,6 +75,26 @@ TRAITEMENTS = {
         droit_magasin="stock.view_article",
         aide="Prix et TVA dans le pays du magasin choisi.",
     ),
+    **{
+        quoi: Traitement(
+            (
+                "stock.add_article",
+                "stock.change_article",
+                "stock.add_prixarticle",
+                "stock.change_prixarticle",
+            ),
+            lambda lignes, m, u, piece, apercu, famille=famille: importer_catalogue(
+                lignes, pays=m.pays, apercu=apercu, famille=famille
+            ),
+            droit_magasin="stock.view_article",
+            aide="Prix et TVA dans le pays du magasin choisi.",
+        )
+        for quoi, famille in (
+            ("montures", Article.Famille.MONTURE),
+            ("lentilles", Article.Famille.LENTILLE),
+            ("produits", Article.Famille.DIVERS),
+        )
+    },
     "stock": Traitement(
         ("stock.add_mouvementstock",),
         lambda lignes, m, u, piece, apercu: importer_stock(
