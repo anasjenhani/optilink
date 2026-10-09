@@ -25,6 +25,7 @@ import History from "@mui/icons-material/History";
 import Inventory from "@mui/icons-material/Inventory";
 import Inventory2 from "@mui/icons-material/Inventory2";
 import ListAlt from "@mui/icons-material/ListAlt";
+import LocalOffer from "@mui/icons-material/LocalOffer";
 import LocalShipping from "@mui/icons-material/LocalShipping";
 import Lock from "@mui/icons-material/Lock";
 import LockOpen from "@mui/icons-material/LockOpen";
@@ -32,6 +33,7 @@ import MonitorHeart from "@mui/icons-material/MonitorHeart";
 import MoveDown from "@mui/icons-material/MoveDown";
 import MoveToInbox from "@mui/icons-material/MoveToInbox";
 import Payments from "@mui/icons-material/Payments";
+import Percent from "@mui/icons-material/Percent";
 import People from "@mui/icons-material/People";
 import PersonAddAlt from "@mui/icons-material/PersonAddAlt";
 import PersonSearch from "@mui/icons-material/PersonSearch";
@@ -48,11 +50,13 @@ import Store from "@mui/icons-material/Store";
 import SwapHoriz from "@mui/icons-material/SwapHoriz";
 import Sync from "@mui/icons-material/Sync";
 import TableChart from "@mui/icons-material/TableChart";
+import TrendingUp from "@mui/icons-material/TrendingUp";
 import Today from "@mui/icons-material/Today";
 import TrackChanges from "@mui/icons-material/TrackChanges";
 import Undo from "@mui/icons-material/Undo";
 import UploadFile from "@mui/icons-material/UploadFile";
 import Visibility from "@mui/icons-material/Visibility";
+import VolunteerActivism from "@mui/icons-material/VolunteerActivism";
 import Widgets from "@mui/icons-material/Widgets";
 import type { SvgIconComponent } from "@mui/icons-material";
 import type { ReactNode } from "react";
@@ -79,6 +83,7 @@ import { ResteVendeur } from "../pages/ResteVendeur";
 import { Devis } from "../pages/Devis";
 import { ClotureMois, FacturationGroupee } from "../pages/FacturationGroupee";
 import { Factures } from "../pages/Factures";
+import { Statistiques } from "../pages/Statistiques";
 import { Fournisseurs } from "../pages/Fournisseurs";
 import { Imports } from "../pages/Imports";
 import { Journee } from "../pages/Journee";
@@ -812,6 +817,28 @@ export function modulesPour(session: EtatSession): Module[] {
         },
         aVenir("avoir-financier", "Avoir Financier", Undo, COULEURS.rouge),
       ],
+    },
+    {
+      id: "statistiques",
+      libelle: "Statistiques",
+      tuiles: (
+        [
+          ["montures", "Montures et Marques", Sell, COULEURS.violet],
+          ["verres", "Verres", RemoveRedEye, COULEURS.bleu],
+          ["lentilles", "Lentilles", Visibility, COULEURS.turquoise],
+          ["remises", "Remises", LocalOffer, COULEURS.orange],
+          ["gratuits", "Gratuits", VolunteerActivism, COULEURS.vert],
+          ["ophtalmologues", "Ophtalmologues", Groups, COULEURS.brun],
+          ["tva", "TVA", Percent, COULEURS.gris],
+          ["benefice", "Bénéfice Journalier", TrendingUp, COULEURS.rouge],
+        ] as const
+      ).map(([rapport, libelle, icone, couleur]) => ({
+        id: `stat-${rapport}`,
+        libelle,
+        icone,
+        couleur,
+        ecran: si(a("ventes.consulter_reporting"), () => <Statistiques rapport={rapport} />),
+      })),
     },
     {
       id: "administration",
