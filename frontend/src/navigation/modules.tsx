@@ -118,13 +118,14 @@ export type Module = { id: string; libelle: string; tuiles: Tuile[] };
 
 /** Boutons fixes sous les onglets : les écrans du quotidien, accessibles depuis partout. */
 export const RACCOURCIS: { module: string; tuile: string; libelle: string }[] = [
+  { module: "vente", tuile: "clients", libelle: "Clients" },
   { module: "vente", tuile: "journee", libelle: "Journée" },
   { module: "vente", tuile: "nouvelle-visite", libelle: "Nouvelle visite" },
   { module: "vente", tuile: "suivi-visite", libelle: "Suivi" },
   { module: "vente", tuile: "recherche-verre", libelle: "Recherche verre" },
   { module: "vente", tuile: "recherche-monture", libelle: "Recherche monture" },
   { module: "vente", tuile: "recherche-lentille", libelle: "Recherche lentille" },
-  { module: "vente", tuile: "clients", libelle: "Clients" },
+  { module: "reglement", tuile: "reglement", libelle: "Saisie règlement" },
 ];
 
 const COULEURS = {

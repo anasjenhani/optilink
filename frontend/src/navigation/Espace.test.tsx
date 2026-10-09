@@ -68,15 +68,17 @@ test("sans le droit, le bouton disparaît ; une fonction pas encore faite est gr
 });
 
 test("les boutons fixes sous le menu ouvrent les écrans du quotidien depuis tout onglet", async () => {
-  afficher(["ventes.add_vente", "ventes.view_vente", "stock.view_article"]);
+  afficher(["ventes.add_vente", "ventes.view_vente", "stock.view_article", "crm.view_client"]);
   const raccourcis = within(screen.getByRole("navigation", { name: "Raccourcis" }));
   expect(raccourcis.getAllByRole("button").map((b) => b.textContent)).toEqual([
+    "Clients",
     "Journée",
     "Nouvelle visite",
     "Suivi",
     "Recherche verre",
     "Recherche monture",
     "Recherche lentille",
+    "Saisie règlement",
   ]);
   fireEvent.click(screen.getByRole("tab", { name: "Caisse" }));
   fireEvent.click(raccourcis.getByRole("button", { name: "Suivi" }));
