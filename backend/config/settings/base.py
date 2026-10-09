@@ -210,6 +210,9 @@ SPECTACULAR_SETTINGS = {
         "CategorieMontureEnum": "apps.stock.models.Monture.Categorie",
         "EtapeSavEnum": "apps.ventes.models.DossierSav.Etape",
         "ModeReglementBordereauEnum": "apps.ventes.models.BordereauPec.Mode",
+        "ModeReglementFournisseurEnum": "apps.achats.models.ReglementFournisseur.Mode",
+        "TypeFactureGroupeeEnum": "apps.ventes.models.FactureGroupee.Type",
+        "TypeBonSortieEnum": "apps.stock.models.BonSortie.Type",
     },
 }
 

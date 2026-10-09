@@ -21,6 +21,9 @@ class TypeDocument(models.TextChoices):
     INVENTAIRE = "inventaire", "Inventaire"
     SAV = "sav", "Dossier SAV"
     BORDEREAU_PEC = "bord_pec", "Bordereau de prise en charge"
+    REGLEMENT_FOURNISSEUR = "reg_fourn", "Règlement fournisseur"
+    BON_SORTIE = "bon_sortie", "Bon de sortie"
+    DEMANDE_TRANSFERT = "dem_transf", "Demande de transfert"
 
 
 # Préfixe du numéro : M01-T2026-000001 pour un ticket, M01-F2026-000001 pour une facture,
@@ -41,6 +44,9 @@ PREFIXES = {
     TypeDocument.INVENTAIRE: "IN",
     TypeDocument.SAV: "S",
     TypeDocument.BORDEREAU_PEC: "BP",
+    TypeDocument.REGLEMENT_FOURNISSEUR: "RF",
+    TypeDocument.BON_SORTIE: "BS",
+    TypeDocument.DEMANDE_TRANSFERT: "DT",
 }
 
 
@@ -126,6 +132,21 @@ class Vente(ModeleDeBase):
         blank=True,
         help_text="Dernière étape saisie au suivi ; vide, l'étape vient des verres commandés.",
     )
+    # Vente à crédit : remise au client sans être soldée ; le reste se règle plus tard.
+    credit_accorde_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    credit_echeance = models.DateField(
+        "crédit à régler le", null=True, blank=True, help_text="Date promise par le client."
+    )
+    # Facture regroupant plusieurs visites, ou récapitulative du mois (clôture).
+    facture_groupee = models.ForeignKey(
+        "FactureGroupee",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="ventes",
+    )
 
     objects = ParMagasinManager()
     tous = models.Manager()
@@ -136,6 +157,11 @@ class Vente(ModeleDeBase):
         permissions = [
             ("appliquer_remise", "Peut appliquer une remise"),
             ("consulter_reporting", "Peut consulter le reporting des ventes"),
+            ("vendre_a_credit", "Peut vendre à crédit (remettre sans que le client ait soldé)"),
+            (
+                "gerer_impayes",
+                "Peut gérer les impayés, les changements de chèque et la liste noire",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -154,7 +180,11 @@ class Vente(ModeleDeBase):
 
     @property
     def regle_par_le_client(self):
-        return sum((p.montant for p in self.paiements.all()), Decimal("0"))
+        """Règlements du client qui comptent : un chèque impayé ou remplacé n'en fait pas partie."""
+        return sum(
+            (p.montant for p in self.paiements.all() if p.statut == Paiement.Statut.ENCAISSE),
+            Decimal("0"),
+        )
 
     @property
     def pris_en_charge(self):
@@ -304,6 +334,99 @@ class LigneDevis(models.Model):
         return f"{self.quantite} × {self.libelle}"
 
 
+class FactureGroupee(ModeleDeBase):
+    """Une facture pour plusieurs ventes : visites ou ventes comptoir d'un même client, ou
+    facture récapitulative du mois (ventes restées sans facture, établie à la clôture).
+
+    Même suite de numéros que les factures d'une vente : pas de trou ni de doublon entre elles.
+    """
+
+    class Type(models.TextChoices):
+        CLIENT = "client", "Facture groupée"
+        MENSUELLE = "mensuelle", "Facture récapitulative du mois"
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    type = models.CharField(max_length=10, choices=Type.choices, default=Type.CLIENT)
+    client = models.ForeignKey(
+        "crm.Client",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="factures_groupees",
+    )
+    # Copiés à l'émission ; saisis à la main pour une société sans fiche client.
+    client_nom = models.CharField(max_length=200, blank=True)
+    client_adresse = models.CharField(max_length=320, blank=True)
+    client_matricule_fiscal = models.CharField(max_length=30, blank=True)
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    du = models.DateField(help_text="Première vente facturée.")
+    au = models.DateField(help_text="Dernière vente facturée.")
+    devise = models.CharField(max_length=3)
+    total_ht = models.DecimalField(max_digits=14, decimal_places=3)
+    total_tva = models.DecimalField(max_digits=14, decimal_places=3)
+    total_ttc = models.DecimalField(max_digits=14, decimal_places=3)
+    timbre_fiscal = models.DecimalField(max_digits=10, decimal_places=3, default=0)
+    net_a_payer = models.DecimalField(max_digits=14, decimal_places=3)
+    mode_paiement_timbre = models.CharField(max_length=20, blank=True)
+    emise_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-cree_le"]
+        verbose_name = "facture groupée"
+        verbose_name_plural = "factures groupées"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="facture_groupee_sans_doublon"
+            )
+        ]
+
+    def __str__(self):
+        return self.numero
+
+
+class ClotureMois(ModeleDeBase):
+    """Mois clos pour un magasin : les ventes restées sans facture passent sur la facture
+    récapitulative ; plus aucune facture ne se fait ensuite sur une vente de ce mois."""
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    annee = models.PositiveSmallIntegerField()
+    mois = models.PositiveSmallIntegerField()
+    facture = models.OneToOneField(
+        FactureGroupee,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="cloture",
+        help_text="Vide si toutes les ventes du mois étaient déjà facturées.",
+    )
+    cloture_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-annee", "-mois"]
+        verbose_name = "clôture du mois"
+        verbose_name_plural = "clôtures des mois"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "mois"], name="un_mois_clos_une_fois"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.mois:02d}/{self.annee}"
+
+
 class Avoir(ModeleDeBase):
     """Avoir : crédit rendu au client sur une vente (retour d'articles, ou annulation).
 
@@ -323,6 +446,14 @@ class Avoir(ModeleDeBase):
         blank=True,
         related_name="avoirs",
         help_text="Facture corrigée, si la vente avait été facturée.",
+    )
+    facture_groupee = models.ForeignKey(
+        FactureGroupee,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="avoirs",
+        help_text="Facture groupée ou récapitulative corrigée.",
     )
     client = models.ForeignKey(
         "crm.Client", on_delete=models.PROTECT, null=True, blank=True, related_name="avoirs"
@@ -514,6 +645,16 @@ class Paiement(models.Model):
         CARTE = "carte", "Carte bancaire"
         ESPECES = "especes", "Espèces"
         CHEQUE = "cheque", "Chèque"
+        VIREMENT = "virement", "Virement"
+        TRAITE = "traite", "Traite"
+
+    class Statut(models.TextChoices):
+        ENCAISSE = "encaisse", "Encaissé"
+        IMPAYE = "impaye", "Impayé"
+        REMPLACE = "remplace", "Remplacé"
+
+    # Chèques et traites : remis à la banque à leur échéance, ils peuvent revenir impayés.
+    A_ECHEANCE = (Mode.CHEQUE, Mode.TRAITE)
 
     vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="paiements")
     mode = models.CharField(max_length=20, choices=Mode.choices)
@@ -521,6 +662,24 @@ class Paiement(models.Model):
     recu_le = models.DateTimeField(default=timezone.now)
     recu_par = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, related_name="+"
+    )
+    reference = models.CharField(
+        max_length=60, blank=True, help_text="N° du chèque, de la traite ou du virement."
+    )
+    banque = models.CharField(max_length=100, blank=True)
+    echeance = models.DateField(
+        "échéance", null=True, blank=True, help_text="Chèque ou traite : à remettre à la banque le."
+    )
+    statut = models.CharField(max_length=10, choices=Statut.choices, default=Statut.ENCAISSE)
+    impaye_le = models.DateField(null=True, blank=True)
+    motif_impaye = models.CharField("motif de l'impayé", max_length=200, blank=True)
+    remplace_par = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="remplace",
+        help_text="Changement de chèque : le règlement qui a pris sa place.",
     )
 
     class Meta:

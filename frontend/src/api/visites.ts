@@ -53,7 +53,16 @@ export type FicheVisite = Vente & {
   } | null;
   etat: string | null;
   etat_libelle: string | null;
-  reglements: { mode: string; mode_libelle: string; montant: string; recu_le: string; recu_par: string }[];
+  reglements: {
+    mode: string;
+    mode_libelle: string;
+    montant: string;
+    recu_le: string;
+    recu_par: string;
+    reference?: string;
+    statut?: "encaisse" | "impaye" | "remplace";
+    statut_libelle?: string;
+  }[];
   prises_en_charge: { organisme: string; montant: string; numero_dossier: string; statut_libelle: string }[];
   etapes: { etape: string; etape_libelle: string; observation: string; le: string; par: string }[];
   verres_commandes: VerreCommande[];

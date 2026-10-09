@@ -118,7 +118,7 @@ class LigneJourneeSerializer(serializers.Serializer):
         return vente.statut == vente.Statut.EN_COMMANDE or vente.peniche is not None
 
     def get_facture(self, vente) -> str | None:
-        facture = getattr(vente, "facture", None)
+        facture = getattr(vente, "facture", None) or vente.facture_groupee
         return facture.numero if facture else None
 
 

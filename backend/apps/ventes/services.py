@@ -218,6 +218,8 @@ def enregistrer_vente(
     articles_retires_admis=False,
     lunettes=(),
     lentilles=(),
+    a_credit=False,
+    credit_echeance=None,
 ):
     """Enregistre une vente : lignes, sortie de stock, paiements et numéro de ticket.
 
@@ -291,7 +293,9 @@ def enregistrer_vente(
         raise VenteInvalide(
             f"L'acompte ({total_paye} {pays.devise}) dépasse le total ({total_ttc} {pays.devise})."
         )
-    if not commande and total_paye != total_ttc:
+    # Vente à crédit : le client emporte ses articles et réglera le reste plus tard.
+    a_credit = a_credit and not commande and total_paye < total_ttc
+    if not commande and not a_credit and total_paye != total_ttc:
         raise VenteInvalide(
             f"Les paiements ({total_paye} {pays.devise}) ne couvrent pas le total "
             f"({total_ttc} {pays.devise})."
@@ -319,6 +323,9 @@ def enregistrer_vente(
         livree_le=None if commande else timezone.now(),
         livree_par=None if commande else vendeur,
     )
+    if not commande and a_credit:
+        _accorder_credit(vente, client, vendeur, credit_echeance)
+        vente.save(update_fields=["credit_accorde_par", "credit_echeance"])
     paires = [
         Lunette.objects.create(vente=vente, numero=rang, **lunette)
         for rang, lunette in enumerate(lunettes, start=1)
@@ -365,7 +372,21 @@ def enregistrer_vente(
     return vente
 
 
+def _verifier_paiements(client, paiements):
+    """Un client en liste noire ne paie plus par chèque ni par traite."""
+    a_echeance = [p for p in paiements if p["mode"] in Paiement.A_ECHEANCE and p["montant"] > 0]
+    if a_echeance and client is not None and client.liste_noire:
+        raise VenteInvalide(
+            f"{client} est en liste noire : ni chèque ni traite"
+            + (f" ({client.motif_liste_noire})." if client.motif_liste_noire else ".")
+        )
+    for p in a_echeance:
+        if not p.get("reference", "").strip():
+            raise VenteInvalide("Indiquer le n° du chèque ou de la traite.")
+
+
 def _encaisser(vente, paiements, utilisateur):
+    _verifier_paiements(vente.client, paiements)
     decimales = vente.magasin.pays.decimales
     Paiement.objects.bulk_create(
         Paiement(
@@ -373,10 +394,21 @@ def _encaisser(vente, paiements, utilisateur):
             mode=p["mode"],
             montant=arrondir(p["montant"], decimales),
             recu_par=utilisateur,
+            reference=p.get("reference", "").strip(),
+            banque=p.get("banque", "").strip(),
+            echeance=p.get("echeance") if p["mode"] in Paiement.A_ECHEANCE else None,
         )
         for p in paiements
         if p["montant"] > 0
     )
+
+
+def _accorder_credit(vente, client, utilisateur, echeance):
+    if client is None:
+        raise VenteInvalide("Une vente à crédit se fait au nom d'un client.")
+    if client.liste_noire:
+        raise VenteInvalide(f"{client} est en liste noire : pas de vente à crédit.")
+    vente.credit_accorde_par, vente.credit_echeance = utilisateur, echeance
 
 
 def _verrouiller_vente(vente):
@@ -400,8 +432,9 @@ def regler_commande(*, vente, paiements, utilisateur):
 
 
 @transaction.atomic
-def livrer_commande(*, vente, utilisateur, paiements=()):
-    """Remet l'équipement au client. Le solde est encaissé au plus tard à ce moment-là."""
+def livrer_commande(*, vente, utilisateur, paiements=(), a_credit=False, credit_echeance=None):
+    """Remet l'équipement au client. Le solde est encaissé au plus tard à ce moment-là, sauf
+    vente à crédit (``a_credit``) : le client réglera le reste plus tard."""
     vente = _verrouiller_vente(vente)
     if vente.statut == Vente.Statut.ANNULEE:
         raise VenteInvalide(f"La vente {vente.numero} est annulée.")
@@ -416,14 +449,18 @@ def livrer_commande(*, vente, utilisateur, paiements=()):
     if paiements:
         regler_commande(vente=vente, paiements=paiements, utilisateur=utilisateur)
     reste = vente.reste_a_payer
-    if reste > 0:
+    champs = ["statut", "livree_le", "livree_par", "modifie_le"]
+    if reste > 0 and a_credit:
+        _accorder_credit(vente, vente.client, utilisateur, credit_echeance)
+        champs += ["credit_accorde_par", "credit_echeance"]
+    elif reste > 0:
         raise VenteInvalide(
             f"Le client doit encore {reste} {vente.devise} : encaisser le solde avant la livraison."
         )
     vente.statut = Vente.Statut.LIVREE
     vente.livree_le = timezone.now()
     vente.livree_par = utilisateur
-    vente.save(update_fields=["statut", "livree_le", "livree_par", "modifie_le"])
+    vente.save(update_fields=champs)
     return vente
 
 
@@ -439,7 +476,7 @@ def generer_facture(*, vente, client, emetteur, mode_paiement_timbre=""):
     de la facture (``mode_paiement_timbre``). Une vente n'a qu'une facture.
     """
     vente = Vente.tous.select_for_update().select_related("magasin__pays").get(pk=vente.pk)
-    if Facture.tous.filter(vente=vente).exists():
+    if Facture.tous.filter(vente=vente).exists() or vente.facture_groupee_id:
         raise FactureImpossible(f"La vente {vente.numero} est déjà facturée.")
     if Avoir.tous.filter(vente=vente).exists():
         raise FactureImpossible(
@@ -447,6 +484,9 @@ def generer_facture(*, vente, client, emetteur, mode_paiement_timbre=""):
         )
     if client is None:
         raise FactureImpossible("Une facture est établie au nom d'un client.")
+    from .facturation import verifier_mois_ouvert
+
+    verifier_mois_ouvert(vente)
     reste = vente.reste_a_payer
     if reste > 0:
         raise FactureImpossible(
@@ -679,6 +719,7 @@ def _emettre(*, vente, retours, motif, emetteur, mode_remboursement, annulation)
         sequence=sequence,
         vente=vente,
         facture=Facture.tous.filter(vente=vente).first(),
+        facture_groupee_id=vente.facture_groupee_id,
         client=vente.client,
         annulation=annulation,
         motif=motif.strip(),

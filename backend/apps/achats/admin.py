@@ -12,9 +12,11 @@ from .models import (
     CommandeFournisseur,
     FactureAchat,
     Fournisseur,
+    ImputationReglement,
     LigneCommandeFournisseur,
     LigneReception,
     LigneRetour,
+    ReglementFournisseur,
 )
 
 
@@ -163,6 +165,48 @@ class CasseVerreAdmin(admin.ModelAdmin):
         return CasseVerre.objects.select_related("vente", "ligne_commande__article", "declaree_par")
 
     # Une casse se déclare depuis la visite, dans l'application (le verre repasse à commander).
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class ImputationReglementInline(admin.TabularInline):
+    model = ImputationReglement
+    fields = ("facture", "montant", "le")
+    readonly_fields = fields
+    extra = 0
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ReglementFournisseur)
+class ReglementFournisseurAdmin(admin.ModelAdmin):
+    """Consultation : les règlements se saisissent dans l'application (imputation, échéancier)."""
+
+    list_display = (
+        "numero",
+        "date_reglement",
+        "fournisseur",
+        "mode",
+        "montant",
+        "retenue",
+        "echeance",
+        "statut",
+    )
+    list_filter = ("magasin", "mode", "statut", "fournisseur")
+    search_fields = ("numero", "reference", "fournisseur__nom")
+    inlines = [ImputationReglementInline]
+
+    def get_queryset(self, request):
+        return ReglementFournisseur.tous.select_related("magasin", "fournisseur")
+
     def has_add_permission(self, request):
         return False
 

@@ -1,7 +1,7 @@
 import uuid
 from datetime import date
 
-from django.db.models import DecimalField, Prefetch, Sum, Value
+from django.db.models import DecimalField, Prefetch, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -95,7 +95,7 @@ class VenteViewSet(
 
     def get_queryset(self):
         return Vente.objects.select_related(
-            "magasin", "vendeur", "client__organisme", "facture"
+            "magasin", "vendeur", "client__organisme", "facture", "facture_groupee"
         ).prefetch_related(
             "lignes__article",
             "lignes__retours",
@@ -184,7 +184,19 @@ class VenteViewSet(
         """Livre une commande ; le solde éventuel est encaissé en même temps."""
         saisie = LivraisonSerializer(data=request.data)
         saisie.is_valid(raise_exception=True)
-        return self._apres(livrer_commande, paiements=saisie.validated_data.get("paiements", []))
+        donnees = saisie.validated_data
+        if donnees["a_credit"]:
+            self._verifier_credit(self.get_object().magasin)
+        return self._apres(
+            livrer_commande,
+            paiements=donnees.get("paiements", []),
+            a_credit=donnees["a_credit"],
+            credit_echeance=donnees.get("credit_echeance"),
+        )
+
+    def _verifier_credit(self, magasin):
+        if not self.request.user.has_perm("ventes.vendre_a_credit", magasin):
+            raise PermissionDenied("Vente à crédit non autorisée pour votre rôle.")
 
     @extend_schema(
         parameters=[
@@ -262,7 +274,10 @@ class VenteViewSet(
             .exclude(statut=Vente.Statut.ANNULEE)
             .annotate(
                 regle=Coalesce(
-                    Sum("paiements__montant"),
+                    Sum(
+                        "paiements__montant",
+                        filter=Q(paiements__statut=Paiement.Statut.ENCAISSE),
+                    ),
                     Value(0),
                     output_field=DecimalField(max_digits=14, decimal_places=3),
                 )
@@ -314,6 +329,8 @@ class VenteViewSet(
                 raise ValidationError({"client": "Client inconnu."})
         lunettes = self._avec_ordonnances(donnees.get("lunettes", []), user)
         lentilles = self._avec_ordonnances(donnees.get("lentilles", []), user)
+        if donnees["a_credit"]:
+            self._verifier_credit(magasin)
 
         try:
             vente = enregistrer_vente(
@@ -329,6 +346,8 @@ class VenteViewSet(
                 peniche=donnees.get("peniche"),
                 lunettes=lunettes,
                 lentilles=lentilles,
+                a_credit=donnees["a_credit"],
+                credit_echeance=donnees.get("credit_echeance"),
             )
         except VenteInvalide as erreur:
             return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)

@@ -8,7 +8,11 @@ Pendant une requête HTTP, le middleware pose la variable de session ``app.perim
 (tâches Celery, migrations, commandes), elle est vide et la base n'ajoute aucun filtre.
 """
 
+from contextlib import contextmanager
+
 from django.db import connection
+
+from core.perimetre import perimetre_actuel
 
 VARIABLE = "app.perimetre"
 TOUT = "*"
@@ -29,6 +33,21 @@ def poser(ids):
 
 def effacer():
     _ecrire("")
+
+
+@contextmanager
+def voir_aussi(magasin_ids):
+    """Élargit le périmètre de la base à quelques magasins, le temps d'une lecture précise
+    (le stock du dépôt quand un magasin prépare son réassort), puis le rétablit."""
+    ids = perimetre_actuel()
+    if ids is None:
+        yield
+        return
+    poser(ids | frozenset(magasin_ids))
+    try:
+        yield
+    finally:
+        poser(ids)
 
 
 def _ecrire(texte):

@@ -364,6 +364,55 @@ PERMISSIONS_SAV = {
     "Comptabilité & Finance": ["ventes.view_dossiersav"],
 }
 
+# Règlements fournisseurs : saisis et suivis par la finance (échéancier, retenue à la source).
+REGLEMENTS_FOURNISSEURS = [
+    "achats.view_reglementfournisseur",
+    "achats.add_reglementfournisseur",
+    "achats.change_reglementfournisseur",
+    "achats.delete_reglementfournisseur",
+]
+PERMISSIONS_REGLEMENTS_FOURNISSEURS = {
+    "Comptabilité & Finance": REGLEMENTS_FOURNISSEURS,
+    "Responsable de magasin": ["achats.view_reglementfournisseur"],
+    "Achats & Gestionnaire de Stock": ["achats.view_reglementfournisseur"],
+}
+
+# Crédit client et impayés : le responsable accorde le crédit ; lui et la finance suivent les
+# chèques impayés, les changements de chèque et la liste noire.
+PERMISSIONS_CREDIT_IMPAYES = {
+    "Responsable de magasin": ["ventes.vendre_a_credit", "ventes.gerer_impayes"],
+    "Comptabilité & Finance": ["ventes.gerer_impayes"],
+}
+
+# Facturation groupée et clôture du mois : la clôture est un acte comptable, faite par le
+# responsable ou la comptabilité.
+PERMISSIONS_FACTURATION_GROUPEE = {
+    "Responsable de magasin": [
+        "ventes.view_facturegroupee",
+        "ventes.add_facturegroupee",
+        "ventes.view_cloturemois",
+        "ventes.add_cloturemois",
+    ],
+    "Opticien": ["ventes.view_facturegroupee", "ventes.add_facturegroupee"],
+    "Comptabilité & Finance": [
+        "ventes.view_facturegroupee",
+        "ventes.view_cloturemois",
+        "ventes.add_cloturemois",
+    ],
+}
+
+# Bons de sortie et sorties casse : le responsable et le stock. Demandes de transfert : tout le
+# magasin peut demander ; servir ou refuser revient au magasin sollicité (responsable, stock).
+SORTIES = ["stock.view_bonsortie", "stock.add_bonsortie"]
+DEMANDER = ["stock.view_demandetransfert", "stock.add_demandetransfert"]
+TRAITER = DEMANDER + ["stock.change_demandetransfert"]
+PERMISSIONS_SORTIES_DEMANDES = {
+    "Responsable de magasin": SORTIES + TRAITER,
+    "Achats & Gestionnaire de Stock": SORTIES + TRAITER,
+    "Opticien": DEMANDER,
+    "Vendeur": DEMANDER,
+}
+
 # Corbeille : les responsables restaurent ce qui a été supprimé par erreur dans leur
 # périmètre ; vider définitivement reste à l'administrateur.
 CORBEILLE = ["securite.view_elementcorbeille", "securite.restaurer_elementcorbeille"]
@@ -391,6 +440,10 @@ for _par_role in (
     PERMISSIONS_CASSES,
     PERMISSIONS_BORDEREAUX,
     PERMISSIONS_SAV,
+    PERMISSIONS_REGLEMENTS_FOURNISSEURS,
+    PERMISSIONS_CREDIT_IMPAYES,
+    PERMISSIONS_FACTURATION_GROUPEE,
+    PERMISSIONS_SORTIES_DEMANDES,
     PERMISSIONS_CORBEILLE,
 ):
     for _nom, _permissions in _par_role.items():

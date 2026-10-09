@@ -3,11 +3,13 @@ from django.contrib import admin
 from .models import (
     Avoir,
     BordereauPec,
+    ClotureMois,
     Devis,
     DossierSav,
     EtapeCommande,
     EvenementSav,
     Facture,
+    FactureGroupee,
     LigneAvoir,
     LigneDevis,
     LigneVente,
@@ -66,6 +68,38 @@ class FactureAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+class LectureSeule:
+    """Documents établis depuis l'application, jamais modifiés ici."""
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(FactureGroupee)
+class FactureGroupeeAdmin(LectureSeule, admin.ModelAdmin):
+    list_display = ("numero", "type", "magasin", "client_nom", "du", "au", "net_a_payer")
+    list_filter = ("type", "magasin")
+    search_fields = ("numero", "client_nom")
+
+    def get_queryset(self, request):
+        return FactureGroupee.tous.select_related("magasin", "client")
+
+
+@admin.register(ClotureMois)
+class ClotureMoisAdmin(LectureSeule, admin.ModelAdmin):
+    list_display = ("__str__", "magasin", "facture", "cloture_par", "cree_le")
+    list_filter = ("magasin", "annee")
+
+    def get_queryset(self, request):
+        return ClotureMois.tous.select_related("magasin", "facture", "cloture_par")
 
 
 class LigneDevisInline(admin.TabularInline):

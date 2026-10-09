@@ -9,6 +9,10 @@ PRIVILEGES = {
         "ventes.view_vente": "Voir les ventes et les commandes",
         "ventes.add_vente": "Encaisser (caisse, acomptes, livraisons)",
         "ventes.appliquer_remise": "Accorder une remise",
+        "ventes.vendre_a_credit": "Vendre à crédit (remettre au client sans qu'il ait soldé)",
+        "ventes.gerer_impayes": (
+            "Gérer les chèques impayés, les changements de chèque et la liste noire"
+        ),
     },
     "Prises en charge": {
         "ventes.view_priseencharge": "Voir les prises en charge (CNAM, assurances, mutuelles)",
@@ -39,6 +43,10 @@ PRIVILEGES = {
         "ventes.add_facture": "Établir une facture",
         "ventes.view_avoir": "Voir les avoirs",
         "ventes.add_avoir": "Établir un avoir ou annuler une vente",
+        "ventes.view_facturegroupee": "Voir les factures groupées et récapitulatives",
+        "ventes.add_facturegroupee": "Facturer plusieurs visites ou ventes comptoir ensemble",
+        "ventes.view_cloturemois": "Voir les mois clôturés",
+        "ventes.add_cloturemois": "Clôturer le mois (facture récapitulative)",
     },
     "Clients et ordonnances": {
         "crm.view_client": "Voir les clients",
@@ -89,6 +97,11 @@ PRIVILEGES = {
         "stock.view_transfertstock": "Voir les transferts de stock",
         "stock.add_transfertstock": "Envoyer un transfert de stock (du dépôt vers un magasin)",
         "stock.change_transfertstock": "Réceptionner un transfert de stock arrivé au magasin",
+        "stock.view_bonsortie": "Voir les bons de sortie et sorties casse",
+        "stock.add_bonsortie": "Sortir du stock (usage interne, cadeau, casse…)",
+        "stock.view_demandetransfert": "Voir les demandes de transfert",
+        "stock.add_demandetransfert": "Demander des articles à un autre magasin ou au dépôt",
+        "stock.change_demandetransfert": "Servir ou refuser une demande de transfert",
         "stock.view_inventaire": "Voir les inventaires",
         "stock.add_inventaire": "Ouvrir un inventaire",
         "stock.change_inventaire": "Compter les articles d'un inventaire en cours",
@@ -111,6 +124,14 @@ PRIVILEGES = {
         "achats.add_bonretour": "Saisir un bon retour fournisseur (marchandise renvoyée)",
         "achats.view_casseverre": "Voir les casses de verres",
         "achats.add_casseverre": "Déclarer une casse de verre (verre à recommander)",
+    },
+    "Règlements fournisseurs": {
+        "achats.view_reglementfournisseur": "Voir les règlements fournisseurs et l'échéancier",
+        "achats.add_reglementfournisseur": (
+            "Régler un fournisseur (factures, avances, retenue à la source)"
+        ),
+        "achats.change_reglementfournisseur": "Marquer un chèque ou une traite comme débité",
+        "achats.delete_reglementfournisseur": "Annuler un règlement fournisseur",
     },
     "Sociétés, magasins et pays": {
         "reseau.view_societe": "Voir les sociétés",

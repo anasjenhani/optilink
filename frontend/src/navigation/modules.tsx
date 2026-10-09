@@ -6,6 +6,7 @@ import ArrowUpward from "@mui/icons-material/ArrowUpward";
 import AssignmentReturn from "@mui/icons-material/AssignmentReturn";
 import Badge from "@mui/icons-material/Badge";
 import BeachAccess from "@mui/icons-material/BeachAccess";
+import Block from "@mui/icons-material/Block";
 import Build from "@mui/icons-material/Build";
 import CalendarMonth from "@mui/icons-material/CalendarMonth";
 import CheckCircle from "@mui/icons-material/CheckCircle";
@@ -24,6 +25,7 @@ import History from "@mui/icons-material/History";
 import Inventory from "@mui/icons-material/Inventory";
 import Inventory2 from "@mui/icons-material/Inventory2";
 import ListAlt from "@mui/icons-material/ListAlt";
+import LocalOffer from "@mui/icons-material/LocalOffer";
 import LocalShipping from "@mui/icons-material/LocalShipping";
 import Lock from "@mui/icons-material/Lock";
 import LockOpen from "@mui/icons-material/LockOpen";
@@ -31,6 +33,7 @@ import MonitorHeart from "@mui/icons-material/MonitorHeart";
 import MoveDown from "@mui/icons-material/MoveDown";
 import MoveToInbox from "@mui/icons-material/MoveToInbox";
 import Payments from "@mui/icons-material/Payments";
+import Percent from "@mui/icons-material/Percent";
 import People from "@mui/icons-material/People";
 import PersonAddAlt from "@mui/icons-material/PersonAddAlt";
 import PersonSearch from "@mui/icons-material/PersonSearch";
@@ -47,11 +50,13 @@ import Store from "@mui/icons-material/Store";
 import SwapHoriz from "@mui/icons-material/SwapHoriz";
 import Sync from "@mui/icons-material/Sync";
 import TableChart from "@mui/icons-material/TableChart";
+import TrendingUp from "@mui/icons-material/TrendingUp";
 import Today from "@mui/icons-material/Today";
 import TrackChanges from "@mui/icons-material/TrackChanges";
 import Undo from "@mui/icons-material/Undo";
 import UploadFile from "@mui/icons-material/UploadFile";
 import Visibility from "@mui/icons-material/Visibility";
+import VolunteerActivism from "@mui/icons-material/VolunteerActivism";
 import Widgets from "@mui/icons-material/Widgets";
 import type { SvgIconComponent } from "@mui/icons-material";
 import type { ReactNode } from "react";
@@ -68,13 +73,18 @@ import { Clients } from "../pages/Clients";
 import { CassesVerres } from "../pages/CassesVerres";
 import { Commandes } from "../pages/Commandes";
 import { Corbeille } from "../pages/Corbeille";
+import { CreditClients } from "../pages/CreditClients";
 import { BordereauxPec } from "../pages/BordereauxPec";
 import { PrisesEnCharge } from "../pages/PrisesEnCharge";
 import { Sav } from "../pages/Sav";
 import { Recus } from "../pages/Recus";
+import { ReglementsFournisseurs } from "../pages/ReglementsFournisseurs";
 import { ResteVendeur } from "../pages/ResteVendeur";
 import { Devis } from "../pages/Devis";
+import { ClotureMois, FacturationGroupee } from "../pages/FacturationGroupee";
 import { Factures } from "../pages/Factures";
+import { BonSortie, DemandesTransfert, Reassort, StockALaDate } from "../pages/SortiesStock";
+import { Statistiques } from "../pages/Statistiques";
 import { Fournisseurs } from "../pages/Fournisseurs";
 import { Imports } from "../pages/Imports";
 import { Journee } from "../pages/Journee";
@@ -166,6 +176,12 @@ export function modulesPour(session: EtatSession): Module[] {
     si(droitsTresorerie[onglet], () => (
       <Tresorerie droits={droitsTresorerie} ongletInitial={ONGLETS_TRESORERIE[onglet]} />
     ));
+  const droitsCredit = { regler: a("ventes.add_vente"), gerer: a("ventes.gerer_impayes") };
+  const droitsReglementsFournisseurs = {
+    regler: a("achats.add_reglementfournisseur"),
+    debiter: a("achats.change_reglementfournisseur"),
+    annuler: a("achats.delete_reglementfournisseur"),
+  };
   const droitsRh = {
     voirEmployes: a("rh.view_employe"),
     creerEmploye: a("rh.add_employe"),
@@ -506,7 +522,13 @@ export function modulesPour(session: EtatSession): Module[] {
             />
           )),
         },
-        aVenir("stock-date", "Stock à la Date", CalendarMonth, COULEURS.vert),
+        {
+          id: "stock-date",
+          libelle: "Stock à la Date",
+          icone: CalendarMonth,
+          couleur: COULEURS.vert,
+          ecran: si(a("stock.view_article"), () => <StockALaDate />),
+        },
         aVenir("config-stock", "Config Stock", Widgets, COULEURS.brun),
         aVenir("stock-depense", "Stock Article Dépense", Inventory2, COULEURS.jaune),
         {
@@ -517,11 +539,49 @@ export function modulesPour(session: EtatSession): Module[] {
           ecran: si(a("stock.view_mouvementstock"), () => <MouvementsStock />),
         },
         aVenir("stock-total", "Stock Total", Widgets, COULEURS.orange),
-        aVenir("bon-sortie", "Bon Sortie", ArrowUpward, COULEURS.vert),
-        aVenir("demande-transfert", "Demande Transfert", CompareArrows, COULEURS.bleu),
-        aVenir("demande-alimentation", "Demande Alimentation", MoveDown, COULEURS.bleu),
-        aVenir("bon-sortie-casse", "Bon Sortie Casse", ArrowUpward, COULEURS.vert),
-        aVenir("reassort", "Réassort", EventRepeat, COULEURS.orange),
+        {
+          id: "bon-sortie",
+          libelle: "Bon Sortie",
+          icone: ArrowUpward,
+          couleur: COULEURS.vert,
+          ecran: si(a("stock.add_bonsortie"), () => <BonSortie />),
+        },
+        {
+          id: "demande-transfert",
+          libelle: "Demande Transfert",
+          icone: CompareArrows,
+          couleur: COULEURS.bleu,
+          ecran: si(a("stock.view_demandetransfert"), () => (
+            <DemandesTransfert demander={a("stock.add_demandetransfert")} servir={a("stock.change_demandetransfert")} />
+          )),
+        },
+        {
+          id: "demande-alimentation",
+          libelle: "Demande Alimentation",
+          icone: MoveDown,
+          couleur: COULEURS.bleu,
+          ecran: si(a("stock.view_demandetransfert"), () => (
+            <DemandesTransfert
+              alimentation
+              demander={a("stock.add_demandetransfert")}
+              servir={a("stock.change_demandetransfert")}
+            />
+          )),
+        },
+        {
+          id: "bon-sortie-casse",
+          libelle: "Bon Sortie Casse",
+          icone: ArrowUpward,
+          couleur: COULEURS.vert,
+          ecran: si(a("stock.add_bonsortie"), () => <BonSortie casse />),
+        },
+        {
+          id: "reassort",
+          libelle: "Réassort",
+          icone: EventRepeat,
+          couleur: COULEURS.orange,
+          ecran: si(a("stock.add_demandetransfert"), () => <Reassort />),
+        },
         aVenir("comparaison", "Comparaison", CompareArrows, COULEURS.gris),
       ],
     },
@@ -552,7 +612,13 @@ export function modulesPour(session: EtatSession): Module[] {
           couleur: COULEURS.bleu,
           ecran: si(droitsRh.voirAcomptes, () => <RessourcesHumaines droits={droitsRh} ongletInitial="acomptes" />),
         },
-        aVenir("vente-credit", "Liste Vente à Crédit", ListAlt, COULEURS.brun),
+        {
+          id: "vente-credit",
+          libelle: "Liste Vente à Crédit",
+          icone: ListAlt,
+          couleur: COULEURS.brun,
+          ecran: si(a("ventes.view_vente"), () => <CreditClients droits={droitsCredit} ongletInitial="ventes" />),
+        },
         {
           id: "liste-reglements",
           libelle: "Liste Règlements",
@@ -560,7 +626,13 @@ export function modulesPour(session: EtatSession): Module[] {
           couleur: COULEURS.gris,
           ecran: si(voirVentes, () => <Recus />),
         },
-        aVenir("changement-cheques", "Changement Chèques", SwapHoriz, COULEURS.brun),
+        {
+          id: "changement-cheques",
+          libelle: "Changement Chèques",
+          icone: SwapHoriz,
+          couleur: COULEURS.brun,
+          ecran: si(a("ventes.gerer_impayes"), () => <CreditClients droits={droitsCredit} ongletInitial="cheques" />),
+        },
         {
           id: "prises-en-charge",
           libelle: "Prises en Charge (CNAM)",
@@ -579,10 +651,63 @@ export function modulesPour(session: EtatSession): Module[] {
             <BordereauxPec preparer={a("ventes.add_bordereaupec")} regler={a("ventes.change_bordereaupec")} />
           )),
         },
-        aVenir("reglement-credit", "Règlement Crédit", CreditCard, COULEURS.brun),
+        {
+          id: "reglement-credit",
+          libelle: "Règlement Crédit",
+          icone: CreditCard,
+          couleur: COULEURS.brun,
+          ecran: si(a("ventes.add_vente"), () => <CreditClients droits={droitsCredit} ongletInitial="ventes" />),
+        },
         aVenir("transfert-solde", "Transfert Solde", CompareArrows, COULEURS.gris),
-        aVenir("impaye", "Impayé Client", ReportProblem, COULEURS.rouge),
-        aVenir("reglement-impaye", "Règlement Impayé", ReportProblem, COULEURS.rouge),
+        {
+          id: "impaye",
+          libelle: "Impayé Client",
+          icone: ReportProblem,
+          couleur: COULEURS.rouge,
+          ecran: si(a("ventes.view_vente"), () => <CreditClients droits={droitsCredit} ongletInitial="impayes" />),
+        },
+        {
+          id: "liste-noire",
+          libelle: "Liste Noire",
+          icone: Block,
+          couleur: COULEURS.rouge,
+          ecran: si(a("ventes.gerer_impayes"), () => (
+            <CreditClients droits={droitsCredit} ongletInitial="liste-noire" />
+          )),
+        },
+      ],
+    },
+    {
+      id: "reglement-fournisseur",
+      libelle: "Règlement Fournisseur",
+      tuiles: [
+        {
+          id: "nouveau-reglement-fournisseur",
+          libelle: "Règlement Fournisseur",
+          icone: Payments,
+          couleur: COULEURS.vert,
+          ecran: si(a("achats.add_reglementfournisseur"), () => (
+            <ReglementsFournisseurs droits={droitsReglementsFournisseurs} />
+          )),
+        },
+        {
+          id: "liste-reglements-fournisseurs",
+          libelle: "Liste Règlements Fournisseurs",
+          icone: ReceiptLong,
+          couleur: COULEURS.gris,
+          ecran: si(a("achats.view_reglementfournisseur"), () => (
+            <ReglementsFournisseurs droits={droitsReglementsFournisseurs} ongletInitial="liste" />
+          )),
+        },
+        {
+          id: "echeancier-fournisseurs",
+          libelle: "Échéancier Fournisseurs",
+          icone: CalendarMonth,
+          couleur: COULEURS.orange,
+          ecran: si(a("achats.view_reglementfournisseur"), () => (
+            <ReglementsFournisseurs droits={droitsReglementsFournisseurs} ongletInitial="echeancier" />
+          )),
+        },
       ],
     },
     {
@@ -638,7 +763,13 @@ export function modulesPour(session: EtatSession): Module[] {
           couleur: COULEURS.brun,
           ecran: tresorerie("banque"),
         },
-        aVenir("echeancier", "Échéancier Client", CalendarMonth, COULEURS.vert),
+        {
+          id: "echeancier",
+          libelle: "Échéancier Client",
+          icone: CalendarMonth,
+          couleur: COULEURS.vert,
+          ecran: si(a("ventes.view_vente"), () => <CreditClients droits={droitsCredit} ongletInitial="portefeuille" />),
+        },
         aVenir("export-reglements", "Exportation Règlements", UploadFile, COULEURS.gris),
         aVenir("transfert-reglements", "Transfert Règlements Clients", SwapHoriz, COULEURS.vert),
         aVenir("report-magasin", "Mise à jour Report Magasin", Store, COULEURS.brun),
@@ -701,12 +832,58 @@ export function modulesPour(session: EtatSession): Module[] {
           )),
         },
         aVenir("ca-previsionnel", "CA Prévisionnel", TableChart, COULEURS.bleu),
-        aVenir("cloture-mois", "Clôture Mois", Lock, COULEURS.brun),
-        aVenir("facturation-vc", "Facturation Vente Comptoir", FactCheck, COULEURS.vert),
-        aVenir("preparation-facturation", "Préparation Facturation", EditNote, COULEURS.violet),
-        aVenir("facturation-visite", "Facturation Visite", FactCheck, COULEURS.violet),
+        {
+          id: "cloture-mois",
+          libelle: "Clôture Mois",
+          icone: Lock,
+          couleur: COULEURS.brun,
+          ecran: si(a("ventes.add_cloturemois"), () => <ClotureMois cloturer />),
+        },
+        {
+          id: "facturation-vc",
+          libelle: "Facturation Vente Comptoir",
+          icone: FactCheck,
+          couleur: COULEURS.vert,
+          ecran: si(a("ventes.add_facturegroupee"), () => <FacturationGroupee comptoir />),
+        },
+        {
+          id: "preparation-facturation",
+          libelle: "Préparation Facturation",
+          icone: EditNote,
+          couleur: COULEURS.violet,
+          ecran: si(a("ventes.view_cloturemois"), () => <ClotureMois />),
+        },
+        {
+          id: "facturation-visite",
+          libelle: "Facturation Visite",
+          icone: FactCheck,
+          couleur: COULEURS.violet,
+          ecran: si(a("ventes.add_facturegroupee"), () => <FacturationGroupee />),
+        },
         aVenir("avoir-financier", "Avoir Financier", Undo, COULEURS.rouge),
       ],
+    },
+    {
+      id: "statistiques",
+      libelle: "Statistiques",
+      tuiles: (
+        [
+          ["montures", "Montures et Marques", Sell, COULEURS.violet],
+          ["verres", "Verres", RemoveRedEye, COULEURS.bleu],
+          ["lentilles", "Lentilles", Visibility, COULEURS.turquoise],
+          ["remises", "Remises", LocalOffer, COULEURS.orange],
+          ["gratuits", "Gratuits", VolunteerActivism, COULEURS.vert],
+          ["ophtalmologues", "Ophtalmologues", Groups, COULEURS.brun],
+          ["tva", "TVA", Percent, COULEURS.gris],
+          ["benefice", "Bénéfice Journalier", TrendingUp, COULEURS.rouge],
+        ] as const
+      ).map(([rapport, libelle, icone, couleur]) => ({
+        id: `stat-${rapport}`,
+        libelle,
+        icone,
+        couleur,
+        ecran: si(a("ventes.consulter_reporting"), () => <Statistiques rapport={rapport} />),
+      })),
     },
     {
       id: "administration",
