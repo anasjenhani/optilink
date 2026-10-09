@@ -168,9 +168,10 @@ export function Espace({ session }: { session: EtatSession }) {
   const [adresse, aller] = useAdresse();
   const module = modules.find((m) => m.id === adresse.module) ?? modules[0];
   const tuile = module.tuiles.find((t) => t.id === adresse.ecran && t.ecran);
-  const raccourcis = RACCOURCIS.filter((r) =>
-    modules.find((m) => m.id === r.module)?.tuiles.some((t) => t.id === r.tuile && t.ecran),
-  );
+  const raccourcis = RACCOURCIS.flatMap((r) => {
+    const cible = modules.find((m) => m.id === r.module)?.tuiles.find((t) => t.id === r.tuile && t.ecran);
+    return cible ? [{ ...r, icone: cible.icone }] : [];
+  });
 
   return (
     <Stack spacing={2}>
@@ -201,6 +202,7 @@ export function Espace({ session }: { session: EtatSession }) {
                   variant={actif ? "contained" : "outlined"}
                   aria-current={actif ? "page" : undefined}
                   onClick={() => aller(r.module, r.tuile)}
+                  startIcon={<r.icone />}
                   sx={{ textTransform: "none" }}
                 >
                   {r.libelle}
