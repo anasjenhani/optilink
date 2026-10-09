@@ -16,6 +16,9 @@ const PEC = {
   numero_dossier: "BS-118",
   statut: "demandee",
   statut_libelle: "Demandée",
+  bordereau: null,
+  montant_regle: null,
+  motif_rejet: "",
   cree_le: "2026-10-04T10:00:00+01:00",
 };
 

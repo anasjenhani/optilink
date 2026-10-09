@@ -19,6 +19,8 @@ class TypeDocument(models.TextChoices):
     BON_RETOUR = "bon_retour", "Bon retour fournisseur"
     TRANSFERT = "transfert", "Transfert de stock"
     INVENTAIRE = "inventaire", "Inventaire"
+    SAV = "sav", "Dossier SAV"
+    BORDEREAU_PEC = "bord_pec", "Bordereau de prise en charge"
 
 
 # Préfixe du numéro : M01-T2026-000001 pour un ticket, M01-F2026-000001 pour une facture,
@@ -37,6 +39,8 @@ PREFIXES = {
     TypeDocument.BON_RETOUR: "BR",
     TypeDocument.TRANSFERT: "TR",
     TypeDocument.INVENTAIRE: "IN",
+    TypeDocument.SAV: "S",
+    TypeDocument.BORDEREAU_PEC: "BP",
 }
 
 
@@ -157,7 +161,7 @@ class Vente(ModeleDeBase):
         """Part des organismes (CNAM, assurance, mutuelle), sauf prise en charge refusée."""
         return sum(
             (
-                pec.montant
+                pec.part_organisme
                 for pec in self.prises_en_charge.all()
                 if pec.statut != PriseEnCharge.Statut.REFUSEE
             ),
@@ -566,6 +570,22 @@ class PriseEnCharge(ModeleDeBase):
     saisie_par = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
     )
+    bordereau = models.ForeignKey(
+        "BordereauPec",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="prises_en_charge",
+    )
+    montant_regle = models.DecimalField(
+        "montant réglé",
+        max_digits=14,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        help_text="Ce que l'organisme a payé ; l'écart avec le montant revient au client.",
+    )
+    motif_rejet = models.CharField("motif du rejet", max_length=200, blank=True)
 
     class Meta:
         ordering = ["cree_le"]
@@ -576,6 +596,166 @@ class PriseEnCharge(ModeleDeBase):
         return f"{self.organisme} : {self.montant}"
 
     @property
+    def part_organisme(self):
+        """Ce qui reste à la charge de l'organisme : rien si refusée, le réglé s'il a moins payé."""
+        if self.statut == self.Statut.REFUSEE:
+            return Decimal("0")
+        if self.statut == self.Statut.REGLEE and self.montant_regle is not None:
+            return self.montant_regle
+        return self.montant
+
+    @property
     def magasin_id(self):
         """Pour les droits par magasin : celui de la vente."""
         return self.vente.magasin_id
+
+
+class BordereauPec(ModeleDeBase):
+    """Envoi groupé de prises en charge à un organisme (CNAM, assurance, convention).
+
+    On le prépare avec les prises en charge d'un magasin pour un organisme, on l'envoie, puis on
+    saisit le règlement : chaque prise en charge est réglée en entier, en partie ou rejetée. Ce
+    que l'organisme ne paie pas revient à la charge du client.
+    """
+
+    class Statut(models.TextChoices):
+        PREPARATION = "preparation", "En préparation"
+        ENVOYE = "envoye", "Envoyé"
+        REGLE = "regle", "Réglé"
+
+    class Mode(models.TextChoices):
+        VIREMENT = "virement", "Virement"
+        CHEQUE = "cheque", "Chèque"
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    organisme = models.ForeignKey("crm.Organisme", on_delete=models.PROTECT, related_name="+")
+    statut = models.CharField(max_length=12, choices=Statut.choices, default=Statut.PREPARATION)
+    envoye_le = models.DateField("envoyé le", null=True, blank=True)
+    regle_le = models.DateField("réglé le", null=True, blank=True)
+    mode_reglement = models.CharField(
+        "mode de règlement", max_length=10, choices=Mode.choices, blank=True
+    )
+    reference_reglement = models.CharField(
+        "référence du règlement",
+        max_length=60,
+        blank=True,
+        help_text="N° de chèque ou de virement.",
+    )
+    observation = models.CharField(max_length=300, blank=True)
+    cree_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-cree_le"]
+        verbose_name = "bordereau de prise en charge"
+        verbose_name_plural = "bordereaux de prise en charge"
+
+    def __str__(self):
+        return self.numero
+
+
+class DossierSav(ModeleDeBase):
+    """Service après-vente : ce qu'un client rapporte (lunette cassée, réglage, défaut…).
+
+    Le dossier suit des étapes, du dépôt au magasin jusqu'au retour chez le client ; chaque
+    changement d'étape est gardé dans l'historique. Une réparation payante s'encaisse à part,
+    comme une vente au comptoir.
+    """
+
+    class Motif(models.TextChoices):
+        CASSE = "casse", "Casse"
+        REGLAGE = "reglage", "Réglage, ajustage"
+        DEFAUT = "defaut", "Défaut de fabrication"
+        ADAPTATION = "adaptation", "Non-adaptation aux verres"
+        AUTRE = "autre", "Autre"
+
+    class Etape(models.TextChoices):
+        RECU = "recu", "Reçu au magasin"
+        ATELIER = "atelier", "En réparation à l'atelier"
+        FOURNISSEUR = "fournisseur", "Envoyé au fournisseur"
+        PRET = "pret", "Prêt à rendre"
+        RENDU = "rendu", "Rendu au client"
+        ANNULE = "annule", "Annulé"
+
+    OUVERTES = (Etape.RECU, Etape.ATELIER, Etape.FOURNISSEUR, Etape.PRET)
+    # Étapes où le dossier attend un retour : passé la date prévue, il est en retard.
+    EN_ATTENTE = (Etape.RECU, Etape.ATELIER, Etape.FOURNISSEUR)
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    client = models.ForeignKey("crm.Client", on_delete=models.PROTECT, related_name="dossiers_sav")
+    vente = models.ForeignKey(
+        Vente,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="dossiers_sav",
+        help_text="Visite ou vente d'origine de l'article.",
+    )
+    article = models.ForeignKey(
+        "stock.Article", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    designation = models.CharField(
+        "désignation", max_length=200, help_text="Ce que le client rapporte."
+    )
+    motif = models.CharField(max_length=12, choices=Motif.choices)
+    description = models.TextField(blank=True, help_text="Le problème constaté.")
+    sous_garantie = models.BooleanField(default=False)
+    fournisseur = models.ForeignKey(
+        "achats.Fournisseur", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    etape = models.CharField(max_length=12, choices=Etape.choices, default=Etape.RECU)
+    retour_prevu_le = models.DateField("retour prévu le", null=True, blank=True)
+    solution = models.CharField(max_length=300, blank=True, help_text="Ce qui a été fait.")
+    cree_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-cree_le"]
+        verbose_name = "dossier SAV"
+        verbose_name_plural = "dossiers SAV"
+
+    def __str__(self):
+        return self.numero
+
+    @property
+    def est_ouvert(self):
+        return self.etape in self.OUVERTES
+
+    def en_retard(self, aujourdhui):
+        return (
+            self.etape in self.EN_ATTENTE
+            and self.retour_prevu_le is not None
+            and self.retour_prevu_le < aujourdhui
+        )
+
+
+class EvenementSav(models.Model):
+    """Une étape franchie par un dossier SAV, avec son commentaire."""
+
+    dossier = models.ForeignKey(DossierSav, on_delete=models.CASCADE, related_name="evenements")
+    etape = models.CharField(max_length=12, choices=DossierSav.Etape.choices)
+    commentaire = models.CharField(max_length=300, blank=True)
+    le = models.DateTimeField(default=timezone.now)
+    par = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+
+    class Meta:
+        ordering = ["le", "pk"]
+        verbose_name = "étape SAV"
+        verbose_name_plural = "étapes SAV"
+
+    def __str__(self):
+        return f"{self.dossier} : {self.get_etape_display()}"

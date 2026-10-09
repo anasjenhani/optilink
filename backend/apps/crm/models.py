@@ -5,12 +5,13 @@ from core.models import ModeleDeBase
 
 
 class Organisme(ModeleDeBase):
-    """Organisme qui prend en charge une partie des lunettes : CNAM, assurance ou mutuelle."""
+    """Organisme qui prend en charge une partie des lunettes : CNAM, assurance, mutuelle…"""
 
     class Type(models.TextChoices):
         CAISSE = "caisse", "Caisse d'assurance maladie"
         ASSURANCE = "assurance", "Assurance"
         MUTUELLE = "mutuelle", "Mutuelle"
+        CONVENTION = "convention", "Convention (entreprise, association)"
 
     nom = models.CharField(max_length=120)
     type = models.CharField(max_length=10, choices=Type.choices)

@@ -346,6 +346,24 @@ PERMISSIONS_PRISES_EN_CHARGE = {
     "Comptabilité & Finance": PEC_SUIVI + ["crm.view_organisme"],
 }
 
+# Bordereaux CNAM et conventions : préparés au magasin, réglés par la finance.
+BORDEREAUX = ["ventes.view_bordereaupec", "ventes.add_bordereaupec", "ventes.change_bordereaupec"]
+PERMISSIONS_BORDEREAUX = {
+    "Responsable de magasin": BORDEREAUX,
+    "Comptabilité & Finance": BORDEREAUX,
+}
+
+# SAV : ouvert par toute l'équipe du magasin, suivi par l'atelier et les opticiens.
+SAV_SUIVI = ["ventes.view_dossiersav", "ventes.add_dossiersav", "ventes.change_dossiersav"]
+PERMISSIONS_SAV = {
+    "Responsable de magasin": SAV_SUIVI,
+    "Opticien": SAV_SUIVI,
+    "Vendeur": SAV_SUIVI,
+    "Atelier": SAV_SUIVI,
+    "Caissier": ["ventes.view_dossiersav", "ventes.add_dossiersav"],
+    "Comptabilité & Finance": ["ventes.view_dossiersav"],
+}
+
 # Corbeille : les responsables restaurent ce qui a été supprimé par erreur dans leur
 # périmètre ; vider définitivement reste à l'administrateur.
 CORBEILLE = ["securite.view_elementcorbeille", "securite.restaurer_elementcorbeille"]
@@ -371,6 +389,8 @@ for _par_role in (
     PERMISSIONS_PILOTAGE,
     PERMISSIONS_PRISES_EN_CHARGE,
     PERMISSIONS_CASSES,
+    PERMISSIONS_BORDEREAUX,
+    PERMISSIONS_SAV,
     PERMISSIONS_CORBEILLE,
 ):
     for _nom, _permissions in _par_role.items():
