@@ -12,13 +12,16 @@ from ..models import Client, Organisme
 
 
 def soldes(clients):
-    """Ce que chaque client doit encore sur ses commandes en cours (négatif : trop perçu)."""
+    """Ce que chaque client doit encore : commandes en cours, ventes à crédit, chèques impayés
+    (négatif : trop perçu)."""
     from apps.ventes.models import Vente
 
     resultat = {client.pk: Decimal("0.000") for client in clients}
-    commandes = Vente.objects.filter(
-        client__in=resultat, statut=Vente.Statut.EN_COMMANDE
-    ).prefetch_related("paiements", "prises_en_charge")
+    commandes = (
+        Vente.objects.filter(client__in=resultat)
+        .exclude(statut=Vente.Statut.ANNULEE)
+        .prefetch_related("paiements", "prises_en_charge")
+    )
     for vente in commandes:
         resultat[vente.client_id] += vente.reste_a_payer
     return resultat
@@ -45,7 +48,7 @@ class ClientSerializer(serializers.ModelSerializer):
     )
     organisme_nom = serializers.CharField(source="organisme.nom", read_only=True, default=None)
     solde = serializers.SerializerMethodField(
-        help_text="Reste dû sur les commandes en cours (négatif : trop perçu)."
+        help_text="Reste dû : commandes en cours, crédit, impayés (négatif : trop perçu)."
     )
     magasin_origine = serializers.SlugRelatedField(
         slug_field="public_id",
@@ -78,10 +81,18 @@ class ClientSerializer(serializers.ModelSerializer):
             "numero_affilie",
             "notes",
             "est_actif",
+            "liste_noire",
+            "motif_liste_noire",
             "solde",
             "cree_le",
         ]
-        read_only_fields = ["numero", "reference_externe", "cree_le"]
+        read_only_fields = [
+            "numero",
+            "reference_externe",
+            "cree_le",
+            "liste_noire",
+            "motif_liste_noire",
+        ]
 
     @extend_schema_field(OpenApiTypes.DECIMAL)
     def get_solde(self, client):

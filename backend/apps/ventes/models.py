@@ -128,6 +128,13 @@ class Vente(ModeleDeBase):
         blank=True,
         help_text="Dernière étape saisie au suivi ; vide, l'étape vient des verres commandés.",
     )
+    # Vente à crédit : remise au client sans être soldée ; le reste se règle plus tard.
+    credit_accorde_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    credit_echeance = models.DateField(
+        "crédit à régler le", null=True, blank=True, help_text="Date promise par le client."
+    )
 
     objects = ParMagasinManager()
     tous = models.Manager()
@@ -138,6 +145,11 @@ class Vente(ModeleDeBase):
         permissions = [
             ("appliquer_remise", "Peut appliquer une remise"),
             ("consulter_reporting", "Peut consulter le reporting des ventes"),
+            ("vendre_a_credit", "Peut vendre à crédit (remettre sans que le client ait soldé)"),
+            (
+                "gerer_impayes",
+                "Peut gérer les impayés, les changements de chèque et la liste noire",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -156,7 +168,11 @@ class Vente(ModeleDeBase):
 
     @property
     def regle_par_le_client(self):
-        return sum((p.montant for p in self.paiements.all()), Decimal("0"))
+        """Règlements du client qui comptent : un chèque impayé ou remplacé n'en fait pas partie."""
+        return sum(
+            (p.montant for p in self.paiements.all() if p.statut == Paiement.Statut.ENCAISSE),
+            Decimal("0"),
+        )
 
     @property
     def pris_en_charge(self):
@@ -516,6 +532,16 @@ class Paiement(models.Model):
         CARTE = "carte", "Carte bancaire"
         ESPECES = "especes", "Espèces"
         CHEQUE = "cheque", "Chèque"
+        VIREMENT = "virement", "Virement"
+        TRAITE = "traite", "Traite"
+
+    class Statut(models.TextChoices):
+        ENCAISSE = "encaisse", "Encaissé"
+        IMPAYE = "impaye", "Impayé"
+        REMPLACE = "remplace", "Remplacé"
+
+    # Chèques et traites : remis à la banque à leur échéance, ils peuvent revenir impayés.
+    A_ECHEANCE = (Mode.CHEQUE, Mode.TRAITE)
 
     vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="paiements")
     mode = models.CharField(max_length=20, choices=Mode.choices)
@@ -523,6 +549,24 @@ class Paiement(models.Model):
     recu_le = models.DateTimeField(default=timezone.now)
     recu_par = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, related_name="+"
+    )
+    reference = models.CharField(
+        max_length=60, blank=True, help_text="N° du chèque, de la traite ou du virement."
+    )
+    banque = models.CharField(max_length=100, blank=True)
+    echeance = models.DateField(
+        "échéance", null=True, blank=True, help_text="Chèque ou traite : à remettre à la banque le."
+    )
+    statut = models.CharField(max_length=10, choices=Statut.choices, default=Statut.ENCAISSE)
+    impaye_le = models.DateField(null=True, blank=True)
+    motif_impaye = models.CharField("motif de l'impayé", max_length=200, blank=True)
+    remplace_par = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="remplace",
+        help_text="Changement de chèque : le règlement qui a pris sa place.",
     )
 
     class Meta:

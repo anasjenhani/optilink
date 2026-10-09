@@ -1,4 +1,4 @@
-import type { ModePaiement, Vente } from "./caisse";
+import type { ModePaiement, Piece, Vente } from "./caisse";
 import { appeler } from "./client";
 
 export type StatutDevis = "en_cours" | "accepte" | "refuse" | "encaisse";
@@ -69,7 +69,7 @@ export const refuserDevis = (id: string) => appeler<Devis>(`/api/v1/devis/${id}/
 /** Encaisse au prix du devis ; renvoie le ticket. En commande, le paiement est l'acompte. */
 export const encaisserDevis = (
   id: string,
-  paiement: { mode: ModePaiement; montant: string },
+  paiement: { mode: ModePaiement; montant: string } & Piece,
   commande = false,
   peniche?: number,
 ) =>

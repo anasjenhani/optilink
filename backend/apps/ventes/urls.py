@@ -1,6 +1,7 @@
 from rest_framework.routers import DefaultRouter
 
 from .api.bordereaux import BordereauPecViewSet
+from .api.impayes import CreditClientViewSet
 from .api.lunettes import LentillesViewSet, LunetteViewSet
 from .api.prises_en_charge import PriseEnChargeViewSet
 from .api.sav import DossierSavViewSet
@@ -16,5 +17,6 @@ router.register("lentilles", LentillesViewSet, basename="lentilles")
 router.register("prises-en-charge", PriseEnChargeViewSet, basename="prise-en-charge")
 router.register("bordereaux-pec", BordereauPecViewSet, basename="bordereau-pec")
 router.register("sav", DossierSavViewSet, basename="dossier-sav")
+router.register("credit-clients", CreditClientViewSet, basename="credit-client")
 
 urlpatterns = router.urls

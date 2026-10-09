@@ -93,6 +93,9 @@ class PaiementFicheSerializer(serializers.Serializer):
     montant = serializers.DecimalField(max_digits=14, decimal_places=3)
     recu_le = serializers.DateTimeField()
     recu_par = serializers.SerializerMethodField()
+    reference = serializers.CharField()
+    statut = serializers.CharField()
+    statut_libelle = serializers.CharField(source="get_statut_display")
 
     def get_recu_par(self, paiement) -> str:
         return _nom(paiement.recu_par)

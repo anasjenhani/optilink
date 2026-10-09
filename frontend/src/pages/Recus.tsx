@@ -31,6 +31,8 @@ const MODES = [
   { valeur: "especes", libelle: "Espèces" },
   { valeur: "carte", libelle: "Carte bancaire" },
   { valeur: "cheque", libelle: "Chèque" },
+  { valeur: "virement", libelle: "Virement" },
+  { valeur: "traite", libelle: "Traite" },
 ];
 
 const aujourdhui = () => new Date().toLocaleDateString("sv-SE");
@@ -114,15 +116,36 @@ export function Recus() {
             Liste des reçus
           </Typography>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-            <TextField select size="small" label="Magasin" value={magasin} onChange={(e) => setMagasin(e.target.value)} sx={{ minWidth: 180 }}>
+            <TextField
+              select
+              size="small"
+              label="Magasin"
+              value={magasin}
+              onChange={(e) => setMagasin(e.target.value)}
+              sx={{ minWidth: 180 }}
+            >
               {magasins.data?.map((m) => (
                 <MenuItem key={m.id} value={m.id}>
                   {m.nom}
                 </MenuItem>
               ))}
             </TextField>
-            <TextField size="small" type="date" label="Du" value={du} onChange={(e) => setDu(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
-            <TextField size="small" type="date" label="Au" value={au} onChange={(e) => setAu(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+            <TextField
+              size="small"
+              type="date"
+              label="Du"
+              value={du}
+              onChange={(e) => setDu(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+            <TextField
+              size="small"
+              type="date"
+              label="Au"
+              value={au}
+              onChange={(e) => setAu(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
           </Stack>
           {recus.isError && <Alert severity="error">{recus.error.message}</Alert>}
           {recus.data && (
