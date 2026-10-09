@@ -22,7 +22,10 @@ from rest_framework.views import APIView
 
 from apps.reseau.models import Magasin, Societe
 
-from ..models import Affectation, Utilisateur
+from ..corbeille import mettre_a_la_corbeille
+from ..journal import journaliser
+from ..models import Affectation, EvenementSecurite, Utilisateur
+from ..presence import est_connecte
 from ..privileges import ADMINISTRATION, CODES, PRIVILEGES
 
 
@@ -185,7 +188,7 @@ class ProfilViewSet(viewsets.ModelViewSet):
                 {"detail": "Ce profil est donné à des utilisateurs : retirez-le-leur d'abord."}
             )
         verifier_privileges(self.request.user, _codes(profil.permissions.all()) & CODES)
-        profil.delete()
+        mettre_a_la_corbeille(profil, auteur=self.request.user)
 
 
 # --- Utilisateurs ----------------------------------------------------------------------------
@@ -248,6 +251,7 @@ class UtilisateurSerializer(serializers.ModelSerializer):
     )
     derniere_connexion = serializers.DateTimeField(source="last_login", read_only=True)
     mfa_active = serializers.SerializerMethodField()
+    connecte = serializers.SerializerMethodField()
     administrateur_technique = serializers.BooleanField(source="is_superuser", read_only=True)
     affectations = AffectationSerializer(many=True, required=False)
 
@@ -263,9 +267,14 @@ class UtilisateurSerializer(serializers.ModelSerializer):
             "mot_de_passe",
             "derniere_connexion",
             "mfa_active",
+            "connecte",
             "administrateur_technique",
             "affectations",
         ]
+
+    def get_connecte(self, utilisateur) -> bool:
+        """A utilisé OptiLink ces dernières minutes (voir apps.securite.presence)."""
+        return est_connecte(utilisateur)
 
     def get_mfa_active(self, utilisateur) -> bool:
         return TOTPDevice.objects.filter(user=utilisateur, confirmed=True).exists()
@@ -306,7 +315,15 @@ class UtilisateurSerializer(serializers.ModelSerializer):
                 raise PermissionDenied("Vous ne pouvez pas désactiver votre propre compte.")
         utilisateur = super().save(**kwargs)
         if mot_de_passe:
-            utilisateur.set_password(mot_de_passe)
+            # L'import chiffre les mots de passe d'avance (en parallèle) et ne les chiffre pas
+            # du tout pour la vérification, annulée de toute façon : sinon le serveur coupe.
+            chiffres = self.context.get("mots_de_passe_chiffres")
+            if chiffres is None:
+                utilisateur.set_password(mot_de_passe)
+            elif mot_de_passe in chiffres:
+                utilisateur.password = chiffres[mot_de_passe]
+            else:
+                utilisateur.set_unusable_password()
             utilisateur.save(update_fields=["password"])
         if affectations is not None:
             self._enregistrer_affectations(demandeur, utilisateur, affectations)
@@ -340,6 +357,8 @@ class UtilisateurSerializer(serializers.ModelSerializer):
                     continue
                 # Changer une affectation, c'est retirer l'ancienne et donner la nouvelle.
                 verifier_affectation(demandeur, ancienne)
+                # Ligne déjà en base : le journal d'audit enregistre la modification (avant, après).
+                nouvelle._state.adding = False
             verifier_affectation(demandeur, nouvelle)
             nouvelle.save()
 
@@ -392,4 +411,10 @@ class UtilisateurViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Ce compte technique ne se modifie que par lui-même.")
         TOTPDevice.objects.filter(user=utilisateur).delete()
         StaticDevice.objects.filter(user=utilisateur).delete()
+        journaliser(
+            EvenementSecurite.Type.MFA_REINITIALISEE,
+            request,
+            utilisateur,
+            details=f"par {request.user.get_username()}",
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)

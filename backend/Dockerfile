@@ -18,7 +18,9 @@ RUN DJANGO_SETTINGS_MODULE=config.settings.prod DB_ENGINE=sqlite \
 RUN useradd --create-home --uid 1000 optilink && chown -R optilink /app
 USER optilink
 
-ENV DJANGO_SETTINGS_MODULE=config.settings.prod
+# Nombre de processus Gunicorn, lu par Gunicorn lui-même : 2 suffisent en qualification.
+ENV DJANGO_SETTINGS_MODULE=config.settings.prod \
+    WEB_CONCURRENCY=3
 EXPOSE 8000
 ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--timeout", "60"]

@@ -1,5 +1,4 @@
 from django.conf import settings
-from django_otp import user_has_device
 from rest_framework.permissions import BasePermission
 
 _ACTIONS_PAR_METHODE = {
@@ -18,6 +17,16 @@ def mfa_verifiee(user):
     return getattr(user, "otp_device", None) is not None
 
 
+def mfa_requise(user):
+    """Le second facteur n'est exigé que des administrateurs : accès à /admin/ ou profil listé
+    dans MFA_PROFILS. Les autres comptes se connectent avec leur seul mot de passe."""
+    if not settings.MFA_OBLIGATOIRE:
+        return False
+    if user.is_staff or user.is_superuser:
+        return True
+    return user.affectations.filter(role__name__in=settings.MFA_PROFILS).exists()
+
+
 class MfaVerifiee(BasePermission):
     """Session ouverte et second facteur validé pendant cette session."""
 
@@ -29,7 +38,7 @@ class MfaVerifiee(BasePermission):
             return False
         if mfa_verifiee(user):
             return True
-        return not settings.MFA_OBLIGATOIRE and not user_has_device(user)
+        return not mfa_requise(user)
 
 
 class PermissionsParAction(BasePermission):

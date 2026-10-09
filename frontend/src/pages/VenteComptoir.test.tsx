@@ -1,11 +1,22 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import { VenteComptoir } from "./VenteComptoir";
 
 const TUNISIE = { code: "TN", nom: "Tunisie", devise: "TND", decimales: 3 };
 const MAGASIN = { id: "m1", code: "T01", nom: "Tunis", societe: "Optique de Tunis", ville: "Tunis", pays: TUNISIE };
-const CLIENT = { id: "c1", numero: 42, nom: "Ben Ali", prenom: "Sami", telephone: "98123456", telephone_2: "", ville: "Tunis" };
+const CLIENT = {
+  id: "c1",
+  numero: 42,
+  reference_externe: "",
+  nom: "Ben Ali",
+  prenom: "Sami",
+  telephone: "98123456",
+  telephone_2: "",
+  ville: "Tunis",
+  notes: "Client fidèle",
+  solde: "-0.010",
+};
 const SOLAIRE = {
   id: "a1",
   reference: "SOL-1",
@@ -28,7 +39,7 @@ function simuler() {
     vi.fn((url: string, init?: RequestInit) => {
       appels.push({ url, init });
       if (url === "/api/v1/magasins/") return json({ results: [MAGASIN] });
-      if (url.startsWith("/api/v1/clients/")) return json({ results: [CLIENT] });
+      if (url.startsWith("/api/v1/clients/")) return json({ count: 1, results: [CLIENT] });
       if (url.startsWith("/api/v1/articles/")) return json({ results: [SOLAIRE] });
       return json({
         id: "v1",
@@ -55,13 +66,16 @@ function afficher(creerClient = true) {
 
 afterEach(() => vi.unstubAllGlobals());
 
-test("client retrouvé par son n° de fiche, puis type de vente, puis encaissement à son nom", async () => {
+test("client retrouvé dans le tableau par son n° de fiche, puis type de vente, puis encaissement", async () => {
   const appels = simuler();
   afficher();
 
-  fireEvent.change(screen.getByLabelText(/Rechercher le client/), { target: { value: "42" } });
-  fireEvent.click(await screen.findByText("BEN ALI Sami · fiche n° 42"));
-  expect(appels.some((a) => a.url === "/api/v1/clients/?recherche=42")).toBe(true);
+  fireEvent.change(screen.getByLabelText("Filtrer N° Fiche"), { target: { value: "42" } });
+  await waitFor(() => expect(appels.some((a) => a.url.includes("fiche=42"))).toBe(true));
+  const ligne = (await screen.findByText("BEN ALI SAMI")).closest("tr")!;
+  expect(within(ligne).getByText("-0,010")).toBeInTheDocument();
+  expect(within(ligne).getByText("Client fidèle")).toBeInTheDocument();
+  fireEvent.click(ligne);
 
   fireEvent.click(screen.getByRole("button", { name: /Lunettes solaires/ }));
   fireEvent.click(await screen.findByRole("button", { name: "Ajouter" }));
@@ -77,14 +91,26 @@ test("client retrouvé par son n° de fiche, puis type de vente, puis encaisseme
 test("nouveau client : la fiche s'ouvre ; sans le droit, seul le client de passage reste", async () => {
   simuler();
   afficher();
-  fireEvent.click(screen.getByRole("button", { name: "Nouveau client" }));
+  fireEvent.click(screen.getByRole("button", { name: "Nouveau Client" }));
   expect(await screen.findByRole("form", { name: "Nouveau client" })).toBeInTheDocument();
 
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
   simuler();
   afficher(false);
-  expect(screen.queryByRole("button", { name: "Nouveau client" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Nouveau Client" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Client de passage" }));
   expect(screen.getByRole("button", { name: /Produits et accessoires/ })).toBeInTheDocument();
+});
+
+test("lunettes optiques : la péniche se saisit dès l'ouverture de la fiche lunette", async () => {
+  const appels = simuler();
+  afficher();
+  fireEvent.change(screen.getByLabelText("Filtrer N° Fiche"), { target: { value: "42" } });
+  await waitFor(() => expect(appels.some((a) => a.url.includes("fiche=42"))).toBe(true));
+  fireEvent.click((await screen.findByText("BEN ALI SAMI")).closest("tr")!);
+
+  fireEvent.click(screen.getByRole("button", { name: /Lunettes optiques/ }));
+  expect(await screen.findByLabelText(/PÉNICHE/)).toBeInTheDocument();
+  expect(screen.getByRole("checkbox", { name: /Commande/ })).toBeChecked();
 });

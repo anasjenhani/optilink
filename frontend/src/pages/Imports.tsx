@@ -1,7 +1,12 @@
+import UploadFile from "@mui/icons-material/UploadFile";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
 import Link from "@mui/material/Link";
 import List from "@mui/material/List";
 import ListItemText from "@mui/material/ListItemText";
@@ -10,18 +15,9 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 
-import {
-  COLONNES_CATALOGUE,
-  COLONNES_CLIENTS,
-  COLONNES_STOCK,
-  importerCatalogue,
-  importerClients,
-  importerStock,
-  urlModele,
-  type RapportImport,
-} from "../api/imports";
+import { importer, urlModele, type RapportImport, type TypeImport } from "../api/imports";
 import { listerMagasins } from "../api/magasins";
 
 function Alertes({ rapport }: { rapport: RapportImport }) {
@@ -64,55 +60,115 @@ function Rapport({ rapport }: { rapport: RapportImport }) {
   );
 }
 
-function Bloc({
-  titre,
-  aide,
-  colonnes,
-  nomModele,
-  champs,
-  pret = true,
-  contexte = "",
-  envoyer,
-}: {
-  titre: string;
-  aide: string;
-  colonnes: string[];
-  nomModele: string;
-  champs?: ReactNode;
-  pret?: boolean;
-  /** Ce qui, avec le fichier, entre dans la vérification (magasin, bon) : la changer l'annule. */
-  contexte?: string;
-  envoyer: (fichier: File, jeton?: string) => Promise<RapportImport>;
-}) {
+/** Ce que chaque import explique, et s'il se fait pour un magasin. */
+const IMPORTS: Record<TypeImport, { titre: string; aide: string; magasin?: boolean; piece?: boolean }> = {
+  catalogue: {
+    titre: "Catalogue",
+    aide: "Une ligne par article, mise à jour par référence. Fournisseur obligatoire (code ou raison sociale d'un fournisseur déjà créé) ; prix_ttc et tva pour la Tunisie.",
+  },
+  verres: {
+    titre: "Verres",
+    aide: "Une ligne par verre, mis à jour par référence. Fournisseur (code ou raison sociale) et géométrie obligatoires.",
+  },
+  stock: {
+    titre: "Entrées de stock",
+    aide: "Une ligne par article reçu : code_barres (ou reference) et quantite.",
+    magasin: true,
+    piece: true,
+  },
+  clients: {
+    titre: "Clients d'un autre logiciel",
+    aide: "Export Excel ou CSV de l'ancien logiciel, une ligne par client. Les noms de colonnes courants sont reconnus (N° fiche, Nom, Prénom, Tél, GSM, Date de naissance…). L'ancien n° de fiche est gardé : réimporter le même fichier met les fiches à jour sans doublon.",
+    magasin: true,
+  },
+  fournisseurs: {
+    titre: "Fournisseurs",
+    aide: "Une ligne par fournisseur. Le code est attribué automatiquement ; un fournisseur déjà créé (même code, matricule fiscal ou raison sociale) est signalé puis mis à jour.",
+  },
+  receptions: {
+    titre: "Bons de réception",
+    aide: "Une ligne par article reçu ; les lignes d'un même n° de BL et fournisseur forment un bon. Un BL déjà saisi est refusé. Les verres commandés pour un client se reçoivent dans l'écran Bon de Réception.",
+    magasin: true,
+  },
+  utilisateurs: {
+    titre: "Utilisateurs",
+    aide: "Une ligne par profil donné (plusieurs lignes pour plusieurs profils). Un identifiant déjà pris est refusé. Mot de passe provisoire de 12 caractères au moins : supprimez le fichier après l'import.",
+  },
+};
+
+const INVALIDES = ["catalogue", "articles", "clients", "fournisseurs", "bons-reception", "utilisateurs"];
+
+/** Import d'un fichier : modèles à télécharger, vérification puis import (tout ou rien). */
+export function BlocImport({ type }: { type: TypeImport }) {
+  const config = IMPORTS[type];
   const queryClient = useQueryClient();
+  const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins, enabled: Boolean(config.magasin) });
+  const [magasinChoisi, setMagasin] = useState("");
+  const magasin = config.magasin ? magasinChoisi || magasins.data?.[0]?.id || "" : "";
+  const [piece, setPiece] = useState("");
   const [fichier, setFichier] = useState<File | null>(null);
+  const champs: Record<string, string> = {
+    ...(config.magasin && { magasin }),
+    ...(config.piece && { piece }),
+  };
   const envoi = useMutation({
-    mutationFn: (jeton?: string) => envoyer(fichier as File, jeton),
+    mutationFn: (jeton?: string) => importer(type, fichier as File, champs, jeton),
     onSuccess: (rapport) => {
       if (!rapport.apercu && rapport.erreurs.length === 0) {
         setFichier(null);
-        void queryClient.invalidateQueries({ queryKey: ["catalogue"] });
-        void queryClient.invalidateQueries({ queryKey: ["articles"] });
-        void queryClient.invalidateQueries({ queryKey: ["clients"] });
+        INVALIDES.forEach((cle) => void queryClient.invalidateQueries({ queryKey: [cle] }));
       }
     },
   });
 
-  // L'import n'est possible qu'après une vérification sans erreur de ce fichier.
+  // L'import n'est possible qu'après une vérification sans erreur de ce fichier, pour ce magasin.
   const jeton = envoi.data?.apercu ? envoi.data.jeton : "";
   const { reset } = envoi;
-  useEffect(() => reset(), [contexte, reset]);
+  useEffect(() => reset(), [magasin, piece, reset]);
+  const pret = Boolean(fichier) && (!config.magasin || Boolean(magasin));
 
   return (
     <Stack spacing={2}>
-      <Typography variant="subtitle1">{titre}</Typography>
+      <Typography variant="subtitle1">{config.titre}</Typography>
       <Typography variant="body2" color="text.secondary">
-        {aide}{" "}
-        <Link href={urlModele(colonnes)} download={nomModele}>
-          Télécharger le modèle
+        {config.aide}
+      </Typography>
+      <Typography variant="body2">
+        Télécharger le modèle :{" "}
+        <Link href={urlModele(type, "xlsx")} download>
+          Excel
+        </Link>
+        {" · "}
+        <Link href={urlModele(type, "csv")} download>
+          CSV
         </Link>
       </Typography>
-      {champs}
+      {config.magasin && (
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+          <TextField
+            select
+            size="small"
+            label="Magasin"
+            value={magasin}
+            onChange={(e) => setMagasin(e.target.value)}
+            sx={{ minWidth: 220 }}
+          >
+            {magasins.data?.map((m) => (
+              <MenuItem key={m.id} value={m.id}>
+                {m.nom}
+              </MenuItem>
+            ))}
+          </TextField>
+          {config.piece && (
+            <TextField
+              size="small"
+              label="N° du bon de livraison"
+              value={piece}
+              onChange={(e) => setPiece(e.target.value)}
+            />
+          )}
+        </Stack>
+      )}
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ alignItems: { sm: "center" } }}>
         <Button component="label" variant="outlined">
           Choisir un fichier
@@ -120,7 +176,7 @@ function Bloc({
             hidden
             type="file"
             accept=".xlsx,.csv"
-            aria-label={`Fichier ${titre}`}
+            aria-label={`Fichier ${config.titre}`}
             onChange={(e) => {
               setFichier(e.target.files?.[0] ?? null);
               envoi.reset();
@@ -130,7 +186,7 @@ function Bloc({
         <Typography color="text.secondary">{fichier?.name ?? "Excel (.xlsx) ou CSV"}</Typography>
       </Stack>
       <Stack direction="row" spacing={2}>
-        <Button variant="outlined" disabled={!fichier || !pret || envoi.isPending} onClick={() => envoi.mutate(undefined)}>
+        <Button variant="outlined" disabled={!pret || envoi.isPending} onClick={() => envoi.mutate(undefined)}>
           1. Vérifier
         </Button>
         <Button variant="contained" disabled={!jeton || envoi.isPending} onClick={() => envoi.mutate(jeton)}>
@@ -143,87 +199,41 @@ function Bloc({
   );
 }
 
-function ChoixMagasin({
-  magasins,
-  valeur,
-  onChange,
-}: {
-  magasins: { id: string; nom: string }[] | undefined;
-  valeur: string;
-  onChange: (magasin: string) => void;
-}) {
+/** Bouton « Importer » d'un écran : ouvre l'import et ses modèles dans une fenêtre. */
+export function BoutonImport({ type, libelle = "Importer" }: { type: TypeImport; libelle?: string }) {
+  const [ouvert, setOuvert] = useState(false);
   return (
-    <TextField select size="small" label="Magasin" value={valeur} onChange={(e) => onChange(e.target.value)}>
-      {magasins?.map((m) => (
-        <MenuItem key={m.id} value={m.id}>
-          {m.nom}
-        </MenuItem>
-      ))}
-    </TextField>
+    <>
+      <Button variant="outlined" startIcon={<UploadFile />} onClick={() => setOuvert(true)}>
+        {libelle}
+      </Button>
+      {ouvert && (
+        <Dialog open onClose={() => setOuvert(false)} maxWidth="md" fullWidth>
+          <DialogTitle>Importer : {IMPORTS[type].titre}</DialogTitle>
+          <DialogContent>
+            <BlocImport type={type} />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOuvert(false)}>Fermer</Button>
+          </DialogActions>
+        </Dialog>
+      )}
+    </>
   );
 }
 
-/** Imports Excel ou CSV : catalogue, entrées de stock d'un magasin et clients d'un autre logiciel. */
-export function Imports({
-  droits,
-}: {
-  droits: { catalogue: boolean; stock: boolean; clients?: boolean };
-}) {
-  const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
-  const [magasinChoisi, setMagasin] = useState("");
-  const magasin = magasinChoisi || magasins.data?.[0]?.id || "";
-  const [piece, setPiece] = useState("");
-
+/** Page des imports Excel ou CSV : un bloc par import autorisé. */
+export function Imports({ types }: { types: TypeImport[] }) {
   return (
     <Card>
       <CardContent>
-        <Stack spacing={3}>
+        <Stack spacing={4}>
           <Typography variant="h6" component="h2">
             Imports
           </Typography>
-          {droits.catalogue && (
-            <Bloc
-              titre="Catalogue"
-              aide="Une ligne par article, mise à jour par référence. Fournisseur obligatoire (déjà créé dans l'administration) ; prix_ttc et tva pour la Tunisie."
-              colonnes={COLONNES_CATALOGUE}
-              nomModele="modele-catalogue.csv"
-              envoyer={importerCatalogue}
-            />
-          )}
-          {droits.stock && (
-            <Bloc
-              titre="Entrées de stock"
-              aide="Une ligne par article reçu : code_barres (ou reference) et quantite."
-              colonnes={COLONNES_STOCK}
-              nomModele="modele-entrees-stock.csv"
-              pret={Boolean(magasin)}
-              contexte={`${magasin}|${piece}`}
-              champs={
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                  <ChoixMagasin magasins={magasins.data} valeur={magasin} onChange={setMagasin} />
-                  <TextField
-                    size="small"
-                    label="N° du bon de livraison"
-                    value={piece}
-                    onChange={(e) => setPiece(e.target.value)}
-                  />
-                </Stack>
-              }
-              envoyer={(fichier, jeton) => importerStock(fichier, magasin, piece, jeton)}
-            />
-          )}
-          {droits.clients && (
-            <Bloc
-              titre="Clients d'un autre logiciel"
-              aide="Export Excel ou CSV de l'ancien logiciel, une ligne par client. Les noms de colonnes courants sont reconnus (N° fiche, Nom, Prénom, Tél, GSM, Date de naissance…). L'ancien n° de fiche est gardé : réimporter le même fichier met les fiches à jour sans doublon."
-              colonnes={COLONNES_CLIENTS}
-              nomModele="modele-clients.csv"
-              pret={Boolean(magasin)}
-              contexte={magasin}
-              champs={<ChoixMagasin magasins={magasins.data} valeur={magasin} onChange={setMagasin} />}
-              envoyer={(fichier, jeton) => importerClients(fichier, magasin, jeton)}
-            />
-          )}
+          {types.map((type) => (
+            <BlocImport key={type} type={type} />
+          ))}
         </Stack>
       </CardContent>
     </Card>

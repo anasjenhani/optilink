@@ -5,7 +5,14 @@ from rest_framework import mixins, viewsets
 from rest_framework.exceptions import PermissionDenied
 
 from ..models import Client, Organisme
-from .serializers import ClientSerializer, OrganismeSerializer
+from .serializers import ClientSerializer, OrganismeSerializer, soldes
+
+TRIS = {
+    "fiche": ["reference_externe", "numero"],
+    "-fiche": ["-reference_externe", "-numero"],
+    "nom": ["nom", "prenom"],
+    "-nom": ["-nom", "-prenom"],
+}
 
 
 @extend_schema_view(
@@ -16,7 +23,23 @@ from .serializers import ClientSerializer, OrganismeSerializer
                 OpenApiTypes.STR,
                 description="N° de fiche, nom, prénom, téléphones, e-mail, société, "
                 "matricule fiscal ou ancien n° de fiche",
-            )
+            ),
+            *(
+                OpenApiParameter(nom, OpenApiTypes.STR, description=description)
+                for nom, description in (
+                    ("fiche", "Colonne N° fiche : n° de fiche ou ancien n° (contient)"),
+                    ("telephone", "Colonne Téléphone : l'un des deux numéros (contient)"),
+                    ("nom", "Colonne Nom & Prénom : chaque mot dans le nom ou le prénom"),
+                    ("prenom", "Colonne Prénom (contient)"),
+                    ("observation", "Colonne Observation : notes de la fiche (contient)"),
+                )
+            ),
+            OpenApiParameter(
+                "tri",
+                OpenApiTypes.STR,
+                enum=list(TRIS),
+                description="Ordre de la liste ; par défaut nom puis prénom",
+            ),
         ]
     )
 )
@@ -50,7 +73,35 @@ class ClientViewSet(
                 | Q(matricule_fiscal__icontains=mot)
                 | Q(reference_externe__iexact=mot)
             )
-        return clients
+        parametres = self.request.query_params
+        colonnes = {
+            "fiche": lambda v: (
+                Q(reference_externe__icontains=v)
+                | (Q(numero=int(v)) if v.isdigit() and len(v) < 10 else Q(pk__in=[]))
+            ),
+            "telephone": lambda v: Q(telephone__icontains=v) | Q(telephone_2__icontains=v),
+            "prenom": lambda v: Q(prenom__icontains=v),
+            "observation": lambda v: Q(notes__icontains=v),
+        }
+        for colonne, condition in colonnes.items():
+            valeur = parametres.get(colonne, "").strip()
+            if valeur:
+                clients = clients.filter(condition(valeur))
+        for mot in parametres.get("nom", "").split():
+            clients = clients.filter(Q(nom__icontains=mot) | Q(prenom__icontains=mot))
+        tri = TRIS.get(parametres.get("tri", ""))
+        return clients.order_by(*tri) if tri else clients
+
+    def get_serializer_context(self):
+        contexte = super().get_serializer_context()
+        if self.action in ("list", "retrieve"):
+            contexte["avec_solde"] = True
+        return contexte
+
+    def list(self, request, *args, **kwargs):
+        page = self.paginate_queryset(self.filter_queryset(self.get_queryset()))
+        contexte = {**self.get_serializer_context(), "soldes": soldes(page)}
+        return self.get_paginated_response(ClientSerializer(page, many=True, context=contexte).data)
 
     def perform_create(self, serializer):
         magasin = serializer.validated_data["magasin_origine"]

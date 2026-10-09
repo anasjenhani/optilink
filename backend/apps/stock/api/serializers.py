@@ -26,8 +26,9 @@ def decrire(fiche):
         morceaux += [
             fiche.couleur,
             mesures,
+            fiche.get_matiere_display() if fiche.matiere else "",
             fiche.get_type_display() if fiche.type else "",
-            "solaire" if fiche.solaire else "",
+            "" if fiche.categorie == Monture.Categorie.OPTIQUE else fiche.get_categorie_display(),
         ]
     elif isinstance(fiche, Verre):
         morceaux = [
@@ -121,10 +122,31 @@ class MouvementStockSerializer(serializers.ModelSerializer):
     type = serializers.ChoiceField(
         choices=[MouvementStock.Type.RECEPTION, MouvementStock.Type.AJUSTEMENT]
     )
+    # Pour la consultation : les ventes, retours et transferts ont aussi leurs mouvements.
+    type_libelle = serializers.CharField(source="get_type_display", read_only=True)
+    magasin_nom = serializers.CharField(source="magasin.nom", read_only=True)
+    article_reference = serializers.CharField(source="article.reference", read_only=True)
+    article_libelle = serializers.CharField(source="article.libelle", read_only=True)
+    utilisateur = serializers.CharField(
+        source="utilisateur.get_username", read_only=True, default=""
+    )
 
     class Meta:
         model = MouvementStock
-        fields = ["id", "magasin", "article", "quantite", "type", "reference", "horodatage"]
+        fields = [
+            "id",
+            "magasin",
+            "magasin_nom",
+            "article",
+            "article_reference",
+            "article_libelle",
+            "quantite",
+            "type",
+            "type_libelle",
+            "reference",
+            "utilisateur",
+            "horodatage",
+        ]
         read_only_fields = ["id", "horodatage"]
 
     def get_fields(self):

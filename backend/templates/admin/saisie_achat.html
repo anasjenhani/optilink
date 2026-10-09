@@ -1,0 +1,65 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Accueil</a> › <a href="{{ url_liste }}">{{ opts.verbose_name_plural|capfirst }}</a> › {{ title }}</div>{% endblock %}
+{% block content %}
+<style>
+  .saisie p.help { max-width: 70em; }
+  .saisie table.lignes input { width: 9em; }
+  .saisie table.lignes input[name$="-article"] { width: 14em; }
+  .saisie table.lignes input[type="number"] { width: 7em; }
+  .saisie ul.errorlist { margin: 0; }
+  .saisie ul#id_bons { list-style: none; margin: 0; padding: 0; max-height: 22em; overflow: auto; }
+  .saisie ul#id_bons li { list-style: none; padding: 2px 0; }
+</style>
+<div id="content-main" class="saisie">
+  <p class="help">{{ aide }}</p>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% if entete.non_field_errors %}<p class="errornote">{% for e in entete.non_field_errors %}{{ e }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>{% endif %}
+    <fieldset class="module aligned">
+      {% for champ in entete %}
+        <div class="form-row{% if champ.errors %} errors{% endif %}">
+          {{ champ.errors }}
+          <div class="flex-container">
+            {{ champ.label_tag }} {{ champ }}
+          </div>
+          {% if champ.help_text %}<div class="help">{{ champ.help_text }}</div>{% endif %}
+        </div>
+      {% endfor %}
+    </fieldset>
+
+    {% if lignes %}
+      {{ lignes.management_form }}
+      <fieldset class="module">
+        <h2>{{ titre_lignes }}</h2>
+        {% if lignes.non_form_errors %}<p class="errornote">{{ lignes.non_form_errors|join:" " }}</p>{% endif %}
+        <table class="lignes" style="width: 100%">
+          <thead><tr>{% for champ in lignes.empty_form %}<th>{{ champ.label }}</th>{% endfor %}</tr></thead>
+          <tbody id="lignes-corps">
+            {% for ligne in lignes %}
+              <tr>{% for champ in ligne %}<td>{{ champ.errors }}{{ champ }}</td>{% endfor %}</tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <template id="ligne-vide"><tr>{% for champ in lignes.empty_form %}<td>{{ champ }}</td>{% endfor %}</tr></template>
+        <p><a href="#" class="addlink" id="ajouter-ligne">Ajouter une ligne</a></p>
+        <p class="help">{{ aide_lignes }}</p>
+      </fieldset>
+      <script>
+        document.getElementById("ajouter-ligne").addEventListener("click", function (e) {
+          e.preventDefault();
+          var total = document.getElementById("id_lignes-TOTAL_FORMS");
+          var n = parseInt(total.value, 10);
+          var html = document.getElementById("ligne-vide").innerHTML.replace(/__prefix__/g, n);
+          document.getElementById("lignes-corps").insertAdjacentHTML("beforeend", html);
+          total.value = n + 1;
+        });
+      </script>
+    {% endif %}
+
+    <div class="submit-row">
+      <input type="submit" value="Enregistrer" class="default">
+      <a href="{{ url_liste }}" class="closelink">Annuler</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -63,6 +63,7 @@ MIDDLEWARE = [
     "django_otp.middleware.OTPMiddleware",
     "auditlog.middleware.AuditlogMiddleware",
     "core.middleware.PerimetreMagasinMiddleware",
+    "apps.securite.presence.PresenceMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -160,6 +161,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.securite.tasks.desactiver_comptes_inactifs",
         "schedule": 24 * 60 * 60,
     },
+    "vider-corbeille": {
+        "task": "apps.securite.tasks.vider_corbeille",
+        "schedule": 24 * 60 * 60,
+    },
 }
 
 REST_FRAMEWORK = {
@@ -195,13 +200,35 @@ SPECTACULAR_SETTINGS = {
         "StatutPrimeEnum": "apps.rh.models.Prime.Statut",
         "TypePrimeEnum": "apps.rh.models.Prime.Type",
         "StatutPriseEnChargeEnum": "apps.ventes.models.PriseEnCharge.Statut",
+        "StatutVenteEnum": "apps.ventes.models.Vente.Statut",
+        "OeilReceptionEnum": "apps.achats.models.LigneReception.Oeil",
+        "OeilDevisEnum": "apps.ventes.models.LigneDevis.Oeil",
+        "EtatReceptionEnum": "apps.achats.models.BonReception.Etat",
+        "EtatRetourEnum": "apps.achats.models.BonRetour.Etat",
+        "StatutTransfertEnum": "apps.stock.models.TransfertStock.Statut",
+        "StatutInventaireEnum": "apps.stock.models.Inventaire.Statut",
+        "CategorieMontureEnum": "apps.stock.models.Monture.Categorie",
+        "EtapeSavEnum": "apps.ventes.models.DossierSav.Etape",
+        "ModeReglementBordereauEnum": "apps.ventes.models.BordereauPec.Mode",
+        "ModeReglementFournisseurEnum": "apps.achats.models.ReglementFournisseur.Mode",
+        "TypeFactureGroupeeEnum": "apps.ventes.models.FactureGroupee.Type",
+        "TypeBonSortieEnum": "apps.stock.models.BonSortie.Type",
     },
 }
 
 # Sécurité : MFA, sessions et comptes.
 MFA_OBLIGATOIRE = env_bool("MFA_OBLIGATOIRE", True)
+# Profils qui exigent le code de l'application d'authentification, en plus des comptes qui
+# ouvrent /admin/ (toujours exigé). Les autres profils : mot de passe seul.
+MFA_PROFILS = [
+    p.strip()
+    for p in env("MFA_PROFILS", "Administrateur Global,Administrateur").split(",")
+    if p.strip()
+]
 OTP_TOTP_ISSUER = "OptiLink"
 COMPTES_INACTIFS_JOURS = int(env("COMPTES_INACTIFS_JOURS", "90"))
+# Délai de grâce de la corbeille : un élément supprimé se restaure pendant ce nombre de jours.
+CORBEILLE_JOURS = int(env("CORBEILLE_JOURS", "30"))
 
 # Clés de chiffrement des prescriptions (core/chiffrement.py), séparées par des virgules :
 # la première chiffre, les suivantes ne servent qu'à relire pendant une rotation.
@@ -218,6 +245,8 @@ STOCK_ALERTE_SEUIL = int(env("STOCK_ALERTE_SEUIL", "1"))
 # Journal d'audit : le manager de base évite que le filtre de périmètre masque l'état précédent.
 AUDITLOG_USE_BASE_MANAGER = True
 
+# Un compte est affiché « connecté » s'il a utilisé OptiLink depuis moins de ce délai.
+PRESENCE_MINUTES = int(env("PRESENCE_MINUTES", "15"))
 SESSION_COOKIE_AGE = int(env("SESSION_DUREE_SECONDES", str(10 * 60 * 60)))
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_HTTPONLY = True

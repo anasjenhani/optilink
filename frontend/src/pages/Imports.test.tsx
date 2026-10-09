@@ -1,15 +1,23 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 
+import type { TypeImport } from "../api/imports";
 import { Imports } from "./Imports";
 
-const MAGASIN = { id: "m1", code: "T01", nom: "Tunis Centre", societe: "", ville: "Tunis", pays: { devise: "TND", decimales: 3 } };
+const MAGASIN = {
+  id: "m1",
+  code: "T01",
+  nom: "Tunis Centre",
+  societe: "",
+  ville: "Tunis",
+  pays: { devise: "TND", decimales: 3 },
+};
 
 afterEach(() => vi.unstubAllGlobals());
 
 function afficher(
   reponse: (url: string, corps: FormData) => { status: number; donnees: unknown },
-  droits = { catalogue: true, stock: true, clients: false },
+  types: TypeImport[] = ["catalogue", "stock"],
 ) {
   const envois: { url: string; corps: Record<string, string> }[] = [];
   vi.stubGlobal(
@@ -27,7 +35,7 @@ function afficher(
   );
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <Imports droits={droits} />
+      <Imports types={types} />
     </QueryClientProvider>,
   );
   return envois;
@@ -49,7 +57,9 @@ test("vérifie, alerte sur les articles existants, puis importe avec le jeton", 
         crees: 2,
         modifies: 1,
         erreurs: [],
-        alertes: [{ ligne: 2, message: "MON-1 existe déjà au catalogue : il sera mis à jour (en stock : Tunis Centre 4)." }],
+        alertes: [
+          { ligne: 2, message: "MON-1 existe déjà au catalogue : il sera mis à jour (en stock : Tunis Centre 4)." },
+        ],
         jeton: apercu ? "j-123" : "",
       },
     };
@@ -58,7 +68,9 @@ test("vérifie, alerte sur les articles existants, puis importe avec le jeton", 
   const importer = () => screen.getAllByRole("button", { name: "2. Importer" })[0];
   expect(importer()).toBeDisabled();
   fireEvent.click(screen.getAllByRole("button", { name: "1. Vérifier" })[0]);
-  expect(await screen.findByText("Fichier vérifié : 3 ligne(s), 2 créé(s), 1 mis à jour à l'import.")).toBeInTheDocument();
+  expect(
+    await screen.findByText("Fichier vérifié : 3 ligne(s), 2 créé(s), 1 mis à jour à l'import."),
+  ).toBeInTheDocument();
   expect(
     screen.getByText("Ligne 2 : MON-1 existe déjà au catalogue : il sera mis à jour (en stock : Tunis Centre 4)."),
   ).toBeInTheDocument();
@@ -113,7 +125,7 @@ test("importe les clients d'un autre logiciel dans le magasin choisi", async () 
         },
       };
     },
-    { catalogue: false, stock: false, clients: true },
+    ["clients"],
   );
   await screen.findByText("Tunis Centre");
   choisir("Clients d'un autre logiciel", "export.xlsx");
@@ -127,4 +139,17 @@ test("importe les clients d'un autre logiciel dans le magasin choisi", async () 
     ["/api/v1/imports/clients/", "m1", undefined],
     ["/api/v1/imports/clients/", "m1", "j-cli"],
   ]);
+});
+
+test("propose les modèles Excel et CSV de chaque import", async () => {
+  afficher(() => ({ status: 200, donnees: {} }), ["fournisseurs", "utilisateurs"]);
+  const excel = screen.getAllByRole("link", { name: "Excel" });
+  expect(excel.map((l) => l.getAttribute("href"))).toEqual([
+    "/api/v1/imports/modeles/fournisseurs.xlsx",
+    "/api/v1/imports/modeles/utilisateurs.xlsx",
+  ]);
+  expect(screen.getAllByRole("link", { name: "CSV" })[0]).toHaveAttribute(
+    "href",
+    "/api/v1/imports/modeles/fournisseurs.csv",
+  );
 });

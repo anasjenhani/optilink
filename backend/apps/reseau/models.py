@@ -1,5 +1,6 @@
 from django.core.validators import RegexValidator
 from django.db import models
+from django.db.models.functions import Lower
 
 from core.managers import ParMagasinManager
 from core.models import ModeleDeBase
@@ -49,6 +50,56 @@ class Pays(models.Model):
 
     def __str__(self):
         return self.nom
+
+
+class Ville(models.Model):
+    """Ville proposée dans la liste des fiches (client, fournisseur, société, magasin).
+
+    Les fiches gardent le nom de la ville en texte : la liste impose une écriture unique
+    (« Ariana », pas « ariena ») sans lier les fiches à une ligne qu'on pourrait supprimer.
+    """
+
+    pays = models.ForeignKey(Pays, on_delete=models.PROTECT, related_name="villes")
+    nom = models.CharField(max_length=100)
+    est_active = models.BooleanField(
+        "active", default=True, help_text="Une ville désactivée n'est plus proposée."
+    )
+
+    class Meta:
+        ordering = ["nom"]
+        verbose_name = "ville"
+        constraints = [models.UniqueConstraint(Lower("nom"), "pays", name="ville_unique_par_pays")]
+
+    def __str__(self):
+        return self.nom
+
+
+class Banque(models.Model):
+    """Banque proposée dans la liste des fiches (fournisseur, société, compte bancaire).
+
+    Le code est celui de la banque dans le RIB (ses 2 premiers chiffres en Tunisie) : il permet
+    de retrouver la banque d'un RIB et de signaler un RIB qui ne va pas avec la banque choisie.
+    Comme pour les villes, les fiches gardent le nom de la banque en texte.
+    """
+
+    pays = models.ForeignKey(Pays, on_delete=models.PROTECT, related_name="banques")
+    code = models.CharField(max_length=5, help_text="Code de la banque dans le RIB, ex. 08.")
+    nom = models.CharField(max_length=100)
+    sigle = models.CharField(max_length=20, blank=True)
+    est_active = models.BooleanField(
+        "active", default=True, help_text="Une banque désactivée n'est plus proposée."
+    )
+
+    class Meta:
+        ordering = ["nom"]
+        verbose_name = "banque"
+        constraints = [
+            models.UniqueConstraint(fields=["pays", "code"], name="banque_code_unique_par_pays"),
+            models.UniqueConstraint(Lower("nom"), "pays", name="banque_unique_par_pays"),
+        ]
+
+    def __str__(self):
+        return f"{self.nom} ({self.sigle})" if self.sigle else self.nom
 
 
 class TauxTva(models.Model):
@@ -144,6 +195,10 @@ class Societe(ModeleDeBase):
 
 
 class Magasin(ModeleDeBase):
+    class Type(models.TextChoices):
+        MAGASIN = "magasin", "Magasin"
+        DEPOT = "depot", "Dépôt central"
+
     code = models.CharField(max_length=20, unique=True)
     nom = models.CharField(max_length=100)
     societe = models.ForeignKey(
@@ -154,6 +209,13 @@ class Magasin(ModeleDeBase):
     code_postal = models.CharField(max_length=10, blank=True)
     ville = models.CharField(max_length=100, blank=True)
     telephone = models.CharField(max_length=20, blank=True)
+    type = models.CharField(
+        max_length=10,
+        choices=Type.choices,
+        default=Type.MAGASIN,
+        help_text="Dépôt central : la marchandise des fournisseurs y est reçue et contrôlée "
+        "(BL, factures achat, bons retour), puis envoyée aux magasins par transfert.",
+    )
     nombre_peniches = models.PositiveSmallIntegerField(
         "nombre de péniches",
         default=200,
@@ -170,3 +232,7 @@ class Magasin(ModeleDeBase):
 
     def __str__(self):
         return f"{self.code} {self.nom}"
+
+    @property
+    def est_depot(self):
+        return self.type == self.Type.DEPOT

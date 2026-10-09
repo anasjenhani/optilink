@@ -39,9 +39,11 @@ test("les modules sont des onglets horizontaux, Vente d'abord", () => {
     "Vente",
     "Stock",
     "Règlement",
+    "Règlement Fournisseur",
     "Caisse",
     "SAV",
     "Facture",
+    "Statistiques",
     "Administration",
   ]);
   expect(screen.getByRole("heading", { name: "Vente" })).toBeInTheDocument();
@@ -61,7 +63,7 @@ test("sans le droit, le bouton disparaît ; une fonction pas encore faite est gr
   afficher([]);
   expect(screen.queryByRole("button", { name: "Vente au Comptoir" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Nouvelle Visite/ })).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Liste Visites/ })).toBeDisabled();
+  expect(screen.getByRole("button", { name: /Lunettes Vendues/ })).toBeDisabled();
   expect(screen.queryByRole("navigation", { name: "Raccourcis" })).not.toBeInTheDocument();
 });
 
@@ -96,4 +98,26 @@ test("changer d'onglet affiche les boutons du module", async () => {
   fireEvent.click(screen.getByRole("tab", { name: "Caisse" }));
 
   expect(await screen.findByRole("button", { name: "Session en Cours" })).toBeInTheDocument();
+});
+
+test("l'Administration est rangée en catégories, comme dans /admin/", async () => {
+  afficher(["reseau.view_magasin", "securite.view_utilisateur"]);
+  fireEvent.click(screen.getByRole("tab", { name: "Administration" }));
+  const categories = await screen.findByRole("tablist", { name: "Catégories Administration" });
+  expect(
+    within(categories)
+      .getAllByRole("tab")
+      .map((t) => t.textContent),
+  ).toEqual(["Ressources humaines", "Réseau", "Sécurité", "Plateforme"]);
+  expect(screen.getByRole("button", { name: /Demande de Congé/ })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Magasins/ })).not.toBeInTheDocument();
+
+  fireEvent.click(within(categories).getByRole("tab", { name: "Réseau" }));
+  expect(screen.getByRole("button", { name: /Magasins/ })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Demande de Congé/ })).not.toBeInTheDocument();
+
+  // La recherche parcourt toutes les catégories.
+  fireEvent.change(screen.getByLabelText("Rechercher"), { target: { value: "sécurité" } });
+  expect(screen.getByRole("heading", { name: "Sécurité" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Accès et Sécurité/ })).toBeInTheDocument();
 });

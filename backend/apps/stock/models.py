@@ -23,6 +23,7 @@ class Article(ModeleDeBase):
         VERRE = "verre", "Verre"
         LENTILLE = "lentille", "Lentille"
         DIVERS = "divers", "Divers"
+        SUPPLEMENT = "supplement", "Supplément verre"
 
     reference = models.CharField(max_length=40, unique=True)
     libelle = models.CharField(max_length=200)
@@ -46,6 +47,23 @@ class Article(ModeleDeBase):
         ),
     )
     est_actif = models.BooleanField(default=True)
+    suivi_numero_serie = models.BooleanField(
+        "numéro de série", default=False, help_text="Chaque pièce a son numéro de série."
+    )
+    promotion = models.BooleanField(default=False)
+    etui_special = models.BooleanField("étui spécial", default=False)
+    fodec = models.BooleanField(
+        "FODEC", default=False, help_text="Achat soumis au FODEC (1 % du net HT)."
+    )
+    observation = models.TextField(blank=True)
+    cree_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="créé par",
+    )
 
     class Meta:
         ordering = ["reference"]
@@ -77,7 +95,7 @@ class Article(ModeleDeBase):
     @property
     def caracteristiques(self):
         """Fiche de la famille de l'article (``Monture``, ``Verre``, ``Lentille``), ou None."""
-        if self.famille == self.Famille.DIVERS:
+        if self.famille in (self.Famille.DIVERS, self.Famille.SUPPLEMENT):
             return None
         return getattr(self, self.famille, None)
 
@@ -113,18 +131,49 @@ class Monture(Caracteristiques):
         MIXTE = "mixte", "Mixte"
         ENFANT = "enfant", "Enfant"
 
+    class Categorie(models.TextChoices):
+        OPTIQUE = "optique", "Lunette Optique"
+        SOLAIRE = "solaire", "Lunette Solaire"
+        APPLIQUE = "applique", "Lunette Applique"
+
+    class Matiere(models.TextChoices):
+        ACETATE = "acetate", "Acétate"
+        TITANE = "titane", "Titane"
+        ACIER = "acier", "Acier"
+        TR90 = "tr90", "TR90"
+        CORNE = "corne", "Corne"
+        BOIS = "bois", "Bois"
+        METAL = "metal", "Métal"
+
+    class TrancheAge(models.TextChoices):
+        ADULTE = "adulte", "Adulte"
+        JUNIOR = "junior", "Junior"
+        ENFANT = "enfant", "Enfant"
+        BEBE = "bebe", "Bébé"
+
     article = models.OneToOneField(
         Article, on_delete=models.CASCADE, primary_key=True, related_name="monture"
     )
+    categorie = models.CharField(
+        "famille", max_length=10, choices=Categorie.choices, default=Categorie.OPTIQUE
+    )
     modele = models.CharField("modèle", max_length=100, blank=True)
-    couleur = models.CharField(max_length=60, blank=True)
-    matiere = models.CharField("matière", max_length=60, blank=True)
+    couleur = models.CharField("couleur monture", max_length=60, blank=True)
+    couleur_verres = models.CharField(max_length=60, blank=True)
+    matiere = models.CharField("matière", max_length=60, choices=Matiere.choices, blank=True)
     type = models.CharField(max_length=20, choices=Type.choices, blank=True)
+    forme = models.CharField(max_length=40, blank=True, help_text="Ronde, rectangle, papillon…")
     genre = models.CharField(max_length=10, choices=Genre.choices, blank=True)
-    calibre = models.PositiveSmallIntegerField(null=True, blank=True, help_text="mm")
+    tranche_age = models.CharField(
+        "tranche d'âge", max_length=10, choices=TrancheAge.choices, blank=True
+    )
+    calibre = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="Taille du verre, mm."
+    )
     pont = models.PositiveSmallIntegerField(null=True, blank=True, help_text="mm")
     branche = models.PositiveSmallIntegerField(null=True, blank=True, help_text="mm")
-    solaire = models.BooleanField(default=False)
+    # Suit la famille (« Lunette Solaire ») : la vente au comptoir filtre dessus.
+    solaire = models.BooleanField(default=False, editable=False)
 
     class Meta:
         verbose_name = "caractéristiques de la monture"
@@ -132,6 +181,12 @@ class Monture(Caracteristiques):
 
     def __str__(self):
         return str(self.article)
+
+    def save(self, *args, **kwargs):
+        self.solaire = self.categorie == self.Categorie.SOLAIRE
+        if kwargs.get("update_fields") is not None and "categorie" in kwargs["update_fields"]:
+            kwargs["update_fields"] = {*kwargs["update_fields"], "solaire"}
+        super().save(*args, **kwargs)
 
 
 class Verre(Caracteristiques):
@@ -148,21 +203,46 @@ class Verre(Caracteristiques):
         POLYCARBONATE = "polycarbonate", "Polycarbonate"
         MINERAL = "mineral", "Minéral"
 
+    class Fabrication(models.TextChoices):
+        STOCK = "stock", "Verre de stock fournisseur"
+        PRESCRIPTION = "prescription", "Verre de prescription (RX, importation)"
+
     article = models.OneToOneField(
         Article, on_delete=models.CASCADE, primary_key=True, related_name="verre"
+    )
+    fabrication = models.CharField(
+        max_length=20,
+        choices=Fabrication.choices,
+        default=Fabrication.PRESCRIPTION,
+        help_text=(
+            "Verre sur commande : pris dans le stock du fournisseur, ou fabriqué à la "
+            "prescription. Un verre vendu sur le stock du magasin n'est pas sur commande."
+        ),
     )
     gamme = models.CharField(max_length=100, blank=True, help_text="Nom commercial du verre.")
     geometrie = models.CharField("géométrie", max_length=20, choices=Geometrie.choices)
     indice = models.DecimalField(
         max_digits=4, decimal_places=3, null=True, blank=True, help_text="1.500, 1.600, 1.670…"
     )
-    matiere = models.CharField("matière", max_length=20, choices=Matiere.choices, blank=True)
+    matiere = models.CharField("matière", max_length=60, choices=Matiere.choices, blank=True)
     traitements = models.CharField(
         max_length=200, blank=True, help_text="Antireflet, durci, filtre lumière bleue…"
     )
     photochromique = models.BooleanField(default=False)
     teinte = models.CharField(max_length=60, blank=True)
     diametre = models.PositiveSmallIntegerField("diamètre", null=True, blank=True, help_text="mm")
+    diametre_commercial = models.CharField(
+        "diamètre commercial", max_length=20, blank=True, help_text="65/70, 70/75…"
+    )
+    famille_verre = models.ForeignKey(
+        "FamilleVerre", on_delete=models.PROTECT, null=True, blank=True, related_name="verres"
+    )
+    sous_famille = models.ForeignKey(
+        "SousFamilleVerre", on_delete=models.PROTECT, null=True, blank=True, related_name="verres"
+    )
+    couleur = models.ForeignKey(
+        "CouleurVerre", on_delete=models.PROTECT, null=True, blank=True, related_name="verres"
+    )
 
     class Meta:
         verbose_name = "caractéristiques du verre"
@@ -170,6 +250,21 @@ class Verre(Caracteristiques):
 
     def __str__(self):
         return str(self.article)
+
+    def clean(self):
+        super().clean()
+        if self.sous_famille_id:
+            if self.famille_verre_id is None:
+                self.famille_verre = self.sous_famille.famille
+            elif self.sous_famille.famille_id != self.famille_verre_id:
+                raise ValidationError(
+                    {"sous_famille": "Cette sous-famille n'appartient pas à la famille choisie."}
+                )
+        fournisseur = self.article.fournisseur_id if self.article_id else None
+        for champ in ("famille_verre", "couleur"):
+            ref = getattr(self, champ)
+            if ref is not None and fournisseur and ref.fournisseur_id not in (None, fournisseur):
+                raise ValidationError({champ: f"{ref} est chez un autre fournisseur que le verre."})
 
 
 class Lentille(Caracteristiques):
@@ -231,6 +326,22 @@ class PrixArticle(models.Model):
     tva = models.ForeignKey(
         "reseau.TauxTva", on_delete=models.PROTECT, related_name="prix", verbose_name="TVA"
     )
+    prix_achat_ht = models.DecimalField(
+        "prix d'achat HT",
+        max_digits=14,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="Prix d'achat brut, avant remise.",
+    )
+    taux_remise_achat = models.DecimalField(
+        "remise à l'achat (%)",
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal("0")), MaxValueValidator(Decimal("100"))],
+    )
 
     class Meta:
         verbose_name = "prix de vente"
@@ -250,6 +361,74 @@ class PrixArticle(models.Model):
             )
 
 
+def _puissance(aide):
+    return models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("-40")), MaxValueValidator(Decimal("40"))],
+        help_text=aide,
+    )
+
+
+class PlageVerre(models.Model):
+    """Puissances qu'un verre couvre (sphère et cylindre de début et de fin) et son prix.
+
+    Un verre a souvent plusieurs plages, chacune à son prix : plus la correction est forte,
+    plus le verre est cher. Le prix de la plage remplace celui de l'article à la vente.
+    Le cylindre se compare en valeur absolue (cylindre positif ou négatif).
+    """
+
+    article = models.ForeignKey(Article, on_delete=models.CASCADE, related_name="plages")
+    pays = models.ForeignKey("reseau.Pays", on_delete=models.PROTECT, related_name="+")
+    ordre = models.PositiveSmallIntegerField(default=1)
+    sphere_debut = _puissance("Sphère la plus basse.")
+    sphere_fin = _puissance("Sphère la plus haute.")
+    cylindre_debut = _puissance("Cylindre le plus faible.")
+    cylindre_fin = _puissance("Cylindre le plus fort.")
+    prix_achat_ht = models.DecimalField(
+        "prix d'achat HT",
+        max_digits=14,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    prix_vente_ttc = models.DecimalField(
+        max_digits=14, decimal_places=3, validators=[MinValueValidator(Decimal("0"))]
+    )
+
+    class Meta:
+        ordering = ["article", "ordre", "sphere_debut"]
+        verbose_name = "plage de puissances"
+        verbose_name_plural = "plages de puissances et prix"
+
+    def __str__(self):
+        return (
+            f"{self.article.reference} sph {self.sphere_debut}/{self.sphere_fin} "
+            f"cyl {self.cylindre_debut}/{self.cylindre_fin}"
+        )
+
+    def clean(self):
+        if self.article_id and self.article.famille != Article.Famille.VERRE:
+            raise ValidationError("Les plages de puissances vont avec un verre.")
+        if None not in (self.sphere_debut, self.sphere_fin) and self.sphere_debut > self.sphere_fin:
+            raise ValidationError({"sphere_fin": "La sphère de fin est plus petite que le début."})
+        if None not in (self.cylindre_debut, self.cylindre_fin) and abs(self.cylindre_debut) > abs(
+            self.cylindre_fin
+        ):
+            raise ValidationError(
+                {"cylindre_fin": "Le cylindre de fin est plus faible que le début."}
+            )
+
+    def couvre(self, sphere=None, cylindre=None):
+        """La plage convient à cette correction (une valeur absente ne filtre pas)."""
+        if sphere is not None and not self.sphere_debut <= sphere <= self.sphere_fin:
+            return False
+        return cylindre is None or abs(self.cylindre_debut) <= abs(cylindre) <= abs(
+            self.cylindre_fin
+        )
+
+
 class MouvementStock(models.Model):
     """Entrée ou sortie d'un article dans un magasin. Le stock est la somme des mouvements."""
 
@@ -258,6 +437,11 @@ class MouvementStock(models.Model):
         VENTE = "vente", "Vente"
         RETOUR = "retour", "Retour client"
         AJUSTEMENT = "ajustement", "Ajustement d'inventaire"
+        RETOUR_FOURNISSEUR = "retour_fournisseur", "Retour au fournisseur"
+        TRANSFERT_SORTIE = "transfert_sortie", "Transfert envoyé"
+        TRANSFERT_ENTREE = "transfert_entree", "Transfert reçu"
+        SORTIE = "sortie", "Bon de sortie"
+        CASSE = "casse", "Sortie casse"
 
     magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
     article = models.ForeignKey(Article, on_delete=models.PROTECT, related_name="mouvements")
@@ -286,8 +470,436 @@ class MouvementStock(models.Model):
         return f"{self.get_type_display()} {self.quantite:+d} {self.article}"
 
 
+class TransfertStock(ModeleDeBase):
+    """Envoi d'articles d'un magasin (le dépôt central en général) vers un autre.
+
+    À l'envoi, les articles sortent du stock de départ ; ils entrent dans le stock du magasin
+    destinataire quand il le réceptionne. Entre les deux, ils sont « en route ».
+    """
+
+    class Statut(models.TextChoices):
+        ENVOYE = "envoye", "Envoyé (en route)"
+        RECU = "recu", "Reçu"
+        ANNULE = "annule", "Annulé"
+
+    magasin = models.ForeignKey(
+        "reseau.Magasin",
+        on_delete=models.PROTECT,
+        related_name="+",
+        verbose_name="magasin de départ",
+    )
+    destination = models.ForeignKey(
+        "reseau.Magasin",
+        on_delete=models.PROTECT,
+        related_name="+",
+        verbose_name="magasin destinataire",
+    )
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    statut = models.CharField(max_length=10, choices=Statut.choices, default=Statut.ENVOYE)
+    observation = models.TextField(blank=True)
+    envoye_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+    recu_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    recu_le = models.DateTimeField(null=True, blank=True)
+    annule_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    annule_le = models.DateTimeField(null=True, blank=True)
+
+    # Deux magasins par transfert : le périmètre est filtré par l'API (départ ou destination)
+    # et par la RLS de la base.
+    objects = models.Manager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-annee", "-sequence"]
+        verbose_name = "transfert de stock"
+        verbose_name_plural = "transferts de stock"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="transfert_sans_doublon"
+            ),
+            models.CheckConstraint(
+                name="transfert_vers_un_autre_magasin",
+                condition=~models.Q(destination=models.F("magasin")),
+            ),
+        ]
+
+    def __str__(self):
+        return self.numero
+
+
+class LigneTransfert(models.Model):
+    transfert = models.ForeignKey(TransfertStock, on_delete=models.CASCADE, related_name="lignes")
+    article = models.ForeignKey(Article, on_delete=models.PROTECT, related_name="+")
+    quantite = models.PositiveIntegerField("quantité")
+
+    class Meta:
+        verbose_name = "ligne de transfert"
+        verbose_name_plural = "lignes de transfert"
+
+    def __str__(self):
+        return f"{self.quantite} × {self.article}"
+
+
+class BonSortie(ModeleDeBase):
+    """Sortie de stock sans vente : usage interne, cadeau, échantillon… ou casse (article cassé,
+    défectueux, perdu). Validé à la saisie : les articles sortent tout de suite du stock."""
+
+    class Type(models.TextChoices):
+        SORTIE = "sortie", "Bon de sortie"
+        CASSE = "casse", "Sortie casse"
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    type = models.CharField(max_length=10, choices=Type.choices, default=Type.SORTIE)
+    motif = models.CharField(max_length=200)
+    observation = models.TextField(blank=True)
+    cree_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-annee", "-sequence"]
+        verbose_name = "bon de sortie"
+        verbose_name_plural = "bons de sortie"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="bon_sortie_sans_doublon"
+            )
+        ]
+
+    def __str__(self):
+        return self.numero
+
+
+class LigneSortie(models.Model):
+    bon = models.ForeignKey(BonSortie, on_delete=models.CASCADE, related_name="lignes")
+    article = models.ForeignKey(Article, on_delete=models.PROTECT, related_name="+")
+    quantite = models.PositiveIntegerField("quantité")
+
+    class Meta:
+        verbose_name = "ligne de sortie"
+        verbose_name_plural = "lignes de sortie"
+
+    def __str__(self):
+        return f"{self.quantite} × {self.article}"
+
+
+class DemandeTransfert(ModeleDeBase):
+    """Un magasin demande des articles à un autre (au dépôt central : demande d'alimentation).
+
+    Le magasin sollicité la sert par un transfert (quantités ajustables à ce qu'il a), ou la
+    refuse avec un motif.
+    """
+
+    class Statut(models.TextChoices):
+        EN_ATTENTE = "en_attente", "En attente"
+        SERVIE = "servie", "Servie"
+        REFUSEE = "refusee", "Refusée"
+        ANNULEE = "annulee", "Annulée"
+
+    magasin = models.ForeignKey(
+        "reseau.Magasin",
+        on_delete=models.PROTECT,
+        related_name="+",
+        verbose_name="magasin demandeur",
+    )
+    aupres_de = models.ForeignKey(
+        "reseau.Magasin",
+        on_delete=models.PROTECT,
+        related_name="+",
+        verbose_name="magasin sollicité",
+    )
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    statut = models.CharField(max_length=12, choices=Statut.choices, default=Statut.EN_ATTENTE)
+    observation = models.TextField(blank=True)
+    demandee_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+    traitee_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    traitee_le = models.DateTimeField(null=True, blank=True)
+    motif_refus = models.CharField(max_length=200, blank=True)
+    transfert = models.OneToOneField(
+        TransfertStock,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="demande",
+        help_text="Transfert qui a servi la demande.",
+    )
+
+    # Deux magasins par demande : le périmètre est filtré par l'API et par la RLS.
+    objects = models.Manager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-annee", "-sequence"]
+        verbose_name = "demande de transfert"
+        verbose_name_plural = "demandes de transfert"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="demande_transfert_sans_doublon"
+            ),
+            models.CheckConstraint(
+                name="demande_a_un_autre_magasin",
+                condition=~models.Q(aupres_de=models.F("magasin")),
+            ),
+        ]
+
+    def __str__(self):
+        return self.numero
+
+
+class LigneDemandeTransfert(models.Model):
+    demande = models.ForeignKey(DemandeTransfert, on_delete=models.CASCADE, related_name="lignes")
+    article = models.ForeignKey(Article, on_delete=models.PROTECT, related_name="+")
+    quantite = models.PositiveIntegerField("quantité demandée")
+    quantite_servie = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = "ligne de demande de transfert"
+        verbose_name_plural = "lignes de demande de transfert"
+
+    def __str__(self):
+        return f"{self.quantite} × {self.article}"
+
+
+class Inventaire(ModeleDeBase):
+    """Comptage physique du stock d'un magasin (ou du dépôt) : tout le stock, ou une partie
+    (famille, marque, nature de monture, fournisseur).
+
+    Trois étapes : le comptage (« en cours »), puis la vérification où le responsable contrôle
+    les écarts et corrige les quantités, puis la validation finale avec une observation. À la
+    validation, l'écart entre le compté et le stock de l'application devient un mouvement
+    d'ajustement ; un article en stock mais non compté est considéré comme absent (0).
+    """
+
+    class Statut(models.TextChoices):
+        EN_COURS = "en_cours", "En cours de comptage"
+        A_VERIFIER = "a_verifier", "En vérification"
+        VALIDE = "valide", "Validé"
+        ANNULE = "annule", "Annulé"
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    famille = models.CharField(
+        max_length=20,
+        choices=Article.Famille.choices,
+        blank=True,
+        help_text="Vide : tout le stock du magasin.",
+    )
+    marque = models.CharField(max_length=100, blank=True, help_text="Montures de cette marque.")
+    nature = models.CharField(
+        max_length=10,
+        choices=Monture.Categorie.choices,
+        blank=True,
+        help_text="Montures optiques, solaires ou appliques.",
+    )
+    fournisseur = models.ForeignKey(
+        "achats.Fournisseur", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    statut = models.CharField(max_length=10, choices=Statut.choices, default=Statut.EN_COURS)
+    observation = models.TextField(blank=True)
+    cree_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+    valide_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    valide_le = models.DateTimeField(null=True, blank=True)
+    comptage_termine_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    comptage_termine_le = models.DateTimeField(null=True, blank=True)
+    observation_validation = models.TextField(
+        blank=True, help_text="Saisie à la validation finale (écarts expliqués, recomptages…)."
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()  # noqa: DJ012
+
+    class Meta:
+        ordering = ["-annee", "-sequence"]
+        verbose_name = "inventaire"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="inventaire_sans_doublon"
+            )
+        ]
+        permissions = [("valider_inventaire", "Peut valider un inventaire (corrige le stock)")]
+
+    def __str__(self):
+        return self.numero
+
+
+class LigneInventaire(models.Model):
+    """Article compté ; ``stock_theorique`` et ``ecart`` sont figés à la validation."""
+
+    inventaire = models.ForeignKey(Inventaire, on_delete=models.CASCADE, related_name="lignes")
+    article = models.ForeignKey(Article, on_delete=models.PROTECT, related_name="+")
+    quantite_comptee = models.PositiveIntegerField("quantité comptée", default=0)
+    stock_theorique = models.IntegerField("stock de l'application", null=True, blank=True)
+    ecart = models.IntegerField(null=True, blank=True)
+    observation = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = "ligne d'inventaire"
+        verbose_name_plural = "lignes d'inventaire"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["inventaire", "article"], name="inventaire_article_unique"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.quantite_comptee} × {self.article}"
+
+
 def stock_disponible(magasin, article):
     total = MouvementStock.tous.filter(magasin=magasin, article=article).aggregate(
         total=Sum("quantite")
     )["total"]
     return total or 0
+
+
+# Listes de référence des verres et des montures (tables de l'ancien logiciel : familles,
+# sous-familles, couleurs, diamètres, matières, marques de monture). Un verre se choisit en
+# descendant : fournisseur → famille → sous-famille, puis couleur et diamètre du fournisseur.
+
+
+class _Reference(models.Model):
+    code = models.CharField(
+        max_length=20, unique=True, help_text="Code (repris de l'ancien logiciel)."
+    )
+    est_actif = models.BooleanField("actif", default=True)
+
+    class Meta:
+        abstract = True
+
+
+class Foyer(models.TextChoices):
+    UNIFOCAL = "unifocal", "Unifocal"
+    BIFOCAL = "bifocal", "Bifocal"
+    PROGRESSIF = "progressif", "Progressif"
+
+
+class MarqueMonture(_Reference):
+    libelle = models.CharField("libellé", max_length=100, unique=True)
+
+    class Meta:
+        ordering = ["libelle"]
+        verbose_name = "marque de monture"
+        verbose_name_plural = "marques de monture"
+
+    def __str__(self):
+        return self.libelle
+
+
+class MatiereVerre(_Reference):
+    libelle = models.CharField("libellé", max_length=100)
+
+    class Meta:
+        ordering = ["libelle"]
+        verbose_name = "matière de verre"
+        verbose_name_plural = "matières de verre"
+
+    def __str__(self):
+        return self.libelle
+
+
+class FamilleVerre(_Reference):
+    """Famille (« marque ») de verres d'un fournisseur : Varilux, Relaxy, Hilux…"""
+
+    fournisseur = models.ForeignKey(
+        "achats.Fournisseur", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    libelle = models.CharField("libellé", max_length=100)
+    foyer = models.CharField(max_length=20, choices=Foyer.choices, blank=True)
+
+    class Meta:
+        ordering = ["fournisseur__nom", "libelle"]
+        verbose_name = "famille de verres"
+        verbose_name_plural = "familles de verres"
+
+    def __str__(self):
+        return self.libelle
+
+
+class SousFamilleVerre(_Reference):
+    """Sous-famille d'une famille de verres : matière, finesse ou design (ORGA-CR, SuperFin…)."""
+
+    famille = models.ForeignKey(
+        FamilleVerre, on_delete=models.PROTECT, related_name="sous_familles"
+    )
+    libelle = models.CharField("libellé", max_length=100)
+    foyer = models.CharField(
+        max_length=20, choices=Foyer.choices, blank=True, help_text="Vide : celui de la famille."
+    )
+
+    class Meta:
+        ordering = ["famille__libelle", "libelle"]
+        verbose_name = "sous-famille de verres"
+        verbose_name_plural = "sous-familles de verres"
+
+    def __str__(self):
+        return f"{self.famille} · {self.libelle}"
+
+    def clean(self):
+        if self.est_actif and self.famille_id and not self.famille.est_actif:
+            raise ValidationError({"est_actif": "La famille de cette sous-famille est inactive."})
+
+
+class CouleurVerre(_Reference):
+    class FamilleCouleur(models.TextChoices):
+        BLANC = "blanc", "Blanc"
+        SOLAIRE = "solaire", "Solaire (teinté)"
+        PHOTOCHROMIQUE = "photochromique", "Photochromique"
+        POLARISANT = "polarisant", "Polarisant"
+        MIROIR = "miroir", "Miroir"
+
+    fournisseur = models.ForeignKey(
+        "achats.Fournisseur", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    libelle = models.CharField("libellé", max_length=100)
+    famille_couleur = models.CharField(max_length=20, choices=FamilleCouleur.choices, blank=True)
+
+    class Meta:
+        ordering = ["fournisseur__nom", "libelle"]
+        verbose_name = "couleur de verre"
+        verbose_name_plural = "couleurs de verre"
+
+    def __str__(self):
+        return self.libelle
+
+
+class DiametreVerre(_Reference):
+    fournisseur = models.ForeignKey(
+        "achats.Fournisseur", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    diametre_reel = models.CharField("diamètre réel", max_length=20)
+    diametre_commercial = models.CharField("diamètre commercial", max_length=20)
+
+    class Meta:
+        ordering = ["fournisseur__nom", "diametre_commercial"]
+        verbose_name = "diamètre de verre"
+        verbose_name_plural = "diamètres de verre"
+
+    def __str__(self):
+        return self.diametre_commercial

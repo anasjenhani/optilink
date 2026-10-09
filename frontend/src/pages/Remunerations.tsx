@@ -1,6 +1,10 @@
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
 import MenuItem from "@mui/material/MenuItem";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
@@ -16,6 +20,9 @@ import { useState } from "react";
 
 import { enUnites, formater } from "../api/monnaie";
 import {
+  annulerAcompte,
+  annulerMonAcompte,
+  annulerPrime,
   deciderAcompte,
   deciderPrime,
   demanderAcompte,
@@ -42,7 +49,10 @@ const moisEnLettres = (iso: string) =>
   new Date(`${iso.slice(0, 7)}-01T00:00:00`).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
 const moisCourant = () => new Date().toLocaleDateString("en-CA").slice(0, 7);
 
-const STATUTS_ACOMPTE: Record<StatutAcompte, { libelle: string; couleur: "default" | "info" | "warning" | "success" | "error" }> = {
+const STATUTS_ACOMPTE: Record<
+  StatutAcompte,
+  { libelle: string; couleur: "default" | "info" | "warning" | "success" | "error" }
+> = {
   demande: { libelle: "En attente", couleur: "info" },
   accorde: { libelle: "Accordé, à verser", couleur: "warning" },
   verse: { libelle: "Versé", couleur: "success" },
@@ -72,7 +82,58 @@ const MODES: { valeur: ModeVersement; libelle: string }[] = [
   { valeur: "cheque", libelle: "Chèque" },
 ];
 
-function TableAcomptes({ acomptes, avecNom = false, action }: {
+/** Bouton « Annuler » qui demande confirmation avant d'agir. */
+export function BoutonAnnuler({
+  titre,
+  texte,
+  confirmer,
+  enCours,
+  nom,
+}: {
+  titre: string;
+  texte: string;
+  confirmer: () => void;
+  enCours: boolean;
+  /** Distingue les boutons d'une même liste pour les lecteurs d'écran. */
+  nom: string;
+}) {
+  const [ouvert, setOuvert] = useState(false);
+  return (
+    <>
+      <Button size="small" color="error" onClick={() => setOuvert(true)} aria-label={`Annuler ${nom}`}>
+        Annuler
+      </Button>
+      {ouvert && (
+        <Dialog open onClose={() => setOuvert(false)}>
+          <DialogTitle>{titre}</DialogTitle>
+          <DialogContent>
+            <Typography>{texte}</Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOuvert(false)}>Retour</Button>
+            <Button
+              variant="contained"
+              color="error"
+              disabled={enCours}
+              onClick={() => {
+                confirmer();
+                setOuvert(false);
+              }}
+            >
+              Confirmer l'annulation
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+function TableAcomptes({
+  acomptes,
+  avecNom = false,
+  action,
+}: {
   acomptes: Acompte[];
   avecNom?: boolean;
   action?: (acompte: Acompte) => React.ReactNode;
@@ -108,7 +169,11 @@ function TableAcomptes({ acomptes, avecNom = false, action }: {
   );
 }
 
-function TablePrimes({ primes, avecNom = false, action }: {
+function TablePrimes({
+  primes,
+  avecNom = false,
+  action,
+}: {
   primes: Prime[];
   avecNom?: boolean;
   action?: (prime: Prime) => React.ReactNode;
@@ -143,7 +208,15 @@ function TablePrimes({ primes, avecNom = false, action }: {
 }
 
 /** Espace de l'employé : ses acomptes, une nouvelle demande, ses primes validées. */
-export function MesAcomptes({ acomptes, primes, salaire }: { acomptes: Acompte[]; primes: Prime[]; salaire: string | null }) {
+export function MesAcomptes({
+  acomptes,
+  primes,
+  salaire,
+}: {
+  acomptes: Acompte[];
+  primes: Prime[];
+  salaire: string | null;
+}) {
   const queryClient = useQueryClient();
   const [montant, setMontant] = useState("");
   const [motif, setMotif] = useState("");
@@ -154,6 +227,10 @@ export function MesAcomptes({ acomptes, primes, salaire }: { acomptes: Acompte[]
       setMontant("");
       setMotif("");
     },
+  });
+  const annulation = useMutation({
+    mutationFn: annulerMonAcompte,
+    onSuccess: (espace) => queryClient.setQueryData(["mon-espace-rh"], espace),
   });
   return (
     <Stack spacing={2}>
@@ -170,7 +247,12 @@ export function MesAcomptes({ acomptes, primes, salaire }: { acomptes: Acompte[]
           onChange={(e) => setMontant(e.target.value)}
           slotProps={{ htmlInput: { inputMode: "decimal" } }}
         />
-        <TextField label="Motif de l'acompte" value={motif} onChange={(e) => setMotif(e.target.value)} sx={{ flexGrow: 1 }} />
+        <TextField
+          label="Motif de l'acompte"
+          value={motif}
+          onChange={(e) => setMotif(e.target.value)}
+          sx={{ flexGrow: 1 }}
+        />
       </Stack>
       {demande.isError && <Alert severity="error">{demande.error.message}</Alert>}
       <Button
@@ -181,7 +263,23 @@ export function MesAcomptes({ acomptes, primes, salaire }: { acomptes: Acompte[]
       >
         Demander l'acompte
       </Button>
-      {acomptes.length > 0 && <TableAcomptes acomptes={acomptes} />}
+      {annulation.isError && <Alert severity="error">{annulation.error.message}</Alert>}
+      {acomptes.length > 0 && (
+        <TableAcomptes
+          acomptes={acomptes}
+          action={(a) =>
+            a.statut === "demande" && (
+              <BoutonAnnuler
+                nom={`l'acompte de ${dt(a.montant)}`}
+                titre="Retirer cette demande d'acompte ?"
+                texte={`Votre demande de ${dt(a.montant)} sera annulée ; les RH ne la verront plus à décider.`}
+                confirmer={() => annulation.mutate(a.id)}
+                enCours={annulation.isPending}
+              />
+            )
+          }
+        />
+      )}
       {primes.length > 0 && (
         <>
           <Typography variant="subtitle2">Mes primes</Typography>
@@ -212,7 +310,15 @@ function rafraichir(queryClient: ReturnType<typeof useQueryClient>) {
 }
 
 /** Acomptes du personnel : demande pour un employé, décision et versement par les RH. */
-export function Acomptes({ demander, decider }: { demander: boolean; decider: boolean }) {
+export function Acomptes({
+  demander,
+  decider,
+  annuler = false,
+}: {
+  demander: boolean;
+  decider: boolean;
+  annuler?: boolean;
+}) {
   const queryClient = useQueryClient();
   const [statut, setStatut] = useState<StatutAcompte | "tous">(decider ? "demande" : "tous");
   const acomptes = useQuery({
@@ -242,6 +348,18 @@ export function Acomptes({ demander, decider }: { demander: boolean; decider: bo
     },
     onSuccess: () => rafraichir(queryClient),
   });
+  const annulation = useMutation({ mutationFn: annulerAcompte, onSuccess: () => rafraichir(queryClient) });
+  const boutonAnnuler = (a: Acompte) =>
+    annuler &&
+    (a.statut === "demande" || a.statut === "accorde") && (
+      <BoutonAnnuler
+        nom={`l'acompte de ${a.employe_nom}`}
+        titre="Annuler cet acompte ?"
+        texte={`L'acompte de ${dt(a.montant)} pour ${a.employe_nom} sera annulé : il ne sera ni versé ni retenu sur la paie.`}
+        confirmer={() => annulation.mutate(a.id)}
+        enCours={annulation.isPending}
+      />
+    );
 
   return (
     <Stack spacing={2}>
@@ -285,13 +403,14 @@ export function Acomptes({ demander, decider }: { demander: boolean; decider: bo
         <MenuItem value="tous">Tous</MenuItem>
       </TextField>
       {action.isError && <Alert severity="error">{action.error.message}</Alert>}
+      {annulation.isError && <Alert severity="error">{annulation.error.message}</Alert>}
       {acomptes.data?.length === 0 && <Typography color="text.secondary">Aucun acompte.</Typography>}
       {acomptes.data && acomptes.data.length > 0 && (
         <TableAcomptes
           avecNom
           acomptes={acomptes.data}
           action={(a) => {
-            if (!decider) return null;
+            if (!decider) return boutonAnnuler(a);
             if (a.statut === "demande") {
               return (
                 <Stack spacing={1}>
@@ -303,7 +422,12 @@ export function Acomptes({ demander, decider }: { demander: boolean; decider: bo
                     helperText="Obligatoire pour un refus."
                   />
                   <Stack direction="row" spacing={1}>
-                    <Button size="small" variant="contained" color="success" onClick={() => action.mutate({ acompte: a, quoi: "accorder" })}>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      color="success"
+                      onClick={() => action.mutate({ acompte: a, quoi: "accorder" })}
+                    >
                       Accorder
                     </Button>
                     <Button
@@ -314,13 +438,15 @@ export function Acomptes({ demander, decider }: { demander: boolean; decider: bo
                     >
                       Refuser
                     </Button>
+                    {boutonAnnuler(a)}
                   </Stack>
                 </Stack>
               );
             }
             if (a.statut === "accorde") {
               const v = versements[a.id] ?? { mode: "especes" as ModeVersement, reference: "" };
-              const changer = (nouveau: Partial<typeof v>) => setVersements((m) => ({ ...m, [a.id]: { ...v, ...nouveau } }));
+              const changer = (nouveau: Partial<typeof v>) =>
+                setVersements((m) => ({ ...m, [a.id]: { ...v, ...nouveau } }));
               return (
                 <Stack spacing={1}>
                   <TextField
@@ -352,6 +478,7 @@ export function Acomptes({ demander, decider }: { demander: boolean; decider: bo
                   >
                     Marquer versé
                   </Button>
+                  {boutonAnnuler(a)}
                 </Stack>
               );
             }
@@ -364,14 +491,28 @@ export function Acomptes({ demander, decider }: { demander: boolean; decider: bo
 }
 
 /** Primes : proposées par le responsable, validées par les RH. */
-export function Primes({ proposer, valider }: { proposer: boolean; valider: boolean }) {
+export function Primes({
+  proposer,
+  valider,
+  annuler = false,
+}: {
+  proposer: boolean;
+  valider: boolean;
+  annuler?: boolean;
+}) {
   const queryClient = useQueryClient();
   const [statut, setStatut] = useState<StatutPrime | "toutes">(valider ? "proposee" : "toutes");
   const primes = useQuery({
     queryKey: ["primes-rh", statut],
     queryFn: () => listerPrimes(statut === "toutes" ? undefined : statut),
   });
-  const [saisie, setSaisie] = useState({ employe: "", type: "objectif" as TypePrime, montant: "", mois: moisCourant(), motif: "" });
+  const [saisie, setSaisie] = useState({
+    employe: "",
+    type: "objectif" as TypePrime,
+    montant: "",
+    mois: moisCourant(),
+    motif: "",
+  });
   const [commentaires, setCommentaires] = useState<Record<string, string>>({});
   const proposition = useMutation({
     mutationFn: () => proposerPrime({ ...saisie, mois: `${saisie.mois}-01` }),
@@ -385,6 +526,7 @@ export function Primes({ proposer, valider }: { proposer: boolean; valider: bool
       deciderPrime(prime.id, choix, commentaires[prime.id] ?? ""),
     onSuccess: () => rafraichir(queryClient),
   });
+  const annulation = useMutation({ mutationFn: annulerPrime, onSuccess: () => rafraichir(queryClient) });
 
   return (
     <Stack spacing={2}>
@@ -455,34 +597,55 @@ export function Primes({ proposer, valider }: { proposer: boolean; valider: bool
         <MenuItem value="toutes">Toutes</MenuItem>
       </TextField>
       {decision.isError && <Alert severity="error">{decision.error.message}</Alert>}
+      {annulation.isError && <Alert severity="error">{annulation.error.message}</Alert>}
       {primes.data?.length === 0 && <Typography color="text.secondary">Aucune prime.</Typography>}
       {primes.data && primes.data.length > 0 && (
         <TablePrimes
           avecNom
           primes={primes.data}
           action={(p) =>
-            valider &&
-            p.statut === "proposee" && (
+            p.statut === "proposee" &&
+            (valider || annuler) && (
               <Stack spacing={1}>
-                <TextField
-                  size="small"
-                  label={`Commentaire ${p.employe_nom}`}
-                  value={commentaires[p.id] ?? ""}
-                  onChange={(e) => setCommentaires((m) => ({ ...m, [p.id]: e.target.value }))}
-                  helperText="Obligatoire pour un refus."
-                />
-                <Stack direction="row" spacing={1}>
-                  <Button size="small" variant="contained" color="success" onClick={() => decision.mutate({ prime: p, choix: "valider" })}>
-                    Valider
-                  </Button>
-                  <Button
+                {valider && (
+                  <TextField
                     size="small"
-                    color="error"
-                    onClick={() => decision.mutate({ prime: p, choix: "refuser" })}
-                    disabled={!commentaires[p.id]?.trim()}
-                  >
-                    Refuser
-                  </Button>
+                    label={`Commentaire ${p.employe_nom}`}
+                    value={commentaires[p.id] ?? ""}
+                    onChange={(e) => setCommentaires((m) => ({ ...m, [p.id]: e.target.value }))}
+                    helperText="Obligatoire pour un refus."
+                  />
+                )}
+                <Stack direction="row" spacing={1}>
+                  {valider && (
+                    <>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="success"
+                        onClick={() => decision.mutate({ prime: p, choix: "valider" })}
+                      >
+                        Valider
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        onClick={() => decision.mutate({ prime: p, choix: "refuser" })}
+                        disabled={!commentaires[p.id]?.trim()}
+                      >
+                        Refuser
+                      </Button>
+                    </>
+                  )}
+                  {annuler && (
+                    <BoutonAnnuler
+                      nom={`la prime de ${p.employe_nom}`}
+                      titre="Annuler cette prime ?"
+                      texte={`La prime de ${dt(p.montant)} proposée pour ${p.employe_nom} sera retirée : elle ne sera pas versée.`}
+                      confirmer={() => annulation.mutate(p.id)}
+                      enCours={annulation.isPending}
+                    />
+                  )}
                 </Stack>
               </Stack>
             )
@@ -496,7 +659,11 @@ export function Primes({ proposer, valider }: { proposer: boolean; valider: bool
 /** Ce que la paie du mois retiendra (acomptes) et ajoutera (primes), par employé. */
 export function RecapPaie() {
   const [mois, setMois] = useState(moisCourant());
-  const recap = useQuery({ queryKey: ["recap-paie", mois], queryFn: () => lireRecap(`${mois}-01`), enabled: Boolean(mois) });
+  const recap = useQuery({
+    queryKey: ["recap-paie", mois],
+    queryFn: () => lireRecap(`${mois}-01`),
+    enabled: Boolean(mois),
+  });
   return (
     <Stack spacing={2}>
       <TextField

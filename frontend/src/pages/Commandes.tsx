@@ -18,16 +18,19 @@ import Typography from "@mui/material/Typography";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { listerCommandes, livrerCommande, reglerCommande, type ModePaiement, type Vente } from "../api/caisse";
+import { lireSession, peut } from "../api/auth";
+import {
+  listerCommandes,
+  livrerCommande,
+  reglerCommande,
+  type ModePaiement,
+  type Piece,
+  type Vente,
+} from "../api/caisse";
 import { listerMagasins } from "../api/magasins";
 import { formaterTexte, type Monnaie } from "../api/monnaie";
 import { listerOrganismes, saisirPriseEnCharge } from "../api/prisesEnCharge";
-
-const MODES: { valeur: ModePaiement; libelle: string }[] = [
-  { valeur: "especes", libelle: "Espèces" },
-  { valeur: "carte", libelle: "Carte bancaire" },
-  { valeur: "cheque", libelle: "Chèque" },
-];
+import { ChampsPiece, ChoixMode, piece } from "./ChampsPaiement";
 
 /** Part d'une commande prise en charge par la CNAM, une assurance ou une mutuelle. */
 function SaisiePriseEnCharge({
@@ -46,11 +49,11 @@ function SaisiePriseEnCharge({
   const [montant, setMontant] = useState("");
   const [dossier, setDossier] = useState("");
   // L'organisme de la fiche client d'abord, sinon le premier de la liste (la CNAM).
-  const parDefaut = organismes.data?.find((o) => o.id === vente.client?.organisme) ?? organismes.data?.find((o) => o.type === "caisse");
+  const parDefaut =
+    organismes.data?.find((o) => o.id === vente.client?.organisme) ?? organismes.data?.find((o) => o.type === "caisse");
   const choisi = organisme || parDefaut?.id || organismes.data?.[0]?.id || "";
   const saisie = useMutation({
-    mutationFn: () =>
-      saisirPriseEnCharge({ vente: vente.id, organisme: choisi, montant, numero_dossier: dossier }),
+    mutationFn: () => saisirPriseEnCharge({ vente: vente.id, organisme: choisi, montant, numero_dossier: dossier }),
     onSuccess: (pec) =>
       onEnregistree(
         `Prise en charge ${pec.organisme_nom} de ${formaterTexte(pec.montant, monnaie)} saisie sur ${vente.numero}.`,
@@ -77,7 +80,11 @@ function SaisiePriseEnCharge({
             value={montant}
             onChange={(e) => setMontant(e.target.value)}
           />
-          <TextField label="N° de dossier (bulletin de soins)" value={dossier} onChange={(e) => setDossier(e.target.value)} />
+          <TextField
+            label="N° de dossier (bulletin de soins)"
+            value={dossier}
+            onChange={(e) => setDossier(e.target.value)}
+          />
           {saisie.isError && <Alert severity="error">{saisie.error.message}</Alert>}
         </Stack>
       </DialogContent>
@@ -107,6 +114,9 @@ export function Commandes({ saisirPec = false }: { saisirPec?: boolean }) {
   const magasin = magasinChoisi || magasins.data?.[0]?.id || "";
   const pays = magasins.data?.find((m) => m.id === magasin)?.pays;
   const [mode, setMode] = useState<ModePaiement>("especes");
+  const [pieceSaisie, setPiece] = useState<Piece>({});
+  const session = useQuery({ queryKey: ["session"], queryFn: lireSession });
+  const peutCredit = peut(session.data, "ventes.vendre_a_credit");
   const [montants, setMontants] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   const [peniche, setPeniche] = useState("");
@@ -120,13 +130,19 @@ export function Commandes({ saisirPec = false }: { saisirPec?: boolean }) {
   const monnaie = (vente: Vente): Monnaie => ({ devise: vente.devise, decimales: pays?.decimales ?? 3 });
 
   const action = useMutation({
-    mutationFn: ({ vente, quoi }: { vente: Vente; quoi: "regler" | "livrer" }) => {
+    mutationFn: ({ vente, quoi }: { vente: Vente; quoi: "regler" | "livrer" | "credit" }) => {
       if (quoi === "regler") {
-        return reglerCommande(vente.id, { mode, montant: montants[vente.id] }).then(
+        return reglerCommande(vente.id, { mode, montant: montants[vente.id], ...piece(mode, pieceSaisie) }).then(
           (v) => `Règlement enregistré sur ${v.numero} : reste ${formaterTexte(v.reste_a_payer, monnaie(v))}.`,
         );
       }
-      const solde = Number(vente.reste_a_payer) > 0 ? { mode, montant: vente.reste_a_payer } : null;
+      if (quoi === "credit") {
+        return livrerCommande(vente.id, null, { echeance: null }).then(
+          (v) => `Commande ${v.numero} livrée à crédit : reste ${formaterTexte(v.reste_a_payer, monnaie(v))} dû.`,
+        );
+      }
+      const solde =
+        Number(vente.reste_a_payer) > 0 ? { mode, montant: vente.reste_a_payer, ...piece(mode, pieceSaisie) } : null;
       return livrerCommande(vente.id, solde).then(
         (v) =>
           `Commande ${v.numero} livrée${solde ? `, solde de ${formaterTexte(solde.montant, monnaie(v))} encaissé` : ""}.`,
@@ -135,6 +151,7 @@ export function Commandes({ saisirPec = false }: { saisirPec?: boolean }) {
     onSuccess: (texte) => {
       setMessage(texte);
       setMontants({});
+      setPiece({});
       void queryClient.invalidateQueries({ queryKey: ["commandes"] });
     },
   });
@@ -160,19 +177,8 @@ export function Commandes({ saisirPec = false }: { saisirPec?: boolean }) {
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
-              select
-              label="Paiement"
-              value={mode}
-              onChange={(e) => setMode(e.target.value as ModePaiement)}
-              sx={{ minWidth: 200 }}
-            >
-              {MODES.map((m) => (
-                <MenuItem key={m.valeur} value={m.valeur}>
-                  {m.libelle}
-                </MenuItem>
-              ))}
-            </TextField>
+            <ChoixMode valeur={mode} onChange={setMode} />
+            <ChampsPiece mode={mode} valeur={pieceSaisie} onChange={setPiece} />
           </Stack>
 
           <TextField
@@ -263,6 +269,15 @@ export function Commandes({ saisirPec = false }: { saisirPec?: boolean }) {
                         >
                           {Number(vente.reste_a_payer) > 0 ? "Encaisser le solde et livrer" : "Livrer"}
                         </Button>
+                        {peutCredit && Number(vente.reste_a_payer) > 0 && vente.client && !vente.client.liste_noire && (
+                          <Button
+                            size="small"
+                            disabled={action.isPending || (Boolean(vente.verres) && vente.verres !== "recus")}
+                            onClick={() => action.mutate({ vente, quoi: "credit" })}
+                          >
+                            Livrer à crédit
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

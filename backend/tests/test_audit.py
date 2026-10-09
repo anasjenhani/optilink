@@ -3,11 +3,14 @@ import datetime
 import pytest
 from auditlog.context import set_actor
 from auditlog.models import LogEntry
+from django.contrib.auth.models import Group
 from django.utils import timezone
 
 from apps.reseau.models import Magasin
 from apps.securite.models import Affectation, EvenementSecurite, Utilisateur
+from apps.securite.privileges import CODES
 from apps.securite.tasks import desactiver_comptes_inactifs
+from tests.test_acces import codes
 
 
 def test_modification_d_un_magasin_journalisee_avec_son_auteur(reseau, creer_utilisateur):
@@ -59,3 +62,67 @@ def test_comptes_inactifs_desactives(db):
     assert etats == {"dormant": False, "jamais": False, "actif": True, "admin": True}
     assert EvenementSecurite.objects.filter(type="compte_desactive").count() == 2
     del dormant, actif, admin
+
+
+def test_journal_des_droits_lisible(reseau, client_de):
+    """Profils donnés, modifiés, retirés et privilèges changés : lisibles dans l'admin."""
+    anas = Utilisateur.objects.create_superuser("anas")
+    Affectation.objects.create(
+        utilisateur=anas, role=Group.objects.get(name="Administrateur Global"), portee="reseau"
+    )
+    navigateur = client_de(anas)
+    sami = Utilisateur.objects.create_user("sami")
+    vendeur, caissier = Group.objects.get(name="Vendeur"), Group.objects.get(name="Caissier")
+    affectation = Affectation.objects.create(
+        utilisateur=sami, role=vendeur, portee="magasin", magasin=reseau["lille"]
+    )
+    url = f"/api/v1/securite/utilisateurs/{sami.pk}/"
+    corps = {"affectations": [{"id": affectation.pk, "profil": caissier.pk, "portee": "reseau"}]}
+    assert navigateur.patch(url, corps, format="json").status_code == 200
+    privileges = sorted(codes("Vendeur") & CODES | {"ventes.appliquer_remise"})
+    reponse = navigateur.patch(
+        f"/api/v1/securite/profils/{vendeur.pk}/", {"privileges": privileges}, format="json"
+    )
+    assert reponse.status_code == 200
+
+    modification = LogEntry.objects.get_for_object(affectation).get(action=LogEntry.Action.UPDATE)
+    assert modification.actor == anas
+
+    page = navigateur.get("/admin/securite/modificationdroits/").content.decode()
+    assert "Profil : Vendeur → Caissier" in page
+    assert "Portée : Magasin → Tout le réseau" in page
+    assert "Magasin : M01 Lille → (vide)" in page
+    assert "Privilèges ajoutés : Accorder une remise" in page
+    # Les autres modifications (magasins, clients…) restent dans l'historique général.
+    assert "Optique du Nord" not in page
+
+
+def test_reinitialisation_mfa_journalisee(admin_global_securite):
+    navigateur, cible = admin_global_securite
+    url = f"/api/v1/securite/utilisateurs/{cible.pk}/reinitialiser-mfa/"
+    assert navigateur.post(url).status_code == 204
+    evenement = EvenementSecurite.objects.get(type="mfa_reinitialisee")
+    assert (evenement.utilisateur, evenement.details) == (cible, "par anas")
+
+
+@pytest.fixture
+def admin_global_securite(db, client_de):
+    anas = Utilisateur.objects.create_user("anas")
+    Affectation.objects.create(
+        utilisateur=anas, role=Group.objects.get(name="Administrateur Global"), portee="reseau"
+    )
+    return client_de(anas), Utilisateur.objects.create_user("sami")
+
+
+def test_modifications_des_droits_dans_le_journal_d_audit(admin_global_securite):
+    anas = Utilisateur.objects.get(username="anas")
+    anas.is_staff = anas.is_superuser = True
+    anas.save()
+    navigateur, _ = admin_global_securite
+    sections = navigateur.get("/admin/", {"onglet": "securite"}).context["app_list"]
+    modeles = {app["name"]: [m["name"] for m in app["models"]] for app in sections}
+    assert modeles["Journal d'audit"] == [
+        "Modifications des droits",
+        "Historique complet des modifications",
+    ]
+    assert "Modifications des droits" not in modeles["Sécurité"]

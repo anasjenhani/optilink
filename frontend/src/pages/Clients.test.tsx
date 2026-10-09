@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { formaterOeil } from "../api/clients";
 import { Clients } from "./Clients";
@@ -36,7 +36,7 @@ function json(donnees: unknown) {
 
 afterEach(() => vi.unstubAllGlobals());
 
-function afficher(voirOrdonnances: boolean) {
+function afficher(voirOrdonnances: boolean, trouves: unknown[] = [DUPONT], modifierClient = true) {
   const appels: string[] = [];
   const corps: unknown[] = [];
   vi.stubGlobal(
@@ -48,14 +48,14 @@ function afficher(voirOrdonnances: boolean) {
         corps.push({ methode: options.method, url, saisie });
         return json({ ...DUPONT, ...saisie, id: "c2" });
       }
-      if (url.startsWith("/api/v1/clients/")) return json({ results: [DUPONT] });
+      if (url.startsWith("/api/v1/clients/")) return json({ results: trouves });
       if (url.startsWith("/api/v1/prescriptions/")) return json({ results: [ORDONNANCE] });
       return json({ results: [] });
     }),
   );
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <Clients droits={{ creerClient: true, modifierClient: true, voirOrdonnances, saisirOrdonnance: false }} />
+      <Clients droits={{ creerClient: true, modifierClient, voirOrdonnances, saisirOrdonnance: false }} />
     </QueryClientProvider>,
   );
   return Object.assign(appels, { corps });
@@ -83,10 +83,12 @@ test("notation d'un œil sans cylindre", () => {
 test("crée un client professionnel avec sa société", async () => {
   const { corps } = afficher(false);
   fireEvent.click(screen.getByRole("button", { name: "Nouveau client" }));
-  const remplir = (label: string, valeur: string) =>
+  const remplir = (label: string | RegExp, valeur: string) =>
     fireEvent.change(screen.getByLabelText(label), { target: { value: valeur } });
-  remplir("Nom", "Ben Salah");
-  remplir("Prénom", "Karim");
+  // Champs obligatoires : leur libellé porte un astérisque.
+  remplir(/^Nom \*/, "Ben Salah");
+  remplir(/^Prénom \*/, "Karim");
+  remplir(/^Téléphone 1 \*/, "71123456");
   remplir("Téléphone 2", "98123456");
   remplir("Adresse", "12 rue de Marseille");
   expect(screen.queryByLabelText("Matricule fiscal")).not.toBeInTheDocument();
@@ -97,7 +99,13 @@ test("crée un client professionnel avec sa société", async () => {
   expect(await screen.findByText("Optique Services SARL · MF 1234567/A/M/000")).toBeInTheDocument();
   expect(corps[0]).toMatchObject({
     methode: "POST",
-    saisie: { nom: "Ben Salah", telephone_2: "98123456", societe: "Optique Services SARL", date_naissance: null },
+    saisie: {
+      nom: "Ben Salah",
+      telephone: "71123456",
+      telephone_2: "98123456",
+      societe: "Optique Services SARL",
+      date_naissance: null,
+    },
   });
 });
 
@@ -109,6 +117,43 @@ test("modifie la fiche d'un client", async () => {
   fireEvent.change(screen.getByLabelText("Téléphone 2"), { target: { value: "0700000000" } });
   fireEvent.click(screen.getByRole("button", { name: "Enregistrer la fiche" }));
   expect(await screen.findByText("0601020304 · 0700000000")).toBeInTheDocument();
-  expect(corps[0]).toMatchObject({ methode: "PATCH", url: "/api/v1/clients/c1/", saisie: { telephone_2: "0700000000" } });
+  expect(corps[0]).toMatchObject({
+    methode: "PATCH",
+    url: "/api/v1/clients/c1/",
+    saisie: { telephone_2: "0700000000" },
+  });
   expect((corps[0] as { saisie: object }).saisie).not.toHaveProperty("magasin_origine");
+});
+
+test("la recherche écarte les clients désactivés, sauf si on demande à les voir", async () => {
+  const appels = afficher(false, [{ ...DUPONT, est_actif: false }]);
+  fireEvent.change(screen.getByLabelText("Rechercher un client"), { target: { value: "dupont" } });
+  await screen.findByText("DUPONT Marie");
+  expect(appels.at(-1)).toBe("/api/v1/clients/?recherche=dupont&est_actif=true");
+  fireEvent.click(screen.getByLabelText("Voir les clients désactivés"));
+  await waitFor(() => expect(appels.at(-1)).toBe("/api/v1/clients/?recherche=dupont"));
+  expect(await screen.findByText("Désactivé")).toBeInTheDocument();
+});
+
+test("désactive puis réactive la fiche d'un client", async () => {
+  const { corps } = afficher(false);
+  fireEvent.change(screen.getByLabelText("Rechercher un client"), { target: { value: "dupont" } });
+  fireEvent.click(await screen.findByText("DUPONT Marie"));
+  fireEvent.click(screen.getByRole("button", { name: "Désactiver" }));
+  expect(await screen.findByText(/Fiche désactivée/)).toBeInTheDocument();
+  expect(corps[0]).toEqual({ methode: "PATCH", url: "/api/v1/clients/c1/", saisie: { est_actif: false } });
+  fireEvent.click(screen.getByRole("button", { name: "Réactiver" }));
+  await waitFor(() => expect(screen.queryByText(/Fiche désactivée/)).not.toBeInTheDocument());
+  expect(corps[1]).toMatchObject({ methode: "PATCH", saisie: { est_actif: true } });
+  expect(screen.getByRole("button", { name: "Désactiver" })).toBeInTheDocument();
+});
+
+test("pas de désactivation sans le droit de modifier les clients", async () => {
+  afficher(false, [{ ...DUPONT, est_actif: false }], false);
+  fireEvent.click(screen.getByLabelText("Voir les clients désactivés"));
+  fireEvent.change(screen.getByLabelText("Rechercher un client"), { target: { value: "dupont" } });
+  fireEvent.click(await screen.findByText("DUPONT Marie"));
+  expect(screen.getByText(/Fiche désactivée/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Réactiver" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Désactiver" })).not.toBeInTheDocument();
 });

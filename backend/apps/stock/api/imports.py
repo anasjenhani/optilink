@@ -1,7 +1,9 @@
 import hmac
 
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import serializers, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import MultiPartParser
@@ -9,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.reseau.models import Magasin, Pays
+from core.modeles_import import MODELES, fichier_csv, fichier_xlsx
 
 from ..imports import (
     FichierIllisible,
@@ -17,6 +20,7 @@ from ..imports import (
     jeton_de_verification,
     lire_tableau,
 )
+from ..models import Article
 
 
 class ImportSaisieSerializer(serializers.Serializer):
@@ -151,3 +155,55 @@ class ImportStockView(_Import):
             apercu=donnees["apercu"],
         )
         return self._rapport(rapport, jeton)
+
+
+class ImportVerresView(_Import):
+    """Crée ou met à jour les verres du catalogue (même import que le catalogue, famille verre).
+
+    Tout ou rien : à la moindre ligne en erreur, aucun verre n'est enregistré.
+    """
+
+    permissions_requises = ImportCatalogueView.permissions_requises
+
+    @extend_schema(
+        request={"multipart/form-data": ImportCatalogueSaisieSerializer},
+        responses={200: RapportImportSerializer, 400: RapportImportSerializer},
+    )
+    def post(self, request):
+        saisie = ImportCatalogueSaisieSerializer(data=request.data)
+        saisie.is_valid(raise_exception=True)
+        donnees = saisie.validated_data
+        pays = get_object_or_404(Pays, code=donnees["pays"].upper())
+        lignes, jeton, refus = self._lire(donnees, "verres", pays.code)
+        if refus:
+            return refus
+        rapport = importer_catalogue(
+            lignes, pays=pays, apercu=donnees["apercu"], famille=Article.Famille.VERRE
+        )
+        return self._rapport(rapport, jeton)
+
+
+class ModeleImportView(APIView):
+    """Fichier modèle d'un import : Excel (en-tête, exemple et aide) ou CSV (en-tête)."""
+
+    permissions_requises = {"get": []}  # Une ligne d'en-tête : rien de confidentiel.
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("modele", str, OpenApiParameter.PATH, enum=sorted(MODELES)),
+            OpenApiParameter("extension", str, OpenApiParameter.PATH, enum=["xlsx", "csv"]),
+        ],
+        responses={(200, "application/octet-stream"): OpenApiTypes.BINARY},
+    )
+    def get(self, request, modele, extension):
+        if modele not in MODELES or extension not in ("xlsx", "csv"):
+            raise Http404
+        choisi = MODELES[modele]
+        if extension == "csv":
+            contenu, type_ = fichier_csv(choisi), "text/csv; charset=utf-8"
+        else:
+            contenu = fichier_xlsx(choisi)
+            type_ = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        reponse = HttpResponse(contenu, content_type=type_)
+        reponse["Content-Disposition"] = f'attachment; filename="modele-{modele}.{extension}"'
+        return reponse

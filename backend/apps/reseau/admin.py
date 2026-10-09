@@ -3,12 +3,103 @@ import json
 
 from django import forms
 from django.contrib import admin
-from django.utils.html import format_html
+from django.core.exceptions import ValidationError
+from django.utils.html import format_html, format_html_join
 
-from .models import Magasin, Pays, Societe, TauxTva
+from .banques import valider_banque
+from .models import Banque, Magasin, Pays, Societe, TauxTva, Ville
 from .pays_du_monde import CHAMPS, pays_du_monde
+from .villes import normaliser, valider_ville
 
 OBLIGATOIRES = ("code_numerique", "code", "nom", "devise")
+
+
+class ListeVilles(forms.TextInput):
+    """Champ ville : on tape les premières lettres et on choisit dans la liste des villes."""
+
+    def render(self, name, value, attrs=None, renderer=None):
+        identifiant = f"villes-{name}"
+        attrs = {**(attrs or {}), "list": identifiant, "autocomplete": "off"}
+        noms = sorted(
+            Ville.objects.filter(est_active=True).values_list("nom", flat=True), key=normaliser
+        )
+        options = format_html_join("", '<option value="{}">', ((nom,) for nom in noms))
+        return super().render(name, value, attrs, renderer) + format_html(
+            '<datalist id="{}">{}</datalist>', identifiant, options
+        )
+
+
+class AvecListeVilles:
+    """Fiches de l'administration : la ville se choisit dans la liste (Réseau › Villes)."""
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        if db_field.name == "ville":
+            kwargs["widget"] = ListeVilles()
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
+
+    def get_form(self, request, obj=None, **kwargs):
+        formulaire = super().get_form(request, obj, **kwargs)
+
+        class AvecVille(formulaire):
+            def clean(self):
+                donnees = super().clean()
+                if donnees.get("ville"):
+                    pays = donnees.get("pays") or getattr(self.instance, "pays", None)
+                    try:
+                        donnees["ville"] = valider_ville(donnees["ville"], pays)
+                    except ValidationError as erreur:
+                        self.add_error("ville", erreur)
+                return donnees
+
+        return AvecVille
+
+
+class ListeBanques(forms.TextInput):
+    """Champ banque : on tape le sigle ou le nom et on choisit dans la liste des banques."""
+
+    def render(self, name, value, attrs=None, renderer=None):
+        identifiant = f"banques-{name}"
+        attrs = {**(attrs or {}), "list": identifiant, "autocomplete": "off"}
+        banques = Banque.objects.filter(est_active=True).order_by("nom")
+        options = format_html_join(
+            "", '<option value="{}">{}</option>', ((b.nom, b.sigle) for b in banques)
+        )
+        return super().render(name, value, attrs, renderer) + format_html(
+            '<datalist id="{}">{}</datalist>', identifiant, options
+        )
+
+
+class AvecListeBanques:
+    """Fiches de l'administration : la banque se choisit dans la liste (Réseau › Banques) et
+    doit aller avec le RIB ; sans banque, elle est déduite du RIB."""
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        if db_field.name == "banque":
+            kwargs["widget"] = ListeBanques()
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
+
+    def pays_de_la_fiche(self, donnees, instance):
+        return donnees.get("pays") or getattr(instance, "pays", None)
+
+    def get_form(self, request, obj=None, **kwargs):
+        formulaire = super().get_form(request, obj, **kwargs)
+        model_admin = self
+
+        class AvecBanque(formulaire):
+            def clean(self):
+                donnees = super().clean()
+                if "banque" in donnees:
+                    pays = model_admin.pays_de_la_fiche(donnees, self.instance)
+                    try:
+                        donnees["banque"] = valider_banque(
+                            donnees["banque"], donnees.get("rib", ""), pays
+                        )
+                    except ValidationError as erreur:
+                        for champ, messages in erreur.message_dict.items():
+                            self.add_error(champ if champ in self.fields else None, messages)
+                return donnees
+
+        return AvecBanque
 
 
 class PaysForm(forms.ModelForm):
@@ -169,7 +260,7 @@ class SocieteForm(forms.ModelForm):
 
 
 @admin.register(Societe)
-class SocieteAdmin(admin.ModelAdmin):
+class SocieteAdmin(AvecListeVilles, AvecListeBanques, admin.ModelAdmin):
     form = SocieteForm
     list_display = ("code", "raison_sociale", "forme_juridique", "matricule_fiscal", "ville")
     search_fields = ("code", "raison_sociale", "matricule_fiscal")
@@ -216,7 +307,24 @@ class SocieteAdmin(admin.ModelAdmin):
 
 
 @admin.register(Magasin)
-class MagasinAdmin(admin.ModelAdmin):
-    list_display = ("code", "nom", "pays", "societe", "ville", "est_actif")
-    list_filter = ("pays", "societe", "est_actif")
+class MagasinAdmin(AvecListeVilles, admin.ModelAdmin):
+    list_display = ("code", "nom", "type", "pays", "societe", "ville", "est_actif")
+    list_filter = ("type", "pays", "societe", "est_actif")
     search_fields = ("code", "nom", "ville")
+
+
+@admin.register(Ville)
+class VilleAdmin(admin.ModelAdmin):
+    list_display = ("nom", "pays", "est_active")
+    list_filter = ("pays", "est_active")
+    list_editable = ("est_active",)
+    search_fields = ("nom",)
+
+
+@admin.register(Banque)
+class BanqueAdmin(admin.ModelAdmin):
+    list_display = ("code", "sigle", "nom", "pays", "est_active")
+    list_filter = ("pays", "est_active")
+    list_editable = ("est_active",)
+    search_fields = ("code", "sigle", "nom")
+    ordering = ("pays", "code")

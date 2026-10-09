@@ -9,6 +9,10 @@ PRIVILEGES = {
         "ventes.view_vente": "Voir les ventes et les commandes",
         "ventes.add_vente": "Encaisser (caisse, acomptes, livraisons)",
         "ventes.appliquer_remise": "Accorder une remise",
+        "ventes.vendre_a_credit": "Vendre à crédit (remettre au client sans qu'il ait soldé)",
+        "ventes.gerer_impayes": (
+            "Gérer les chèques impayés, les changements de chèque et la liste noire"
+        ),
     },
     "Prises en charge": {
         "ventes.view_priseencharge": "Voir les prises en charge (CNAM, assurances, mutuelles)",
@@ -17,6 +21,14 @@ PRIVILEGES = {
         "crm.view_organisme": "Voir les organismes de prise en charge",
         "crm.add_organisme": "Créer un organisme de prise en charge",
         "crm.change_organisme": "Modifier un organisme de prise en charge",
+        "ventes.view_bordereaupec": "Voir les bordereaux CNAM et conventions",
+        "ventes.add_bordereaupec": "Préparer un bordereau CNAM ou convention",
+        "ventes.change_bordereaupec": "Envoyer un bordereau et saisir son règlement",
+    },
+    "SAV": {
+        "ventes.view_dossiersav": "Voir les dossiers SAV",
+        "ventes.add_dossiersav": "Ouvrir un dossier SAV",
+        "ventes.change_dossiersav": "Faire avancer un dossier SAV et le clôturer",
     },
     "Pilotage": {
         "ventes.consulter_reporting": "Consulter le reporting (chiffre d'affaires, ventes)",
@@ -31,6 +43,10 @@ PRIVILEGES = {
         "ventes.add_facture": "Établir une facture",
         "ventes.view_avoir": "Voir les avoirs",
         "ventes.add_avoir": "Établir un avoir ou annuler une vente",
+        "ventes.view_facturegroupee": "Voir les factures groupées et récapitulatives",
+        "ventes.add_facturegroupee": "Facturer plusieurs visites ou ventes comptoir ensemble",
+        "ventes.view_cloturemois": "Voir les mois clôturés",
+        "ventes.add_cloturemois": "Clôturer le mois (facture récapitulative)",
     },
     "Clients et ordonnances": {
         "crm.view_client": "Voir les clients",
@@ -78,6 +94,20 @@ PRIVILEGES = {
         "stock.view_prixarticle": "Voir les prix de vente",
         "stock.add_prixarticle": "Fixer un prix de vente",
         "stock.change_prixarticle": "Modifier un prix de vente",
+        "stock.view_transfertstock": "Voir les transferts de stock",
+        "stock.add_transfertstock": "Envoyer un transfert de stock (du dépôt vers un magasin)",
+        "stock.change_transfertstock": "Réceptionner un transfert de stock arrivé au magasin",
+        "stock.view_bonsortie": "Voir les bons de sortie et sorties casse",
+        "stock.add_bonsortie": "Sortir du stock (usage interne, cadeau, casse…)",
+        "stock.view_demandetransfert": "Voir les demandes de transfert",
+        "stock.add_demandetransfert": "Demander des articles à un autre magasin ou au dépôt",
+        "stock.change_demandetransfert": "Servir ou refuser une demande de transfert",
+        "stock.view_inventaire": "Voir les inventaires",
+        "stock.add_inventaire": "Ouvrir un inventaire",
+        "stock.change_inventaire": "Compter les articles d'un inventaire en cours",
+        "stock.valider_inventaire": (
+            "Vérifier, corriger et valider un inventaire (corrige le stock selon le comptage)"
+        ),
     },
     "Achats": {
         "achats.view_fournisseur": "Voir les fournisseurs",
@@ -86,6 +116,22 @@ PRIVILEGES = {
         "achats.view_commandefournisseur": "Voir les commandes fournisseurs",
         "achats.add_commandefournisseur": "Passer une commande fournisseur",
         "achats.change_commandefournisseur": "Réceptionner une commande fournisseur",
+        "achats.view_bonreception": "Voir les bons de réception",
+        "achats.add_bonreception": "Saisir un bon de réception (entrée de la marchandise)",
+        "achats.view_factureachat": "Voir les factures achat (factures fournisseurs)",
+        "achats.add_factureachat": "Saisir une facture achat (regroupe les bons de réception)",
+        "achats.view_bonretour": "Voir les bons retour fournisseur",
+        "achats.add_bonretour": "Saisir un bon retour fournisseur (marchandise renvoyée)",
+        "achats.view_casseverre": "Voir les casses de verres",
+        "achats.add_casseverre": "Déclarer une casse de verre (verre à recommander)",
+    },
+    "Règlements fournisseurs": {
+        "achats.view_reglementfournisseur": "Voir les règlements fournisseurs et l'échéancier",
+        "achats.add_reglementfournisseur": (
+            "Régler un fournisseur (factures, avances, retenue à la source)"
+        ),
+        "achats.change_reglementfournisseur": "Marquer un chèque ou une traite comme débité",
+        "achats.delete_reglementfournisseur": "Annuler un règlement fournisseur",
     },
     "Sociétés, magasins et pays": {
         "reseau.view_societe": "Voir les sociétés",
@@ -101,6 +147,14 @@ PRIVILEGES = {
         "reseau.add_tauxtva": "Ajouter un taux de TVA",
         "reseau.change_tauxtva": "Modifier un taux de TVA",
         "reseau.delete_tauxtva": "Supprimer un taux de TVA",
+        "reseau.view_ville": "Voir la liste des villes",
+        "reseau.add_ville": "Ajouter une ville à la liste",
+        "reseau.change_ville": "Modifier une ville de la liste",
+        "reseau.delete_ville": "Supprimer une ville de la liste",
+        "reseau.view_banque": "Voir la liste des banques",
+        "reseau.add_banque": "Ajouter une banque à la liste",
+        "reseau.change_banque": "Modifier une banque de la liste",
+        "reseau.delete_banque": "Supprimer une banque de la liste",
     },
     "Accès et sécurité": {
         "securite.view_utilisateur": "Voir les utilisateurs",
@@ -116,6 +170,13 @@ PRIVILEGES = {
         "auth.delete_group": "Supprimer un profil",
         "securite.view_evenementsecurite": "Voir le journal des connexions",
         "auditlog.view_logentry": "Voir l'historique des modifications",
+    },
+    "Corbeille": {
+        "securite.view_elementcorbeille": (
+            "Voir la corbeille (éléments supprimés que l'on a le droit de créer)"
+        ),
+        "securite.restaurer_elementcorbeille": "Restaurer un élément supprimé par erreur",
+        "securite.delete_elementcorbeille": "Supprimer définitivement un élément de la corbeille",
     },
 }
 

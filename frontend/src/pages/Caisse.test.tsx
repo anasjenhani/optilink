@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { Caisse } from "./Caisse";
 
@@ -103,7 +103,16 @@ test("affiche le refus de l'API", async () => {
 });
 
 test("un verre sur commande impose une commande avec acompte", async () => {
-  const VERRE = { ...MONTURE, id: "a2", reference: "VER-1", libelle: "Verre progressif", famille: "verre", sur_commande: true, prix_vente_ttc: "180.000", stock: 0 };
+  const VERRE = {
+    ...MONTURE,
+    id: "a2",
+    reference: "VER-1",
+    libelle: "Verre progressif",
+    famille: "verre",
+    sur_commande: true,
+    prix_vente_ttc: "180.000",
+    stock: 0,
+  };
   const ventes: unknown[] = [];
   vi.stubGlobal(
     "fetch",
@@ -112,7 +121,16 @@ test("un verre sur commande impose une commande avec acompte", async () => {
       if (url.startsWith("/api/v1/articles/")) return json({ results: [VERRE] });
       ventes.push(JSON.parse(init?.body as string));
       return json(
-        { id: "v3", numero: "T01-T2026-000003", devise: "TND", total_ttc: "360.000", reste_a_payer: "260.000", statut: "en_commande", peniche: 17, lignes: [] },
+        {
+          id: "v3",
+          numero: "T01-T2026-000003",
+          devise: "TND",
+          total_ttc: "360.000",
+          reste_a_payer: "260.000",
+          statut: "en_commande",
+          peniche: 17,
+          lignes: [],
+        },
         201,
       );
     }),
@@ -126,7 +144,7 @@ test("un verre sur commande impose une commande avec acompte", async () => {
   expect(screen.getByRole("checkbox", { name: /Commande : verres commandés/ })).toBeChecked();
   fireEvent.change(screen.getByLabelText("Acompte"), { target: { value: "100" } });
   expect(screen.getByRole("button", { name: "Enregistrer la commande" })).toBeDisabled();
-  fireEvent.change(screen.getByLabelText(/Péniche/), { target: { value: "17" } });
+  fireEvent.change(screen.getByLabelText(/PÉNICHE/), { target: { value: "17" } });
   expect(screen.getByText(/Reste à la livraison : 260,000\sTND/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Enregistrer la commande" }));
 
@@ -155,4 +173,25 @@ test("la douchette ajoute l'article au panier par son code-barres", async () => 
   fireEvent.keyDown(champ, { key: "Enter" });
   expect(await screen.findByText(/Total : 289,500\sTND/)).toBeInTheDocument();
   expect(champ).toHaveValue("");
+});
+
+test("deux scans rapides ajoutent deux articles ; un code inconnu reste dans la case", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/api/v1/magasins/") return json({ results: [MAGASIN] });
+      return json({ results: [{ ...MONTURE, code_barres: "8053672000001" }] });
+    }),
+  );
+  afficher();
+  const champ = await screen.findByLabelText(/Rechercher un article/);
+  for (let i = 0; i < 2; i++) {
+    fireEvent.change(champ, { target: { value: "8053672000001" } });
+    fireEvent.keyDown(champ, { key: "Enter" });
+    expect(champ).toHaveValue("");
+  }
+  expect(await screen.findByText(/Total : 579,000\sTND/)).toBeInTheDocument();
+  fireEvent.change(champ, { target: { value: "INCONNU" } });
+  fireEvent.keyDown(champ, { key: "Enter" });
+  await waitFor(() => expect(champ).toHaveValue("INCONNU"));
 });

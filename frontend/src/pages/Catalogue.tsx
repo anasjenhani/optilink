@@ -1,6 +1,8 @@
 import Alert from "@mui/material/Alert";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
@@ -16,19 +18,39 @@ import { useState } from "react";
 import { chercherArticles, FAMILLES, type Famille } from "../api/caisse";
 import { listerMagasins } from "../api/magasins";
 import { formaterTexte } from "../api/monnaie";
+import Button from "@mui/material/Button";
+import { FicheArticle } from "./FicheArticle";
+import { FicheMonture } from "./FicheMonture";
+import { BoutonImport } from "./Imports";
 
-/** Catalogue par famille, avec prix et stock du magasin. Les articles se créent dans l'administration. */
-export function Catalogue({ familleInitiale = "monture" }: { familleInitiale?: Famille | "" }) {
+/**
+ * Catalogue par famille, avec prix et stock du magasin. Chaque article s'ouvre sur sa fiche (création et
+ * modification) : fiche monture pour les montures, fiche article pour les verres, lentilles et articles divers.
+ */
+export function Catalogue({
+  familleInitiale = "monture",
+  importer = false,
+  fiche = { creer: false, modifier: false },
+}: {
+  familleInitiale?: Famille | "";
+  /** Bouton d'import : des verres sur la liste des verres, du catalogue sinon. */
+  importer?: boolean;
+  /** Droits sur les fiches article. */
+  fiche?: { creer: boolean; modifier: boolean };
+}) {
+  // Fiche ouverte : article (null pour un nouveau) et sa famille.
+  const [ouverte, setOuverte] = useState<{ article: string | null; famille: Famille } | undefined>(undefined);
   const [magasinChoisi, setMagasin] = useState("");
   const [famille, setFamille] = useState<Famille | "">(familleInitiale);
   const [recherche, setRecherche] = useState("");
+  const [desactives, setDesactives] = useState(false);
   const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
   const magasin = magasinChoisi || magasins.data?.[0]?.id || "";
   const pays = magasins.data?.find((m) => m.id === magasin)?.pays;
   const monnaie = { devise: pays?.devise ?? "TND", decimales: pays?.decimales ?? 3 };
   const articles = useQuery({
-    queryKey: ["catalogue", magasin, famille, recherche],
-    queryFn: () => chercherArticles(magasin, recherche, famille),
+    queryKey: ["catalogue", magasin, famille, recherche, desactives],
+    queryFn: () => chercherArticles(magasin, recherche, famille, "", desactives),
     enabled: Boolean(magasin),
   });
 
@@ -70,7 +92,26 @@ export function Catalogue({ familleInitiale = "monture" }: { familleInitiale?: F
               onChange={(e) => setRecherche(e.target.value)}
               sx={{ flexGrow: 1 }}
             />
+            {fiche.creer && famille && (
+              <Button
+                variant="contained"
+                onClick={() => setOuverte({ article: null, famille })}
+                sx={{ whiteSpace: "nowrap" }}
+              >
+                {famille === "monture" ? "Nouvelle monture" : "Nouvel article"}
+              </Button>
+            )}
+            {importer && (
+              <BoutonImport
+                type={famille === "verre" ? "verres" : "catalogue"}
+                libelle={famille === "verre" ? "Importer des verres" : "Importer des articles"}
+              />
+            )}
           </Stack>
+          <FormControlLabel
+            control={<Checkbox size="small" checked={desactives} onChange={(e) => setDesactives(e.target.checked)} />}
+            label="Voir les articles désactivés (pour les réactiver)"
+          />
           {articles.isError && <Alert severity="error">{articles.error.message}</Alert>}
           {articles.data?.length === 0 && <Typography color="text.secondary">Aucun article.</Typography>}
           {Boolean(articles.data?.length) && (
@@ -85,7 +126,12 @@ export function Catalogue({ familleInitiale = "monture" }: { familleInitiale?: F
               </TableHead>
               <TableBody>
                 {articles.data?.map((article) => (
-                  <TableRow key={article.id}>
+                  <TableRow
+                    key={article.id}
+                    hover
+                    onClick={() => setOuverte({ article: article.id, famille: article.famille })}
+                    sx={{ cursor: "pointer" }}
+                  >
                     <TableCell>{article.reference}</TableCell>
                     <TableCell>
                       {article.libelle}
@@ -103,6 +149,27 @@ export function Catalogue({ familleInitiale = "monture" }: { familleInitiale?: F
             </Table>
           )}
         </Stack>
+        {ouverte && magasin && ouverte.famille === "monture" && (
+          <FicheMonture
+            article={ouverte.article}
+            magasin={magasin}
+            monnaie={monnaie}
+            tauxTva={pays?.taux_tva ?? []}
+            lectureSeule={ouverte.article !== null && !fiche.modifier}
+            onFerme={() => setOuverte(undefined)}
+          />
+        )}
+        {ouverte && magasin && ouverte.famille !== "monture" && (
+          <FicheArticle
+            famille={ouverte.famille}
+            article={ouverte.article}
+            magasin={magasin}
+            monnaie={monnaie}
+            tauxTva={pays?.taux_tva ?? []}
+            lectureSeule={ouverte.article !== null && !fiche.modifier}
+            onFerme={() => setOuverte(undefined)}
+          />
+        )}
       </CardContent>
     </Card>
   );

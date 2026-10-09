@@ -8,7 +8,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from apps.reseau.models import Magasin
-from apps.stock.models import MouvementStock, PrixArticle
+from apps.stock.models import Article, Monture, MouvementStock, PlageVerre, PrixArticle
 
 from .models import (
     PREFIXES,
@@ -16,9 +16,11 @@ from .models import (
     CompteurFacture,
     Devis,
     Facture,
+    Lentilles,
     LigneAvoir,
     LigneDevis,
     LigneVente,
+    Lunette,
     Paiement,
     TypeDocument,
     Vente,
@@ -69,6 +71,8 @@ def _chiffrer(pays, lignes):
             pays=pays, article__in=a_tarifer
         )
     }
+    # Un verre choisi dans une plage de puissances prend le prix de la plage.
+    plages = PlageVerre.objects.in_bulk([ligne["plage"] for ligne in lignes if ligne.get("plage")])
     detail = []
     for ligne in lignes:
         article, quantite = ligne["article"], ligne["quantite"]
@@ -79,11 +83,84 @@ def _chiffrer(pays, lignes):
             if tarif is None:
                 raise VenteInvalide(f"L'article {article.reference} n'a pas de prix en {pays}.")
             prix, taux = tarif.prix_vente_ttc, tarif.tva.taux
+            if ligne.get("plage"):
+                plage = plages.get(ligne["plage"])
+                if plage is None or plage.article_id != article.pk or plage.pays_id != pays.pk:
+                    raise VenteInvalide(
+                        f"La plage de puissances choisie ne correspond pas au verre "
+                        f"{article.reference}."
+                    )
+                prix = plage.prix_vente_ttc
         remise = ligne.get("remise_pct") or Decimal("0")
         total_ttc = arrondir(prix * quantite * (1 - remise / 100), pays.decimales)
         total_ht = arrondir(total_ttc / (1 + taux / 100), pays.decimales)
         detail.append((article, quantite, remise, total_ttc, total_ht, prix, taux, ligne))
     return detail
+
+
+# Famille d'article attendue à chaque place d'une lunette, puis de lentilles.
+_PLACES_LUNETTE = {
+    LigneVente.Role.MONTURE: Article.Famille.MONTURE,
+    LigneVente.Role.VERRE_D: Article.Famille.VERRE,
+    LigneVente.Role.VERRE_G: Article.Famille.VERRE,
+    LigneVente.Role.SUPPLEMENT_D: Article.Famille.SUPPLEMENT,
+    LigneVente.Role.SUPPLEMENT_G: Article.Famille.SUPPLEMENT,
+}
+_PLACES_LENTILLES = {
+    LigneVente.Role.LENTILLE_D: Article.Famille.LENTILLE,
+    LigneVente.Role.LENTILLE_G: Article.Famille.LENTILLE,
+}
+# Une seule ligne par place ; monture et verres à l'unité.
+_UNIQUES = (
+    LigneVente.Role.MONTURE,
+    LigneVente.Role.VERRE_D,
+    LigneVente.Role.VERRE_G,
+    LigneVente.Role.LENTILLE_D,
+    LigneVente.Role.LENTILLE_G,
+)
+_A_L_UNITE = (LigneVente.Role.MONTURE, LigneVente.Role.VERRE_D, LigneVente.Role.VERRE_G)
+
+
+def _verifier_equipements(equipements, lignes, client, *, cle, places, nom, type_ordonnance):
+    """Chaque équipement (lunette ou lentilles) a ses articles à la bonne place, sans doublon."""
+    roles = [[] for _ in equipements]
+    for ligne in lignes:
+        rang = ligne.get(cle)
+        if rang is None:
+            continue
+        if not 0 <= rang < len(equipements):
+            raise VenteInvalide(f"Ligne rattachée à des {nom}s inconnues.")
+        role = ligne.get("role")
+        if role not in places:
+            raise VenteInvalide(f"Préciser la place de l'article dans la {nom}.")
+        article = ligne["article"]
+        if article.famille != places[role]:
+            raise VenteInvalide(
+                f"{article.libelle} ne peut pas servir de {LigneVente.Role(role).label.lower()}."
+            )
+        if role in _A_L_UNITE and ligne["quantite"] != 1:
+            raise VenteInvalide(f"{LigneVente.Role(role).label} : quantité 1 par lunette.")
+        roles[rang].append(role)
+    for numero, (equipement, presentes) in enumerate(zip(equipements, roles, strict=True), 1):
+        titre = f"{nom.capitalize()} {numero}"
+        if not presentes:
+            raise VenteInvalide(f"{titre} : aucun article.")
+        for role in _UNIQUES:
+            if presentes.count(role) > 1:
+                raise VenteInvalide(f"{titre} : {LigneVente.Role(role).label.lower()} en double.")
+        for supplement, verre in (
+            (LigneVente.Role.SUPPLEMENT_D, LigneVente.Role.VERRE_D),
+            (LigneVente.Role.SUPPLEMENT_G, LigneVente.Role.VERRE_G),
+        ):
+            if supplement in presentes and verre not in presentes:
+                raise VenteInvalide(f"{titre} : un supplément va avec son verre.")
+        prescription = equipement.get("prescription")
+        if prescription is None:
+            continue
+        if client is None or prescription.client_id != client.pk:
+            raise VenteInvalide(f"{titre} : l'ordonnance n'est pas celle du client.")
+        if prescription.type != type_ordonnance:
+            raise VenteInvalide(f"{titre} : il faut une ordonnance de {type_ordonnance}.")
 
 
 def _stocks(magasin, articles):
@@ -115,6 +192,18 @@ def _verifier_peniche(magasin, peniche):
         raise VenteInvalide(f"La péniche {peniche} contient déjà une commande en cours.")
 
 
+def _lunette_a_ranger(article):
+    """Monture de lunette optique ou applique : préparée à l'atelier, elle attend dans une
+    péniche ; la vente est donc une commande. Une lunette solaire se vend tout de suite."""
+    if article.famille != Article.Famille.MONTURE:
+        return False
+    fiche = getattr(article, "monture", None)
+    return fiche is not None and fiche.categorie in (
+        Monture.Categorie.OPTIQUE,
+        Monture.Categorie.APPLIQUE,
+    )
+
+
 @transaction.atomic
 def enregistrer_vente(
     *,
@@ -127,6 +216,10 @@ def enregistrer_vente(
     livraison_prevue_le=None,
     peniche=None,
     articles_retires_admis=False,
+    lunettes=(),
+    lentilles=(),
+    a_credit=False,
+    credit_echeance=None,
 ):
     """Enregistre une vente : lignes, sortie de stock, paiements et numéro de ticket.
 
@@ -137,10 +230,36 @@ def enregistrer_vente(
     Les articles sur commande ne sortent pas du stock du magasin.
     Une commande est rangée dans la péniche libre que saisit le vendeur (``peniche``).
     La facture, elle, se génère à part (``generer_facture``).
+    ``lunettes`` : paires de lunettes (vision, ordonnance, mesures de montage…) ; une ligne y
+    entre par ``lunette`` (son rang dans cette liste) et ``role`` (monture, verre_d…).
+    ``lentilles`` : de même, lentilles droite et gauche (``lentilles`` et ``role`` sur la ligne).
+    Une ligne peut porter un ``numero_lot`` et une ``date_peremption`` (lentilles, produits).
     Tout est écrit dans une seule transaction, ou rien.
     """
     if not lignes:
         raise VenteInvalide("La vente ne contient aucun article.")
+    if any(
+        ligne.get("lunette") is not None and ligne.get("lentilles") is not None for ligne in lignes
+    ):
+        raise VenteInvalide("Un article va dans une lunette ou dans des lentilles, pas les deux.")
+    _verifier_equipements(
+        lunettes,
+        lignes,
+        client,
+        cle="lunette",
+        places=_PLACES_LUNETTE,
+        nom="lunette",
+        type_ordonnance="lunettes",
+    )
+    _verifier_equipements(
+        lentilles,
+        lignes,
+        client,
+        cle="lentilles",
+        places=_PLACES_LENTILLES,
+        nom="lentille",
+        type_ordonnance="lentilles",
+    )
 
     quantites = {}
     for ligne in lignes:
@@ -159,6 +278,12 @@ def enregistrer_vente(
         elif stocks.get(article.pk, 0) < quantites[article.pk]:
             raise VenteInvalide(f"Stock insuffisant pour {article.reference}.")
 
+    if not commande and any(_lunette_a_ranger(ligne["article"]) for ligne in lignes):
+        raise VenteInvalide(
+            "Une lunette optique ou applique se vend en commande, rangée dans une péniche : "
+            "saisir le numéro de la péniche."
+        )
+
     pays = magasin.pays
     detail = _chiffrer(pays, lignes)
     total_ttc = sum((d[3] for d in detail), Decimal("0"))
@@ -168,7 +293,9 @@ def enregistrer_vente(
         raise VenteInvalide(
             f"L'acompte ({total_paye} {pays.devise}) dépasse le total ({total_ttc} {pays.devise})."
         )
-    if not commande and total_paye != total_ttc:
+    # Vente à crédit : le client emporte ses articles et réglera le reste plus tard.
+    a_credit = a_credit and not commande and total_paye < total_ttc
+    if not commande and not a_credit and total_paye != total_ttc:
         raise VenteInvalide(
             f"Les paiements ({total_paye} {pays.devise}) ne couvrent pas le total "
             f"({total_ttc} {pays.devise})."
@@ -196,6 +323,17 @@ def enregistrer_vente(
         livree_le=None if commande else timezone.now(),
         livree_par=None if commande else vendeur,
     )
+    if not commande and a_credit:
+        _accorder_credit(vente, client, vendeur, credit_echeance)
+        vente.save(update_fields=["credit_accorde_par", "credit_echeance"])
+    paires = [
+        Lunette.objects.create(vente=vente, numero=rang, **lunette)
+        for rang, lunette in enumerate(lunettes, start=1)
+    ]
+    jeux = [
+        Lentilles.objects.create(vente=vente, numero=rang, **jeu)
+        for rang, jeu in enumerate(lentilles, start=1)
+    ]
     LigneVente.objects.bulk_create(
         LigneVente(
             vente=vente,
@@ -206,8 +344,17 @@ def enregistrer_vente(
             remise_pct=remise,
             taux_tva=taux,
             total_ttc=ttc,
+            lunette=paires[ligne["lunette"]] if ligne.get("lunette") is not None else None,
+            lentilles=jeux[ligne["lentilles"]] if ligne.get("lentilles") is not None else None,
+            role=(
+                ligne.get("role", "")
+                if ligne.get("lunette") is not None or ligne.get("lentilles") is not None
+                else ""
+            ),
+            numero_lot=ligne.get("numero_lot", ""),
+            date_peremption=ligne.get("date_peremption"),
         )
-        for article, quantite, remise, ttc, _, prix, taux, _ in detail
+        for article, quantite, remise, ttc, _, prix, taux, ligne in detail
     )
     MouvementStock.tous.bulk_create(
         MouvementStock(
@@ -225,7 +372,21 @@ def enregistrer_vente(
     return vente
 
 
+def _verifier_paiements(client, paiements):
+    """Un client en liste noire ne paie plus par chèque ni par traite."""
+    a_echeance = [p for p in paiements if p["mode"] in Paiement.A_ECHEANCE and p["montant"] > 0]
+    if a_echeance and client is not None and client.liste_noire:
+        raise VenteInvalide(
+            f"{client} est en liste noire : ni chèque ni traite"
+            + (f" ({client.motif_liste_noire})." if client.motif_liste_noire else ".")
+        )
+    for p in a_echeance:
+        if not p.get("reference", "").strip():
+            raise VenteInvalide("Indiquer le n° du chèque ou de la traite.")
+
+
 def _encaisser(vente, paiements, utilisateur):
+    _verifier_paiements(vente.client, paiements)
     decimales = vente.magasin.pays.decimales
     Paiement.objects.bulk_create(
         Paiement(
@@ -233,10 +394,21 @@ def _encaisser(vente, paiements, utilisateur):
             mode=p["mode"],
             montant=arrondir(p["montant"], decimales),
             recu_par=utilisateur,
+            reference=p.get("reference", "").strip(),
+            banque=p.get("banque", "").strip(),
+            echeance=p.get("echeance") if p["mode"] in Paiement.A_ECHEANCE else None,
         )
         for p in paiements
         if p["montant"] > 0
     )
+
+
+def _accorder_credit(vente, client, utilisateur, echeance):
+    if client is None:
+        raise VenteInvalide("Une vente à crédit se fait au nom d'un client.")
+    if client.liste_noire:
+        raise VenteInvalide(f"{client} est en liste noire : pas de vente à crédit.")
+    vente.credit_accorde_par, vente.credit_echeance = utilisateur, echeance
 
 
 def _verrouiller_vente(vente):
@@ -260,8 +432,9 @@ def regler_commande(*, vente, paiements, utilisateur):
 
 
 @transaction.atomic
-def livrer_commande(*, vente, utilisateur, paiements=()):
-    """Remet l'équipement au client. Le solde est encaissé au plus tard à ce moment-là."""
+def livrer_commande(*, vente, utilisateur, paiements=(), a_credit=False, credit_echeance=None):
+    """Remet l'équipement au client. Le solde est encaissé au plus tard à ce moment-là, sauf
+    vente à crédit (``a_credit``) : le client réglera le reste plus tard."""
     vente = _verrouiller_vente(vente)
     if vente.statut == Vente.Statut.ANNULEE:
         raise VenteInvalide(f"La vente {vente.numero} est annulée.")
@@ -276,14 +449,18 @@ def livrer_commande(*, vente, utilisateur, paiements=()):
     if paiements:
         regler_commande(vente=vente, paiements=paiements, utilisateur=utilisateur)
     reste = vente.reste_a_payer
-    if reste > 0:
+    champs = ["statut", "livree_le", "livree_par", "modifie_le"]
+    if reste > 0 and a_credit:
+        _accorder_credit(vente, vente.client, utilisateur, credit_echeance)
+        champs += ["credit_accorde_par", "credit_echeance"]
+    elif reste > 0:
         raise VenteInvalide(
             f"Le client doit encore {reste} {vente.devise} : encaisser le solde avant la livraison."
         )
     vente.statut = Vente.Statut.LIVREE
     vente.livree_le = timezone.now()
     vente.livree_par = utilisateur
-    vente.save(update_fields=["statut", "livree_le", "livree_par", "modifie_le"])
+    vente.save(update_fields=champs)
     return vente
 
 
@@ -299,7 +476,7 @@ def generer_facture(*, vente, client, emetteur, mode_paiement_timbre=""):
     de la facture (``mode_paiement_timbre``). Une vente n'a qu'une facture.
     """
     vente = Vente.tous.select_for_update().select_related("magasin__pays").get(pk=vente.pk)
-    if Facture.tous.filter(vente=vente).exists():
+    if Facture.tous.filter(vente=vente).exists() or vente.facture_groupee_id:
         raise FactureImpossible(f"La vente {vente.numero} est déjà facturée.")
     if Avoir.tous.filter(vente=vente).exists():
         raise FactureImpossible(
@@ -307,6 +484,9 @@ def generer_facture(*, vente, client, emetteur, mode_paiement_timbre=""):
         )
     if client is None:
         raise FactureImpossible("Une facture est établie au nom d'un client.")
+    from .facturation import verifier_mois_ouvert
+
+    verifier_mois_ouvert(vente)
     reste = vente.reste_a_payer
     if reste > 0:
         raise FactureImpossible(
@@ -539,6 +719,7 @@ def _emettre(*, vente, retours, motif, emetteur, mode_remboursement, annulation)
         sequence=sequence,
         vente=vente,
         facture=Facture.tous.filter(vente=vente).first(),
+        facture_groupee_id=vente.facture_groupee_id,
         client=vente.client,
         annulation=annulation,
         motif=motif.strip(),

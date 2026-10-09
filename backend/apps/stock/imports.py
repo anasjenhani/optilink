@@ -29,6 +29,7 @@ from .models import (
     Lentille,
     Monture,
     MouvementStock,
+    PlageVerre,
     PrixArticle,
     Verre,
     stock_disponible,
@@ -184,6 +185,8 @@ FICHES = {
     Article.Famille.LENTILLE: Lentille,
 }
 
+# Plage de puissances d'un verre : une ligne par plage, même référence répétée.
+COLONNES_PLAGE = ["sphere_debut", "sphere_fin", "cylindre_debut", "cylindre_fin"]
 # Colonnes du modèle d'import, dans l'ordre du fichier modèle.
 COLONNES_CATALOGUE = [
     "reference",
@@ -195,16 +198,20 @@ COLONNES_CATALOGUE = [
     "sur_commande",
     "prix_ttc",
     "tva",
+    "prix_achat_ht",
+    "categorie",
     "marque",
     "modele",
     "couleur",
+    "couleur_verres",
     "matiere",
     "type",
+    "forme",
     "genre",
+    "tranche_age",
     "calibre",
     "pont",
     "branche",
-    "solaire",
     "gamme",
     "geometrie",
     "indice",
@@ -212,6 +219,9 @@ COLONNES_CATALOGUE = [
     "photochromique",
     "teinte",
     "diametre",
+    "fabrication",
+    "diametre_commercial",
+    *COLONNES_PLAGE,
     "renouvellement",
     "rayon",
     "puissance",
@@ -221,6 +231,47 @@ COLONNES_CATALOGUE = [
     "lentilles_par_boite",
 ]
 COLONNES_STOCK = ["code_barres", "reference", "quantite"]
+# Modèle « verres » : les colonnes du catalogue utiles aux verres, famille implicite.
+COLONNES_VERRES = [
+    "reference",
+    "libelle",
+    "fournisseur",
+    "reference_fournisseur",
+    "code_barres",
+    "sur_commande",
+    "prix_ttc",
+    "tva",
+    "gamme",
+    "geometrie",
+    "indice",
+    "matiere",
+    "traitements",
+    "photochromique",
+    "teinte",
+    "diametre",
+    "fabrication",
+    "diametre_commercial",
+    "famille_verre",
+    "sous_famille",
+    "couleur",
+    *COLONNES_PLAGE,
+    "prix_achat_ht",
+]
+
+
+def _reference(modele, texte, nom):
+    """Élément d'une liste de référence (famille, sous-famille, couleur…) par code ou libellé."""
+    if texte == "":
+        return None
+    trouve = (
+        modele.objects.filter(code=texte).first()
+        or modele.objects.filter(libelle__iexact=texte).first()
+    )
+    if trouve is None:
+        raise ValidationError(
+            f"{nom} : « {texte} » absent de la liste ({modele._meta.verbose_name_plural})."
+        )
+    return trouve
 
 
 def _valeurs_fiche(modele, ligne):
@@ -231,7 +282,11 @@ def _valeurs_fiche(modele, ligne):
         if nom == "article" or nom not in ligne:
             continue
         texte = ligne[nom]
-        if champ.choices:
+        if texte == "" and not champ.blank:
+            continue  # Case vide : valeur par défaut, ou valeur déjà enregistrée.
+        if champ.is_relation:
+            valeurs[nom] = _reference(champ.related_model, texte, nom)
+        elif champ.choices:
             valeurs[nom] = _choix(texte, champ.choices, nom)
         elif champ.get_internal_type() == "BooleanField":
             valeurs[nom] = _booleen(texte)
@@ -253,32 +308,55 @@ def _message(erreur):
     return " ".join(erreur.messages)
 
 
-def importer_catalogue(lignes, *, pays, apercu=False):
-    """Crée ou met à jour les articles (par référence), leur fiche et leur prix dans ``pays``."""
+def importer_catalogue(lignes, *, pays, apercu=False, famille=None):
+    """Crée ou met à jour les articles (par référence), leur fiche et leur prix dans ``pays``.
+
+    Avec ``famille`` (import des verres…), la colonne famille est facultative et toute autre
+    famille est refusée.
+    """
     rapport = Rapport(apercu=apercu, lignes=len(lignes))
-    manquantes = {"reference", "libelle", "famille", "fournisseur"} - set(
-        lignes[0][1] if lignes else {}
-    )
+    obligatoires = {"reference", "libelle", "fournisseur"} | (set() if famille else {"famille"})
+    manquantes = obligatoires - set(lignes[0][1] if lignes else {})
     if manquantes:
         rapport.erreur(1, f"Colonnes obligatoires absentes : {', '.join(sorted(manquantes))}.")
         return rapport
-    fournisseurs = {normaliser(f.nom): f for f in Fournisseur.objects.all()}
+    fournisseurs = {normaliser(f.nom): f for f in Fournisseur.objects.all()} | {
+        str(f.code): f for f in Fournisseur.objects.exclude(code=None)
+    }
     taux = {t.taux: t for t in TauxTva.objects.filter(pays=pays)}
-    vues = {}
+    vues, plages = {}, {}
     try:
         with transaction.atomic():
             for numero, ligne in lignes:
                 reference = ligne.get("reference", "")
+                avec_plage = any(ligne.get(nom, "") for nom in COLONNES_PLAGE)
                 if reference in vues:
-                    rapport.erreur(
-                        numero, f"Référence {reference} déjà en ligne {vues[reference]}."
-                    )
+                    if not avec_plage:
+                        rapport.erreur(
+                            numero, f"Référence {reference} déjà en ligne {vues[reference]}."
+                        )
+                        continue
+                    # Ligne suivante d'un même verre : une plage de puissances de plus.
+                    article = Article.objects.filter(reference=reference).first()
+                    if article is None:
+                        rapport.erreur(
+                            numero, f"{reference} : corriger d'abord la ligne {vues[reference]}."
+                        )
+                        continue
+                    try:
+                        with transaction.atomic():
+                            _importer_plage(article, ligne, pays, plages)
+                    except ValidationError as erreur:
+                        rapport.erreur(numero, _message(erreur))
                     continue
                 vues[reference] = numero
                 existant = Article.objects.filter(reference=reference).first()
                 try:
                     with transaction.atomic():
-                        cree = _importer_article(ligne, pays, fournisseurs, taux)
+                        cree = _importer_article(ligne, pays, fournisseurs, taux, famille)
+                        if avec_plage:
+                            article = Article.objects.get(reference=reference)
+                            _importer_plage(article, ligne, pays, plages)
                 except ValidationError as erreur:
                     rapport.erreur(numero, _message(erreur))
                     continue
@@ -299,17 +377,36 @@ def importer_catalogue(lignes, *, pays, apercu=False):
     return rapport
 
 
-def _importer_article(ligne, pays, fournisseurs, taux):
-    famille = _choix(ligne["famille"], Article.Famille.choices, "famille")
+def _importer_article(ligne, pays, fournisseurs, taux, imposee=None):
+    famille = _choix(ligne.get("famille", ""), Article.Famille.choices, "famille") or imposee
     if not famille:
         raise ValidationError("famille : obligatoire.")
-    fournisseur = fournisseurs.get(normaliser(ligne["fournisseur"]))
+    if imposee and famille != imposee:
+        raise ValidationError(f"famille : ce fichier n'importe que des {imposee}s.")
+    fournisseur = fournisseurs.get(normaliser(ligne["fournisseur"])) or fournisseurs.get(
+        ligne["fournisseur"].strip()
+    )
     if fournisseur is None:
         raise ValidationError(
-            f"fournisseur : « {ligne['fournisseur']} » inconnu ; le créer d'abord dans "
-            "l'administration."
+            f"fournisseur : « {ligne['fournisseur']} » inconnu (code ou raison sociale) ; le "
+            "créer d'abord (écran Fournisseurs ou import des fournisseurs)."
         )
+    code_barres = ligne.get("code_barres", "")
+    if code_barres:
+        autre = Article.objects.filter(code_barres=code_barres).exclude(
+            reference=ligne["reference"]
+        )
+        if autre.exists():
+            raise ValidationError(
+                f"code_barres : {code_barres} est déjà celui de {autre.first().reference}."
+            )
     article = Article.objects.filter(reference=ligne["reference"]).first()
+    proche = Article.objects.filter(reference__iexact=ligne["reference"]).first()
+    if article is None and proche is not None:
+        raise ValidationError(
+            f"reference : {ligne['reference']} est déjà celle de {proche.reference} "
+            "(majuscules et minuscules comptent pour la même référence)."
+        )
     cree = article is None
     if cree:
         article = Article(reference=ligne["reference"])
@@ -329,7 +426,11 @@ def _importer_article(ligne, pays, fournisseurs, taux):
     modele = FICHES.get(famille)
     if modele is not None:
         fiche = modele.objects.filter(article=article).first() or modele(article=article)
-        for nom, valeur in _valeurs_fiche(modele, ligne).items():
+        valeurs = _valeurs_fiche(modele, ligne)
+        # Anciens fichiers : colonne « solaire » (oui/non) au lieu de la famille de monture.
+        if modele is Monture and "categorie" not in ligne and _booleen(ligne.get("solaire", "")):
+            valeurs["categorie"] = Monture.Categorie.SOLAIRE
+        for nom, valeur in valeurs.items():
             setattr(fiche, nom, valeur)
         fiche.full_clean()
         fiche.save()
@@ -344,9 +445,42 @@ def _importer_article(ligne, pays, fournisseurs, taux):
             article=article, pays=pays
         )
         tarif.prix_vente_ttc, tarif.tva = prix, taux[taux_tva]
+        achat = _decimal(ligne.get("prix_achat_ht", ""), "prix_achat_ht")
+        if achat is not None:
+            tarif.prix_achat_ht = achat
         tarif.full_clean()
         tarif.save()
     return cree
+
+
+def _importer_plage(article, ligne, pays, plages):
+    """Ajoute une plage de puissances au verre ; les plages d'avant (même pays) sont remplacées
+    par celles du fichier. ``plages`` compte les plages déjà lues de chaque verre."""
+    if article.famille != Article.Famille.VERRE:
+        raise ValidationError("sphere_debut : les plages de puissances ne vont qu'avec un verre.")
+    if article.pk not in plages:
+        PlageVerre.objects.filter(article=article, pays=pays).delete()
+        plages[article.pk] = 0
+    valeurs = {nom: _decimal(ligne.get(nom, ""), nom) for nom in COLONNES_PLAGE}
+    if valeurs["sphere_debut"] is None or valeurs["sphere_fin"] is None:
+        raise ValidationError("sphere_debut et sphere_fin : obligatoires pour une plage.")
+    prix = _decimal(ligne.get("prix_ttc", ""), "prix_ttc")
+    if prix is None:
+        raise ValidationError("prix_ttc : obligatoire pour une plage de puissances.")
+    plages[article.pk] += 1
+    plage = PlageVerre(
+        article=article,
+        pays=pays,
+        ordre=plages[article.pk],
+        sphere_debut=valeurs["sphere_debut"],
+        sphere_fin=valeurs["sphere_fin"],
+        cylindre_debut=valeurs["cylindre_debut"] or 0,
+        cylindre_fin=valeurs["cylindre_fin"] or 0,
+        prix_achat_ht=_decimal(ligne.get("prix_achat_ht", ""), "prix_achat_ht"),
+        prix_vente_ttc=prix,
+    )
+    plage.full_clean()
+    plage.save()
 
 
 def importer_stock(lignes, *, magasin, utilisateur, piece="", apercu=False):

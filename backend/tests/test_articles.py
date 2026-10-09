@@ -142,6 +142,7 @@ def test_creation_d_une_monture_dans_l_administration(creer_utilisateur, tunis):
         "fournisseur": str(labo.pk),
         "est_actif": "on",
         **{f"monture-{k}": v for k, v in {**vide, "TOTAL_FORMS": "1"}.items()},
+        "monture-0-categorie": "optique",
         "monture-0-marque": "Nano",
         "monture-0-genre": "enfant",
         "monture-0-calibre": "44",
@@ -186,7 +187,7 @@ def test_fournisseur_et_code_barres(api, tunis, catalogue):
 
 def test_articles_par_type_de_vente(api, catalogue):
     solaire = Article.objects.create(reference="SOL-1", libelle="Solaire", famille="monture")
-    Monture.objects.create(article=solaire, marque="Ray-Ban", solaire=True)
+    Monture.objects.create(article=solaire, marque="Ray-Ban", categorie="solaire")
     Article.objects.create(reference="MON-2", libelle="Sans fiche", famille="monture")
 
     def references(type_vente):
@@ -195,5 +196,6 @@ def test_articles_par_type_de_vente(api, catalogue):
 
     assert references("optique") == ["MON-2", "MON-T", "VER-1"]
     assert references("solaire") == ["SOL-1"]
-    assert references("lentille") == ["LEN-1"]
+    # Avec les lentilles, on vend aussi leurs produits (solutions, étuis…).
+    assert references("lentille") == ["DIV-1", "LEN-1"]
     assert references("produit") == ["DIV-1"]

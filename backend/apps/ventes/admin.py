@@ -1,6 +1,22 @@
 from django.contrib import admin
 
-from .models import Avoir, Devis, Facture, LigneAvoir, LigneDevis, LigneVente, Paiement, Vente
+from .models import (
+    Avoir,
+    BordereauPec,
+    ClotureMois,
+    Devis,
+    DossierSav,
+    EtapeCommande,
+    EvenementSav,
+    Facture,
+    FactureGroupee,
+    LigneAvoir,
+    LigneDevis,
+    LigneVente,
+    Paiement,
+    PriseEnCharge,
+    Vente,
+)
 
 
 class LigneVenteInline(admin.TabularInline):
@@ -52,6 +68,38 @@ class FactureAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+class LectureSeule:
+    """Documents établis depuis l'application, jamais modifiés ici."""
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(FactureGroupee)
+class FactureGroupeeAdmin(LectureSeule, admin.ModelAdmin):
+    list_display = ("numero", "type", "magasin", "client_nom", "du", "au", "net_a_payer")
+    list_filter = ("type", "magasin")
+    search_fields = ("numero", "client_nom")
+
+    def get_queryset(self, request):
+        return FactureGroupee.tous.select_related("magasin", "client")
+
+
+@admin.register(ClotureMois)
+class ClotureMoisAdmin(LectureSeule, admin.ModelAdmin):
+    list_display = ("__str__", "magasin", "facture", "cloture_par", "cree_le")
+    list_filter = ("magasin", "annee")
+
+    def get_queryset(self, request):
+        return ClotureMois.tous.select_related("magasin", "facture", "cloture_par")
 
 
 class LigneDevisInline(admin.TabularInline):
@@ -112,3 +160,68 @@ class AvoirAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+class Consultation(admin.ModelAdmin):
+    """Consultation seule : ces données se saisissent dans l'application, avec ses contrôles."""
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PriseEnCharge)
+class PriseEnChargeAdmin(Consultation):
+    list_display = ("vente", "organisme", "montant", "numero_dossier", "statut", "cree_le")
+    list_filter = ("statut", "organisme")
+    search_fields = ("vente__numero", "numero_dossier")
+
+    def get_queryset(self, request):
+        return PriseEnCharge.objects.select_related("vente", "organisme")
+
+
+@admin.register(EtapeCommande)
+class EtapeCommandeAdmin(Consultation):
+    list_display = ("vente", "etape", "le", "par", "observation")
+    list_filter = ("etape",)
+    search_fields = ("vente__numero",)
+
+    def get_queryset(self, request):
+        return EtapeCommande.objects.select_related("vente", "par")
+
+
+@admin.register(BordereauPec)
+class BordereauPecAdmin(Consultation):
+    list_display = ("numero", "magasin", "organisme", "statut", "envoye_le", "regle_le")
+    list_filter = ("statut", "organisme")
+    search_fields = ("numero", "reference_reglement")
+
+    def get_queryset(self, request):
+        return BordereauPec.objects.select_related("magasin", "organisme")
+
+
+class EvenementSavInline(admin.TabularInline):
+    model = EvenementSav
+    extra = 0
+    fields = ("le", "etape", "commentaire", "par")
+    readonly_fields = fields
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(DossierSav)
+class DossierSavAdmin(Consultation):
+    list_display = ("numero", "magasin", "client", "designation", "motif", "etape", "cree_le")
+    list_filter = ("etape", "motif", "sous_garantie")
+    search_fields = ("numero", "designation", "client__nom", "client__prenom")
+    inlines = [EvenementSavInline]
+
+    def get_queryset(self, request):
+        return DossierSav.objects.select_related("magasin", "client")

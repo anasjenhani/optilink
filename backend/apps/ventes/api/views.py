@@ -1,7 +1,7 @@
 import uuid
 from datetime import date
 
-from django.db.models import DecimalField, Prefetch, Sum, Value
+from django.db.models import DecimalField, Prefetch, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -49,6 +49,14 @@ from .serializers import (
     VenteSerializer,
 )
 from .suivi import ETATS, EtapeSaisieSerializer, JourneeSerializer, SuiviSerializer
+from .visites import (
+    FicheVisiteSerializer,
+    RecuSerializer,
+    ResteVendeurSerializer,
+    VenteFiltre,
+    recus,
+    reste_par_vendeur,
+)
 
 
 def _uuid(valeur, champ):
@@ -56,6 +64,13 @@ def _uuid(valeur, champ):
         return uuid.UUID(str(valeur))
     except ValueError:
         raise ValidationError({champ: "Identifiant invalide."}) from None
+
+
+def _date(valeur, champ):
+    try:
+        return date.fromisoformat(valeur)
+    except ValueError:
+        raise ValidationError({champ: "Date attendue au format AAAA-MM-JJ."}) from None
 
 
 def _entier(valeur, champ):
@@ -76,12 +91,77 @@ class VenteViewSet(
 
     serializer_class = VenteSerializer
     lookup_field = "public_id"
-    filterset_fields = ["numero", "statut", "peniche", "magasin__public_id"]
+    filterset_class = VenteFiltre
 
     def get_queryset(self):
         return Vente.objects.select_related(
-            "magasin", "vendeur", "client__organisme", "facture"
-        ).prefetch_related("lignes__article", "lignes__retours", "paiements", "prises_en_charge")
+            "magasin", "vendeur", "client__organisme", "facture", "facture_groupee"
+        ).prefetch_related(
+            "lignes__article",
+            "lignes__retours",
+            "lignes__lunette",
+            "lunettes__lignes",
+            "lunettes__prescription",
+            "lignes__lentilles",
+            "lentilles__lignes",
+            "lentilles__prescription",
+            "paiements",
+            "prises_en_charge",
+        )
+
+    @extend_schema(responses={200: FicheVisiteSerializer})
+    @action(detail=True)
+    def fiche(self, request, public_id=None):
+        """Fiche complète d'une visite : articles, règlements, PEC, suivi, verres, avoirs."""
+        vente = (
+            self.get_queryset()
+            .prefetch_related(
+                "paiements__recu_par",
+                "prises_en_charge__organisme",
+                Prefetch("etapes", queryset=EtapeCommande.objects.select_related("par")),
+                "avoirs",
+            )
+            .get(pk=self.get_object().pk)
+        )
+        return Response(FicheVisiteSerializer(vente).data)
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("magasin", OpenApiTypes.UUID),
+            OpenApiParameter("du", OpenApiTypes.DATE),
+            OpenApiParameter("au", OpenApiTypes.DATE),
+            OpenApiParameter("mode", OpenApiTypes.STR, enum=Paiement.Mode.values),
+        ],
+        responses={200: RecuSerializer(many=True)},
+    )
+    @action(detail=False, pagination_class=None, filterset_class=None)
+    def recus(self, request):
+        """Reçus des règlements (au plus 500, les plus récents d'abord), pour les réimprimer."""
+        parametres = request.query_params
+        ventes = self.get_queryset()
+        if parametres.get("magasin"):
+            ventes = ventes.filter(magasin__public_id=_uuid(parametres["magasin"], "magasin"))
+        paiements = recus(ventes)
+        for champ, filtre in (("du", "recu_le__date__gte"), ("au", "recu_le__date__lte")):
+            if parametres.get(champ):
+                paiements = paiements.filter(**{filtre: _date(parametres[champ], champ)})
+        if parametres.get("mode"):
+            paiements = paiements.filter(mode=parametres["mode"])
+        return Response(RecuSerializer(paiements[:500], many=True).data)
+
+    @extend_schema(
+        parameters=[OpenApiParameter("magasin", OpenApiTypes.UUID)],
+        responses={200: ResteVendeurSerializer(many=True)},
+    )
+    @action(detail=False, url_path="reste-par-vendeur", pagination_class=None, filterset_class=None)
+    def reste_par_vendeur(self, request):
+        """Reste dû sur les commandes en cours, par vendeur, avec le détail des commandes."""
+        ventes = self.get_queryset().filter(statut=Vente.Statut.EN_COMMANDE)
+        if request.query_params.get("magasin"):
+            ventes = ventes.filter(
+                magasin__public_id=_uuid(request.query_params["magasin"], "magasin")
+            )
+        return Response(ResteVendeurSerializer(reste_par_vendeur(ventes), many=True).data)
 
     def _apres(self, operation, **parametres):
         try:
@@ -104,7 +184,19 @@ class VenteViewSet(
         """Livre une commande ; le solde éventuel est encaissé en même temps."""
         saisie = LivraisonSerializer(data=request.data)
         saisie.is_valid(raise_exception=True)
-        return self._apres(livrer_commande, paiements=saisie.validated_data.get("paiements", []))
+        donnees = saisie.validated_data
+        if donnees["a_credit"]:
+            self._verifier_credit(self.get_object().magasin)
+        return self._apres(
+            livrer_commande,
+            paiements=donnees.get("paiements", []),
+            a_credit=donnees["a_credit"],
+            credit_echeance=donnees.get("credit_echeance"),
+        )
+
+    def _verifier_credit(self, magasin):
+        if not self.request.user.has_perm("ventes.vendre_a_credit", magasin):
+            raise PermissionDenied("Vente à crédit non autorisée pour votre rôle.")
 
     @extend_schema(
         parameters=[
@@ -182,7 +274,10 @@ class VenteViewSet(
             .exclude(statut=Vente.Statut.ANNULEE)
             .annotate(
                 regle=Coalesce(
-                    Sum("paiements__montant"),
+                    Sum(
+                        "paiements__montant",
+                        filter=Q(paiements__statut=Paiement.Statut.ENCAISSE),
+                    ),
                     Value(0),
                     output_field=DecimalField(max_digits=14, decimal_places=3),
                 )
@@ -232,6 +327,10 @@ class VenteViewSet(
             client = Client.objects.filter(public_id=donnees["client"]).first()
             if client is None:
                 raise ValidationError({"client": "Client inconnu."})
+        lunettes = self._avec_ordonnances(donnees.get("lunettes", []), user)
+        lentilles = self._avec_ordonnances(donnees.get("lentilles", []), user)
+        if donnees["a_credit"]:
+            self._verifier_credit(magasin)
 
         try:
             vente = enregistrer_vente(
@@ -245,11 +344,27 @@ class VenteViewSet(
                 commande=donnees["commande"],
                 livraison_prevue_le=donnees.get("livraison_prevue_le"),
                 peniche=donnees.get("peniche"),
+                lunettes=lunettes,
+                lentilles=lentilles,
+                a_credit=donnees["a_credit"],
+                credit_echeance=donnees.get("credit_echeance"),
             )
         except VenteInvalide as erreur:
             return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)
         vente = self.get_queryset().get(pk=vente.pk)
         return Response(VenteSerializer(vente).data, status=status.HTTP_201_CREATED)
+
+    def _avec_ordonnances(self, saisies, user):
+        """Remplace l'identifiant d'ordonnance de chaque équipement par l'ordonnance elle-même."""
+        identifiants = {s["prescription"] for s in saisies if s.get("prescription")}
+        if identifiants and not user.has_perm("optique.view_prescription"):
+            raise PermissionDenied("Pas d'accès aux ordonnances.")
+        ordonnances = Prescription.objects.filter(public_id__in=identifiants).in_bulk(
+            field_name="public_id"
+        )
+        if len(ordonnances) != len(identifiants):
+            raise ValidationError({"detail": "Ordonnance inconnue."})
+        return [{**s, "prescription": ordonnances.get(s.get("prescription"))} for s in saisies]
 
 
 class FactureViewSet(

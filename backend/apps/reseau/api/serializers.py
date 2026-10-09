@@ -1,9 +1,13 @@
 from rest_framework import serializers
 
-from ..models import Magasin, Pays, Societe
+from ..models import Banque, Magasin, Pays, Societe, Ville
 
 
 class PaysSerializer(serializers.ModelSerializer):
+    taux_tva = serializers.SlugRelatedField(
+        slug_field="taux", many=True, read_only=True, help_text="Taux de TVA du pays."
+    )
+
     class Meta:
         model = Pays
         fields = [
@@ -15,6 +19,7 @@ class PaysSerializer(serializers.ModelSerializer):
             "indicatif_telephonique",
             "timbre_fiscal",
             "libelle_identifiant_prescripteur",
+            "taux_tva",
         ]
 
 
@@ -38,6 +43,7 @@ class MagasinSerializer(serializers.ModelSerializer):
             "ville",
             "telephone",
             "nombre_peniches",
+            "type",
             "est_actif",
         ]
 
@@ -48,3 +54,19 @@ class SocieteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Societe
         fields = ["id", "code", "raison_sociale"]
+
+
+class VilleSerializer(serializers.ModelSerializer):
+    pays = serializers.CharField(source="pays.code", read_only=True)
+
+    class Meta:
+        model = Ville
+        fields = ["id", "nom", "pays"]
+
+
+class BanqueSerializer(serializers.ModelSerializer):
+    pays = serializers.CharField(source="pays.code", read_only=True)
+
+    class Meta:
+        model = Banque
+        fields = ["id", "code", "nom", "sigle", "pays"]

@@ -1,8 +1,30 @@
+from decimal import Decimal
+
+from django.core.exceptions import ValidationError as DjangoValidationError
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.reseau.models import Magasin
+from apps.reseau.villes import valider_ville
 
 from ..models import Client, Organisme
+
+
+def soldes(clients):
+    """Ce que chaque client doit encore : commandes en cours, ventes à crédit, chèques impayés
+    (négatif : trop perçu)."""
+    from apps.ventes.models import Vente
+
+    resultat = {client.pk: Decimal("0.000") for client in clients}
+    commandes = (
+        Vente.objects.filter(client__in=resultat)
+        .exclude(statut=Vente.Statut.ANNULEE)
+        .prefetch_related("paiements", "prises_en_charge")
+    )
+    for vente in commandes:
+        resultat[vente.client_id] += vente.reste_a_payer
+    return resultat
 
 
 class OrganismeSerializer(serializers.ModelSerializer):
@@ -25,6 +47,9 @@ class ClientSerializer(serializers.ModelSerializer):
         help_text="CNAM, assurance ou mutuelle du client (PEC client).",
     )
     organisme_nom = serializers.CharField(source="organisme.nom", read_only=True, default=None)
+    solde = serializers.SerializerMethodField(
+        help_text="Reste dû : commandes en cours, crédit, impayés (négatif : trop perçu)."
+    )
     magasin_origine = serializers.SlugRelatedField(
         slug_field="public_id",
         queryset=Magasin.objects,
@@ -56,15 +81,58 @@ class ClientSerializer(serializers.ModelSerializer):
             "numero_affilie",
             "notes",
             "est_actif",
+            "liste_noire",
+            "motif_liste_noire",
+            "solde",
             "cree_le",
         ]
-        read_only_fields = ["numero", "reference_externe", "cree_le"]
+        read_only_fields = [
+            "numero",
+            "reference_externe",
+            "cree_le",
+            "liste_noire",
+            "motif_liste_noire",
+        ]
+
+    @extend_schema_field(OpenApiTypes.DECIMAL)
+    def get_solde(self, client):
+        if "soldes" in self.context:
+            solde = self.context["soldes"].get(client.pk)
+        elif self.context.get("avec_solde"):
+            solde = soldes([client])[client.pk]
+        else:
+            return None
+        return None if solde is None else str(solde)
 
     def validate(self, attrs):
         if self.instance is not None:
             attrs.pop("magasin_origine", None)
+        # Nom, prénom et téléphone obligatoires à la création ; une fiche reprise de l'ancien
+        # logiciel sans téléphone reste modifiable, mais un téléphone ne s'efface plus.
+        manquants = {}
+        for champ, libelle in (("nom", "Le nom"), ("prenom", "Le prénom")):
+            if champ in attrs:
+                attrs[champ] = attrs[champ].strip()
+                if not attrs[champ]:
+                    manquants[champ] = f"{libelle} est obligatoire."
+        if "telephone" in attrs:
+            attrs["telephone"] = attrs["telephone"].strip()
+        telephone = attrs.get("telephone", getattr(self.instance, "telephone", ""))
+        if not telephone and (self.instance is None or self.instance.telephone):
+            manquants["telephone"] = "Le numéro de téléphone est obligatoire."
+        if manquants:
+            raise serializers.ValidationError(manquants)
         if "matricule_fiscal" in attrs:
             attrs["matricule_fiscal"] = attrs["matricule_fiscal"].strip().upper()
+        if attrs.get("ville"):
+            magasin = attrs.get("magasin_origine") or getattr(
+                self.instance, "magasin_origine", None
+            )
+            pays = getattr(magasin, "pays", None)
+            try:
+                attrs["ville"] = valider_ville(attrs["ville"], pays)
+            except DjangoValidationError as erreur:
+                raise serializers.ValidationError({"ville": erreur.messages}) from erreur
         societe = attrs.get("societe", getattr(self.instance, "societe", ""))
         matricule = attrs.get("matricule_fiscal", getattr(self.instance, "matricule_fiscal", ""))
         if matricule and not societe:

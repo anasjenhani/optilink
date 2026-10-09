@@ -1,12 +1,8 @@
-import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import ButtonBase from "@mui/material/ButtonBase";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
-import List from "@mui/material/List";
-import ListItemButton from "@mui/material/ListItemButton";
-import ListItemText from "@mui/material/ListItemText";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
 import Step from "@mui/material/Step";
@@ -18,14 +14,15 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { TYPES_VENTE, type TypeVente } from "../api/caisse";
-import { chercherClients, nomClient, type Client } from "../api/clients";
+import { nomClient, type Client } from "../api/clients";
 import { listerMagasins } from "../api/magasins";
-import { Caisse } from "./Caisse";
+import { Caisse, type DroitsLunette } from "./Caisse";
 import { FicheClient } from "./Clients";
+import { RechercheClients } from "./RechercheClients";
 
 const ETAPES = ["Client", "Type de vente", "Saisie de la vente"];
 
-/** Étape 1 : retrouver le client (nom, prénom, téléphone ou n° de fiche) ou le créer. */
+/** Étape 1 : retrouver le client dans le tableau « Recherche Clients », ou le créer. */
 function ChoixClient({
   creer,
   onChoisi,
@@ -33,13 +30,7 @@ function ChoixClient({
   creer: boolean;
   onChoisi: (client: Client | null) => void;
 }) {
-  const [recherche, setRecherche] = useState("");
   const [nouveau, setNouveau] = useState(false);
-  const clients = useQuery({
-    queryKey: ["clients", recherche],
-    queryFn: () => chercherClients(recherche),
-    enabled: recherche.trim().length >= 2 || /^\d+$/.test(recherche.trim()),
-  });
 
   if (nouveau) {
     return (
@@ -53,35 +44,11 @@ function ChoixClient({
     );
   }
   return (
-    <Stack spacing={2}>
-      <TextField
-        autoFocus
-        label="Rechercher le client"
-        helperText="Nom, prénom, téléphone ou n° de fiche"
-        value={recherche}
-        onChange={(e) => setRecherche(e.target.value)}
-      />
-      {clients.isError && <Alert severity="error">{clients.error.message}</Alert>}
-      {clients.data?.length === 0 && <Typography color="text.secondary">Aucun client trouvé.</Typography>}
-      <List dense aria-label="Clients trouvés">
-        {clients.data?.map((c) => (
-          <ListItemButton key={c.id} onClick={() => onChoisi(c)}>
-            <ListItemText
-              primary={nomClient(c)}
-              secondary={[c.telephone, c.telephone_2, c.ville].filter(Boolean).join(" · ")}
-            />
-          </ListItemButton>
-        ))}
-      </List>
-      <Stack direction="row" spacing={2}>
-        {creer && (
-          <Button variant="contained" onClick={() => setNouveau(true)}>
-            Nouveau client
-          </Button>
-        )}
-        <Button onClick={() => onChoisi(null)}>Client de passage</Button>
-      </Stack>
-    </Stack>
+    <RechercheClients
+      onChoisi={onChoisi}
+      onNouveau={creer ? () => setNouveau(true) : undefined}
+      onPassage={() => onChoisi(null)}
+    />
   );
 }
 
@@ -117,7 +84,7 @@ function ChoixType({ onChoisi }: { onChoisi: (type: TypeVente) => void }) {
 }
 
 /** Vente au comptoir en trois étapes : client, type de vente, puis saisie et encaissement. */
-export function VenteComptoir({ creerClient }: { creerClient: boolean }) {
+export function VenteComptoir({ creerClient, droits }: { creerClient: boolean; droits?: DroitsLunette }) {
   const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
   const [magasinChoisi, setMagasin] = useState("");
   const magasin = magasinChoisi || magasins.data?.[0]?.id || "";
@@ -196,7 +163,7 @@ export function VenteComptoir({ creerClient }: { creerClient: boolean }) {
             <Box hidden={etape !== 2}>
               <Caisse
                 key={`${vente}-${magasin}`}
-                parcours={{ client, magasin, typeVente, onTypeVente: setTypeVente, onNouvelleVente: recommencer }}
+                parcours={{ client, magasin, typeVente, onTypeVente: setTypeVente, onNouvelleVente: recommencer, droits }}
               />
             </Box>
           )}

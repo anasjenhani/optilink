@@ -2,6 +2,9 @@ import { appeler } from "./client";
 
 export type Client = {
   id: string;
+  /** Liste noire : plus de chèque, de traite ni de crédit. */
+  liste_noire?: boolean;
+  motif_liste_noire?: string;
   /** N° de fiche, attribué par le serveur à la création. */
   numero: number;
   /** N° de la fiche dans l'ancien logiciel, gardé à l'import. */
@@ -24,11 +27,29 @@ export type Client = {
   organisme: string | null;
   organisme_nom: string | null;
   numero_affilie: string;
+  /** Observation libre sur la fiche. */
+  notes?: string;
+  /** Fiche désactivée : on ne supprime jamais un client. */
+  est_actif?: boolean;
+  /** Reste dû sur les commandes en cours (négatif : trop perçu) ; fourni en liste et en fiche. */
+  solde?: string | null;
 };
 
-export type SaisieClient = Omit<Client, "id" | "numero" | "reference_externe" | "organisme_nom">;
+export type SaisieClient = Omit<Client, "id" | "numero" | "reference_externe" | "organisme_nom" | "solde">;
 
-export type MesureOeil = { sphere: string; cylindre?: string; axe?: number | null; addition?: string | null };
+/** Désactive ou réactive une fiche (droit de modification des clients). */
+export const changerActivationClient = (id: string, est_actif: boolean) =>
+  appeler<Client>(`/api/v1/clients/${id}/`, { methode: "PATCH", corps: { est_actif } });
+
+export type MesureOeil = {
+  sphere: string;
+  cylindre?: string;
+  axe?: number | null;
+  addition?: string | null;
+  /** Lentilles : rayon de courbure et diamètre (mm). */
+  rayon?: string | null;
+  diametre?: string | null;
+};
 
 export type Prescription = {
   id: string;
@@ -45,10 +66,31 @@ export type SaisiePrescription = Omit<Prescription, "id" | "saisie_par"> & {
   prescripteur_identifiant: string;
 };
 
-export const chercherClients = (recherche: string) =>
-  appeler<{ results: Client[] }>(`/api/v1/clients/?${new URLSearchParams({ recherche })}`).then(
-    (page) => page.results,
-  );
+/** Recherche de clients ; les fiches désactivées n'en font partie que si on le demande. */
+export const chercherClients = (recherche: string, avecDesactives = false) =>
+  appeler<{ results: Client[] }>(
+    `/api/v1/clients/?${new URLSearchParams({ recherche, ...(avecDesactives ? {} : { est_actif: "true" }) })}`,
+  ).then((page) => page.results);
+
+/** Filtres par colonne du tableau « Recherche Clients ». */
+export type FiltresClients = {
+  fiche?: string;
+  telephone?: string;
+  nom?: string;
+  prenom?: string;
+  observation?: string;
+  /** "true" : fiches actives seulement. */
+  est_actif?: string;
+  tri?: "fiche" | "-fiche" | "nom" | "-nom";
+};
+
+export const listerClients = (filtres: FiltresClients, page = 1) => {
+  const parametres = new URLSearchParams({ page: String(page) });
+  Object.entries(filtres).forEach(([cle, valeur]) => {
+    if (valeur?.trim()) parametres.set(cle, valeur.trim());
+  });
+  return appeler<{ count: number; results: Client[] }>(`/api/v1/clients/?${parametres}`);
+};
 
 export const creerClient = (saisie: SaisieClient) =>
   appeler<Client>("/api/v1/clients/", { methode: "POST", corps: saisie });
@@ -58,9 +100,9 @@ export const modifierClient = (id: string, saisie: Partial<SaisieClient>) =>
 
 /** Chaque appel est journalisé côté serveur comme une consultation du dossier. */
 export const listerPrescriptions = (client: string) =>
-  appeler<{ results: Prescription[] }>(
-    `/api/v1/prescriptions/?${new URLSearchParams({ client })}`,
-  ).then((page) => page.results);
+  appeler<{ results: Prescription[] }>(`/api/v1/prescriptions/?${new URLSearchParams({ client })}`).then(
+    (page) => page.results,
+  );
 
 export const saisirPrescription = (saisie: SaisiePrescription) =>
   appeler<Prescription>("/api/v1/prescriptions/", { methode: "POST", corps: saisie });

@@ -38,3 +38,9 @@ def test_onglets_limites_aux_droits(affecter, client_de):
     rh.save()
     onglets = client_de(rh).get("/admin/").context["onglets"]
     assert [o["libelle"] for o in onglets] == ["RH", "Alertes et reporting"]
+
+
+def test_logo_optilink_dans_l_administration(client, db):
+    page = client.get("/admin/login/").content.decode()
+    assert 'src="/static/optilink/logo.png"' in page
+    assert 'href="/static/optilink/favicon.png"' in page

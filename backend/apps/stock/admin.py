@@ -1,6 +1,32 @@
 from django.contrib import admin
+from django.core.exceptions import PermissionDenied
 
-from .models import Article, Lentille, Monture, MouvementStock, PrixArticle, Verre
+from core.admin_imports import AvecImport
+
+from .admin_saisie import saisir_inventaire, saisir_transfert
+from .models import (
+    Article,
+    BonSortie,
+    CouleurVerre,
+    DemandeTransfert,
+    DiametreVerre,
+    FamilleVerre,
+    Inventaire,
+    Lentille,
+    LigneDemandeTransfert,
+    LigneInventaire,
+    LigneSortie,
+    LigneTransfert,
+    MarqueMonture,
+    MatiereVerre,
+    Monture,
+    MouvementStock,
+    PlageVerre,
+    PrixArticle,
+    SousFamilleVerre,
+    TransfertStock,
+    Verre,
+)
 
 
 class PrixArticleInline(admin.TabularInline):
@@ -11,9 +37,9 @@ class PrixArticleInline(admin.TabularInline):
 class MontureInline(admin.StackedInline):
     model = Monture
     fields = (
-        ("marque", "modele"),
-        ("couleur", "matiere"),
-        ("type", "genre", "solaire"),
+        ("categorie", "marque", "modele"),
+        ("couleur", "couleur_verres", "matiere"),
+        ("type", "forme", "genre", "tranche_age"),
         ("calibre", "pont", "branche"),
     )
 
@@ -25,6 +51,24 @@ class VerreInline(admin.StackedInline):
         ("geometrie", "indice", "matiere"),
         "traitements",
         ("photochromique", "teinte", "diametre"),
+        ("fabrication", "diametre_commercial"),
+        ("famille_verre", "sous_famille", "couleur"),
+    )
+    autocomplete_fields = ("famille_verre", "sous_famille", "couleur")
+
+
+class PlageVerreInline(admin.TabularInline):
+    model = PlageVerre
+    extra = 1
+    fields = (
+        "pays",
+        "ordre",
+        "sphere_debut",
+        "sphere_fin",
+        "cylindre_debut",
+        "cylindre_fin",
+        "prix_achat_ht",
+        "prix_vente_ttc",
     )
 
 
@@ -46,7 +90,8 @@ CARACTERISTIQUES = {
 
 
 @admin.register(Article)
-class ArticleAdmin(admin.ModelAdmin):
+class ArticleAdmin(AvecImport, admin.ModelAdmin):
+    imports = ("catalogue", "verres")
     list_display = (
         "reference",
         "libelle",
@@ -78,6 +123,8 @@ class ArticleAdmin(admin.ModelAdmin):
         if obj is None:
             return [*CARACTERISTIQUES.values(), PrixArticleInline]
         fiche = CARACTERISTIQUES.get(obj.famille)
+        if obj.famille == Article.Famille.VERRE:
+            return [fiche, PrixArticleInline, PlageVerreInline]
         return [fiche, PrixArticleInline] if fiche else [PrixArticleInline]
 
     @admin.display(description="marque")
@@ -94,7 +141,8 @@ class ArticleAdmin(admin.ModelAdmin):
 
 
 @admin.register(MouvementStock)
-class MouvementStockAdmin(admin.ModelAdmin):
+class MouvementStockAdmin(AvecImport, admin.ModelAdmin):
+    imports = ("stock",)
     list_display = ("horodatage", "magasin", "article", "type", "quantite", "reference")
     list_filter = ("type", "magasin")
     search_fields = ("article__reference", "reference")
@@ -108,3 +156,173 @@ class MouvementStockAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+class LigneTransfertInline(admin.TabularInline):
+    model = LigneTransfert
+    extra = 0
+    can_delete = False
+
+
+@admin.register(TransfertStock)
+class TransfertStockAdmin(admin.ModelAdmin):
+    list_display = ("numero", "cree_le", "magasin", "destination", "statut", "recu_le")
+    list_filter = ("statut", "magasin", "destination")
+    search_fields = ("numero",)
+    inlines = [LigneTransfertInline]
+
+    def get_queryset(self, request):
+        return TransfertStock.tous.select_related("magasin", "destination")
+
+    # « Ajouter » envoie le transfert par le même service que l'application ; le magasin de
+    # destination le réceptionne dans l'application. Un transfert ne se modifie pas.
+    def add_view(self, request, form_url="", extra_context=None):
+        if not self.has_add_permission(request):
+            raise PermissionDenied
+        return saisir_transfert(self, request)
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class LigneInventaireInline(admin.TabularInline):
+    model = LigneInventaire
+    extra = 0
+    can_delete = False
+
+
+@admin.register(Inventaire)
+class InventaireAdmin(admin.ModelAdmin):
+    list_display = ("numero", "cree_le", "magasin", "famille", "statut", "valide_le")
+    list_filter = ("statut", "magasin", "famille")
+    search_fields = ("numero",)
+    inlines = [LigneInventaireInline]
+
+    def get_queryset(self, request):
+        return Inventaire.tous.select_related("magasin")
+
+    # « Ajouter » crée l'inventaire (et de premiers comptages) par le même service que
+    # l'application ; le comptage et la validation finale se poursuivent dans l'application.
+    def add_view(self, request, form_url="", extra_context=None):
+        if not self.has_add_permission(request):
+            raise PermissionDenied
+        return saisir_inventaire(self, request)
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+# Listes de référence des verres et des montures : on désactive au lieu de supprimer (les
+# verres déjà créés gardent leur famille, leur sous-famille et leur couleur).
+class _ListeAdmin(AvecImport, admin.ModelAdmin):
+    list_filter = ("est_actif",)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(MarqueMonture)
+class MarqueMontureAdmin(_ListeAdmin):
+    imports = ("marques_montures",)
+    list_display = ("code", "libelle", "est_actif")
+    search_fields = ("code", "libelle")
+
+
+@admin.register(MatiereVerre)
+class MatiereVerreAdmin(_ListeAdmin):
+    imports = ("matieres_verres",)
+    list_display = ("code", "libelle", "est_actif")
+    search_fields = ("code", "libelle")
+
+
+class SousFamilleInline(admin.TabularInline):
+    model = SousFamilleVerre
+    fields = ("code", "libelle", "foyer", "est_actif")
+    extra = 0
+    show_change_link = True
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(FamilleVerre)
+class FamilleVerreAdmin(_ListeAdmin):
+    imports = ("familles_verres",)
+    list_display = ("code", "libelle", "fournisseur", "foyer", "est_actif")
+    list_filter = ("est_actif", "foyer", "fournisseur")
+    search_fields = ("code", "libelle")
+    inlines = [SousFamilleInline]
+
+
+@admin.register(SousFamilleVerre)
+class SousFamilleVerreAdmin(_ListeAdmin):
+    imports = ("sous_familles_verres",)
+    list_display = ("code", "libelle", "famille", "foyer", "est_actif")
+    list_filter = ("est_actif", "foyer", "famille__fournisseur")
+    search_fields = ("code", "libelle", "famille__libelle")
+    autocomplete_fields = ("famille",)
+
+
+@admin.register(CouleurVerre)
+class CouleurVerreAdmin(_ListeAdmin):
+    imports = ("couleurs_verres",)
+    list_display = ("code", "libelle", "fournisseur", "famille_couleur", "est_actif")
+    list_filter = ("est_actif", "famille_couleur", "fournisseur")
+    search_fields = ("code", "libelle")
+
+
+@admin.register(DiametreVerre)
+class DiametreVerreAdmin(_ListeAdmin):
+    imports = ("diametres_verres",)
+    list_display = ("code", "diametre_commercial", "diametre_reel", "fournisseur", "est_actif")
+    list_filter = ("est_actif", "fournisseur")
+    search_fields = ("code", "diametre_commercial")
+
+
+class LectureSeule:
+    """Saisis et traités depuis l'application, consultés ici."""
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class LigneSortieInline(LectureSeule, admin.TabularInline):
+    model = LigneSortie
+
+
+@admin.register(BonSortie)
+class BonSortieAdmin(LectureSeule, admin.ModelAdmin):
+    list_display = ("numero", "cree_le", "magasin", "type", "motif")
+    list_filter = ("type", "magasin")
+    search_fields = ("numero", "motif")
+    inlines = [LigneSortieInline]
+
+    def get_queryset(self, request):
+        return BonSortie.tous.select_related("magasin")
+
+
+class LigneDemandeInline(LectureSeule, admin.TabularInline):
+    model = LigneDemandeTransfert
+
+
+@admin.register(DemandeTransfert)
+class DemandeTransfertAdmin(LectureSeule, admin.ModelAdmin):
+    list_display = ("numero", "cree_le", "magasin", "aupres_de", "statut", "transfert")
+    list_filter = ("statut", "magasin", "aupres_de")
+    search_fields = ("numero",)
+    inlines = [LigneDemandeInline]
+
+    def get_queryset(self, request):
+        return DemandeTransfert.tous.select_related("magasin", "aupres_de", "transfert")

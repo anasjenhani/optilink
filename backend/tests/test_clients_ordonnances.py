@@ -118,6 +118,28 @@ def test_pas_de_suppression_de_client(affecter, client_de, dupont):
     assert client_de(vendeur).delete(f"/api/v1/clients/{dupont.public_id}/").status_code == 405
 
 
+def test_desactivation_et_filtre_des_clients_actifs(affecter, client_de, reseau, dupont):
+    durand = Client.objects.create(nom="Durand", prenom="Paul", magasin_origine=reseau["lille"])
+    lecteur = client_de(affecter("lecteur", "crm.view_client", portee="reseau"))
+    url = f"/api/v1/clients/{dupont.public_id}/"
+    assert lecteur.patch(url, {"est_actif": False}, format="json").status_code == 403
+
+    vendeur = client_de(affecter("vendeur", *CLIENTS, portee="reseau"))
+    reponse = vendeur.patch(url, {"est_actif": False}, format="json")
+    assert reponse.status_code == 200 and reponse.json()["est_actif"] is False
+
+    def noms(**filtres):
+        return [c["nom"] for c in vendeur.get("/api/v1/clients/", filtres).json()["results"]]
+
+    assert noms(tri="nom") == ["Dupont", "Durand"]
+    assert noms(est_actif="true") == ["Durand"]
+    assert noms(est_actif="false") == ["Dupont"]
+    # Réactivation : la fiche revient dans les recherches des clients actifs.
+    assert vendeur.patch(url, {"est_actif": True}, format="json").status_code == 200
+    assert noms(est_actif="true", tri="nom") == ["Dupont", "Durand"]
+    assert durand.est_actif
+
+
 # Ordonnances
 
 
@@ -231,6 +253,7 @@ def test_numero_de_fiche_attribue_et_recherche(affecter, client_de, reseau, dupo
         {
             "nom": "Durand",
             "prenom": "Paul",
+            "telephone": "0320000000",
             "magasin_origine": str(reseau["lille"].public_id),
             "numero": 999,
         },
@@ -243,3 +266,34 @@ def test_numero_de_fiche_attribue_et_recherche(affecter, client_de, reseau, dupo
     assert [c["nom"] for c in trouves] == ["Dupont"]
     trouves = api.get("/api/v1/clients/", {"recherche": "0601020304"}).json()["results"]
     assert [c["nom"] for c in trouves] == ["Dupont"]
+
+
+def test_nom_prenom_et_telephone_obligatoires_a_la_creation(affecter, client_de, reseau):
+    api = client_de(
+        affecter(
+            "vendeur",
+            "crm.view_client",
+            "crm.add_client",
+            "crm.change_client",
+            portee="magasin",
+            magasin=reseau["lille"],
+        )
+    )
+    lille = str(reseau["lille"].public_id)
+    reponse = api.post("/api/v1/clients/", {"nom": " ", "prenom": "", "magasin_origine": lille})
+    assert reponse.status_code == 400
+    assert set(reponse.json()) == {"nom", "prenom"}
+    reponse = api.post(
+        "/api/v1/clients/", {"nom": "Durand", "prenom": "Paul", "magasin_origine": lille}
+    )
+    assert reponse.json() == {"telephone": ["Le numéro de téléphone est obligatoire."]}
+
+    # Fiche reprise de l'ancien logiciel sans téléphone : elle reste modifiable.
+    ancien = Client.objects.create(magasin_origine=reseau["lille"], nom="Ancien", prenom="Client")
+    reponse = api.patch(f"/api/v1/clients/{ancien.public_id}/", {"email": "a@b.fr"})
+    assert reponse.status_code == 200, reponse.json()
+    # Mais un téléphone enregistré ne s'efface plus.
+    ancien.telephone = "0320000000"
+    ancien.save()
+    reponse = api.patch(f"/api/v1/clients/{ancien.public_id}/", {"telephone": ""})
+    assert reponse.json() == {"telephone": ["Le numéro de téléphone est obligatoire."]}

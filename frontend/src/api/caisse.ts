@@ -16,18 +16,32 @@ export type Article = {
   taux_tva: string;
   devise: string;
   stock: number | null;
+  /** Verre pris dans une plage de puissances (recherche des verres) : prix de la plage. */
+  plage?: number | null;
 };
 
-export type Famille = "monture" | "verre" | "lentille" | "divers";
+export type Famille = "monture" | "verre" | "lentille" | "divers" | "supplement";
 
 export const FAMILLES: { valeur: Famille; libelle: string }[] = [
   { valeur: "monture", libelle: "Montures" },
   { valeur: "verre", libelle: "Verres" },
   { valeur: "lentille", libelle: "Lentilles" },
   { valeur: "divers", libelle: "Divers" },
+  { valeur: "supplement", libelle: "Suppléments verre" },
 ];
 
-export type ModePaiement = "carte" | "especes" | "cheque";
+export type ModePaiement = "carte" | "especes" | "cheque" | "virement" | "traite";
+
+export const MODES_PAIEMENT: { valeur: ModePaiement; libelle: string }[] = [
+  { valeur: "especes", libelle: "Espèces" },
+  { valeur: "carte", libelle: "Carte bancaire" },
+  { valeur: "cheque", libelle: "Chèque" },
+  { valeur: "virement", libelle: "Virement" },
+  { valeur: "traite", libelle: "Traite" },
+];
+
+/** Chèque, traite ou virement : n° de la pièce, banque et, pour chèque et traite, échéance. */
+export type Piece = { reference?: string; banque?: string; echeance?: string | null };
 
 export type Vente = {
   id: string;
@@ -44,15 +58,148 @@ export type Vente = {
   /** Verres commandés au fournisseur ; null si la commande n'en comporte pas. */
   verres?: "a_commander" | "commandes" | "recus" | null;
   facture: string | null;
-  client: { id: string; nom: string; matricule_fiscal: string; organisme?: string | null } | null;
-  lignes: { id: number; libelle: string; quantite: number; quantite_reprise: number; total_ttc: string }[];
+  client: {
+    id: string;
+    nom: string;
+    matricule_fiscal: string;
+    organisme?: string | null;
+    liste_noire?: boolean;
+    motif_liste_noire?: string;
+  } | null;
+  /** Vente à crédit : date à laquelle le client a promis de régler le reste. */
+  credit_echeance?: string | null;
+  lignes: {
+    id: number;
+    libelle: string;
+    quantite: number;
+    quantite_reprise: number;
+    total_ttc: string;
+    prix_unitaire_ttc: string;
+    remise_pct: string;
+    taux_tva?: string;
+    /** N° de la lunette ou des lentilles qui contiennent l'article, et sa place. */
+    lunette?: number | null;
+    lentilles?: number | null;
+    role?: RoleLigne | "";
+    numero_lot?: string;
+    date_peremption?: string | null;
+  }[];
+  lunettes?: Lunette[];
+  lentilles?: Lentilles[];
 };
+
+/** Lentilles droite et gauche d'une visite, liées à une ordonnance de lentilles. */
+export type SaisieLentilles = { prescription: string | null; observation: string };
+
+type LentilleOeil = {
+  libelle: string;
+  quantite: number;
+  numero_lot: string;
+  date_peremption: string | null;
+  total_ttc: string;
+};
+
+export type Lentilles = SaisieLentilles & {
+  numero: number;
+  droite: LentilleOeil | null;
+  gauche: LentilleOeil | null;
+  total_ttc: string;
+};
+
+export type LentillesClient = Lentilles & {
+  id: string;
+  vente: string;
+  vente_numero: string;
+  date: string;
+  peniche: number | null;
+};
+
+export const listerLentillesClient = (client: string) =>
+  appeler<{ results: LentillesClient[] }>(`/api/v1/lentilles/?${new URLSearchParams({ client })}`).then(
+    (page) => page.results,
+  );
+
+export type RoleLigne =
+  | "monture"
+  | "verre_d"
+  | "verre_g"
+  | "supplement_d"
+  | "supplement_g"
+  | "lentille_d"
+  | "lentille_g";
+export type Vision = "loin" | "pres" | "double_foyer" | "degressif" | "progressif";
+
+export const VISIONS: { valeur: Vision; libelle: string }[] = [
+  { valeur: "loin", libelle: "Loin" },
+  { valeur: "pres", libelle: "Près" },
+  { valeur: "double_foyer", libelle: "Double foyer" },
+  { valeur: "degressif", libelle: "Dégressif" },
+  { valeur: "progressif", libelle: "Progressif" },
+];
+
+/** Paire de lunettes : vision, ordonnance, mesures de montage (mm). */
+export type SaisieLunette = {
+  vision: Vision | "";
+  solaire: boolean;
+  inadaptation: boolean;
+  prescription: string | null;
+  oeil_directeur: "" | "droit" | "gauche";
+  ecart_d: string | null;
+  ecart_g: string | null;
+  ecart_pres_d: string | null;
+  ecart_pres_g: string | null;
+  hauteur_d: string | null;
+  hauteur_g: string | null;
+  observation: string;
+  client_absent: boolean;
+};
+
+export type Lunette = SaisieLunette & {
+  numero: number;
+  vision_libelle: string;
+  monture: string | null;
+  verre_d: string | null;
+  verre_g: string | null;
+  supplements_d: string[];
+  supplements_g: string[];
+};
+
+export type LunetteClient = Lunette & {
+  id: string;
+  vente: string;
+  vente_numero: string;
+  date: string;
+  magasin: string;
+  peniche: number | null;
+  statut: Vente["statut"];
+};
+
+export const listerLunettesClient = (client: string) =>
+  appeler<{ results: LunetteClient[] }>(`/api/v1/lunettes/?${new URLSearchParams({ client })}`).then(
+    (page) => page.results,
+  );
 
 export type SaisieVente = {
   magasin: string;
   client?: string;
-  lignes: { article: string; quantite: number }[];
-  paiements: { mode: ModePaiement; montant: string }[];
+  lignes: {
+    article: string;
+    quantite: number;
+    remise_pct?: string;
+    lunette?: number;
+    lentilles?: number;
+    role?: RoleLigne;
+    numero_lot?: string;
+    date_peremption?: string;
+    /** Verre : plage de puissances choisie, dont le prix s'applique. */
+    plage?: number;
+  }[];
+  paiements: ({ mode: ModePaiement; montant: string } & Piece)[];
+  /** Vente à crédit : le client emporte ses articles et réglera le reste plus tard. */
+  a_credit?: boolean;
+  credit_echeance?: string | null;
+  /** Paires de lunettes ; leurs articles sont dans ``lignes`` (``lunette`` = rang dans cette liste). */
+  lunettes?: SaisieLunette[];
   /** Commande : acompte maintenant (paiements, éventuellement vides), solde à la livraison. */
   commande?: boolean;
   livraison_prevue_le?: string;
@@ -60,7 +207,7 @@ export type SaisieVente = {
   peniche?: number;
 };
 
-export type Reglement = { mode: ModePaiement; montant: string };
+export type Reglement = { mode: ModePaiement; montant: string } & Piece;
 
 /** Ce que le vendeur vend au comptoir ; chaque type regroupe des familles d'articles. */
 export type TypeVente = "optique" | "solaire" | "lentille" | "produit";
@@ -68,7 +215,7 @@ export type TypeVente = "optique" | "solaire" | "lentille" | "produit";
 export const TYPES_VENTE: { valeur: TypeVente; libelle: string; aide: string }[] = [
   { valeur: "optique", libelle: "Lunettes optiques", aide: "Monture et verres correcteurs" },
   { valeur: "solaire", libelle: "Lunettes solaires", aide: "Montures solaires" },
-  { valeur: "lentille", libelle: "Lentilles", aide: "Lentilles de contact" },
+  { valeur: "lentille", libelle: "Lentilles", aide: "Lentilles de contact et leurs produits" },
   { valeur: "produit", libelle: "Produits et accessoires", aide: "Produits lentilles, étuis, sprays…" },
 ];
 
@@ -77,6 +224,7 @@ export const chercherArticles = (
   recherche: string,
   famille: Famille | "" = "",
   typeVente: TypeVente | "" = "",
+  desactives = false,
 ) =>
   appeler<{ results: Article[] }>(
     `/api/v1/articles/?${new URLSearchParams({
@@ -84,21 +232,64 @@ export const chercherArticles = (
       recherche,
       ...(famille && { famille }),
       ...(typeVente && { type_vente: typeVente }),
+      ...(desactives && { desactives: "true" }),
     })}`,
   ).then((page) => page.results);
 
-export const encaisser = (saisie: SaisieVente) =>
-  appeler<Vente>("/api/v1/ventes/", { methode: "POST", corps: saisie });
+/** Ligne de la recherche des verres : une plage de puissances d'un verre et son prix. */
+export type VerreTrouve = {
+  article: string;
+  plage: number | null;
+  reference: string;
+  designation: string;
+  fournisseur: string;
+  sphere_debut: string | null;
+  sphere_fin: string | null;
+  cylindre_debut: string | null;
+  cylindre_fin: string | null;
+  diametre: string;
+  indice: string | null;
+  prix_vente_ttc: string | null;
+  /** Stock du magasin ; null pour un verre sur commande. */
+  quantite: number | null;
+};
+
+export type SectionVerres = "stock_fournisseur" | "prescription" | "magasin";
+
+export const rechercherVerres = (
+  magasin: string,
+  designation: string,
+  correction: { sphere?: string; cylindre?: string } = {},
+) =>
+  appeler<Record<SectionVerres, VerreTrouve[]>>(
+    `/api/v1/articles/recherche-verres/?${new URLSearchParams({
+      magasin,
+      designation,
+      ...(correction.sphere ? { sphere: correction.sphere } : {}),
+      ...(correction.cylindre ? { cylindre: correction.cylindre } : {}),
+    })}`,
+  );
+
+export const encaisser = (saisie: SaisieVente) => appeler<Vente>("/api/v1/ventes/", { methode: "POST", corps: saisie });
 
 export type Facture = {
   id: string;
   numero: string;
+  /** Code du magasin émetteur. */
+  magasin: string;
   vente: string;
-  client: { id: string; nom: string; matricule_fiscal: string };
+  /** Tel qu'imprimé à l'émission. */
+  client: { id: string; nom: string; adresse: string; matricule_fiscal: string };
+  cree_le: string;
+  emise_par: string;
   devise: string;
+  total_ht: string;
+  total_tva: string;
   total_ttc: string;
   timbre_fiscal: string;
   net_a_payer: string;
+  mode_paiement_timbre: ModePaiement | "";
+  lignes: Vente["lignes"];
 };
 
 export const trouverVente = (numero: string) =>
@@ -110,6 +301,15 @@ export const trouverVente = (numero: string) =>
 export const genererFacture = (saisie: { vente: string; client?: string; mode_paiement_timbre?: ModePaiement }) =>
   appeler<Facture>("/api/v1/factures/", { methode: "POST", corps: saisie });
 
+/** Factures émises, les plus récentes d'abord ; le n° se cherche en entier. */
+export const listerFactures = (numero: string, page = 1) => {
+  const parametres = new URLSearchParams({ page: String(page) });
+  if (numero.trim()) parametres.set("numero", numero.trim());
+  return appeler<{ count: number; results: Facture[] }>(`/api/v1/factures/?${parametres}`);
+};
+
+export const lireFacture = (id: string) => appeler<Facture>(`/api/v1/factures/${id}/`);
+
 export const listerCommandes = (magasin: string) =>
   appeler<{ results: Vente[] }>(
     `/api/v1/ventes/?${new URLSearchParams({ statut: "en_commande", magasin__public_id: magasin })}`,
@@ -119,8 +319,11 @@ export const reglerCommande = (vente: string, reglement: Reglement) =>
   appeler<Vente>(`/api/v1/ventes/${vente}/reglement/`, { methode: "POST", corps: { paiements: [reglement] } });
 
 /** Livre la commande ; le solde éventuel est encaissé en même temps. */
-export const livrerCommande = (vente: string, solde: Reglement | null) =>
+export const livrerCommande = (vente: string, solde: Reglement | null, credit?: { echeance: string | null }) =>
   appeler<Vente>(`/api/v1/ventes/${vente}/livrer/`, {
     methode: "POST",
-    corps: solde ? { paiements: [solde] } : {},
+    corps: {
+      ...(solde ? { paiements: [solde] } : {}),
+      ...(credit ? { a_credit: true, credit_echeance: credit.echeance } : {}),
+    },
   });

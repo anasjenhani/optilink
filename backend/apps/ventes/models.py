@@ -14,17 +14,39 @@ class TypeDocument(models.TextChoices):
     DEVIS = "devis", "Devis"
     AVOIR = "avoir", "Avoir"
     ACHAT = "achat", "Commande fournisseur"
+    RECEPTION = "reception", "Bon de réception"
+    FACTURE_ACHAT = "fac_achat", "Facture achat"
+    BON_RETOUR = "bon_retour", "Bon retour fournisseur"
+    TRANSFERT = "transfert", "Transfert de stock"
+    INVENTAIRE = "inventaire", "Inventaire"
+    SAV = "sav", "Dossier SAV"
+    BORDEREAU_PEC = "bord_pec", "Bordereau de prise en charge"
+    REGLEMENT_FOURNISSEUR = "reg_fourn", "Règlement fournisseur"
+    BON_SORTIE = "bon_sortie", "Bon de sortie"
+    DEMANDE_TRANSFERT = "dem_transf", "Demande de transfert"
 
 
 # Préfixe du numéro : M01-T2026-000001 pour un ticket, M01-F2026-000001 pour une facture,
 # M01-D2026-000001 pour un devis, M01-A2026-000001 pour un avoir, M01-C2026-000001 pour une
-# commande fournisseur. Chaque type de document a sa propre suite de numéros.
+# commande fournisseur, M01-R2026-000001 pour un bon de réception, M01-FA2026-000001 pour une
+# facture achat, M01-BR2026-000001 pour un bon retour fournisseur, M01-TR2026-000001 pour un
+# transfert de stock. Chaque type de document a sa propre suite de numéros.
 PREFIXES = {
     TypeDocument.TICKET: "T",
     TypeDocument.FACTURE: "F",
     TypeDocument.DEVIS: "D",
     TypeDocument.AVOIR: "A",
     TypeDocument.ACHAT: "C",
+    TypeDocument.RECEPTION: "R",
+    TypeDocument.FACTURE_ACHAT: "FA",
+    TypeDocument.BON_RETOUR: "BR",
+    TypeDocument.TRANSFERT: "TR",
+    TypeDocument.INVENTAIRE: "IN",
+    TypeDocument.SAV: "S",
+    TypeDocument.BORDEREAU_PEC: "BP",
+    TypeDocument.REGLEMENT_FOURNISSEUR: "RF",
+    TypeDocument.BON_SORTIE: "BS",
+    TypeDocument.DEMANDE_TRANSFERT: "DT",
 }
 
 
@@ -110,6 +132,21 @@ class Vente(ModeleDeBase):
         blank=True,
         help_text="Dernière étape saisie au suivi ; vide, l'étape vient des verres commandés.",
     )
+    # Vente à crédit : remise au client sans être soldée ; le reste se règle plus tard.
+    credit_accorde_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    credit_echeance = models.DateField(
+        "crédit à régler le", null=True, blank=True, help_text="Date promise par le client."
+    )
+    # Facture regroupant plusieurs visites, ou récapitulative du mois (clôture).
+    facture_groupee = models.ForeignKey(
+        "FactureGroupee",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="ventes",
+    )
 
     objects = ParMagasinManager()
     tous = models.Manager()
@@ -120,6 +157,11 @@ class Vente(ModeleDeBase):
         permissions = [
             ("appliquer_remise", "Peut appliquer une remise"),
             ("consulter_reporting", "Peut consulter le reporting des ventes"),
+            ("vendre_a_credit", "Peut vendre à crédit (remettre sans que le client ait soldé)"),
+            (
+                "gerer_impayes",
+                "Peut gérer les impayés, les changements de chèque et la liste noire",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -138,14 +180,18 @@ class Vente(ModeleDeBase):
 
     @property
     def regle_par_le_client(self):
-        return sum((p.montant for p in self.paiements.all()), Decimal("0"))
+        """Règlements du client qui comptent : un chèque impayé ou remplacé n'en fait pas partie."""
+        return sum(
+            (p.montant for p in self.paiements.all() if p.statut == Paiement.Statut.ENCAISSE),
+            Decimal("0"),
+        )
 
     @property
     def pris_en_charge(self):
         """Part des organismes (CNAM, assurance, mutuelle), sauf prise en charge refusée."""
         return sum(
             (
-                pec.montant
+                pec.part_organisme
                 for pec in self.prises_en_charge.all()
                 if pec.statut != PriseEnCharge.Statut.REFUSEE
             ),
@@ -288,6 +334,99 @@ class LigneDevis(models.Model):
         return f"{self.quantite} × {self.libelle}"
 
 
+class FactureGroupee(ModeleDeBase):
+    """Une facture pour plusieurs ventes : visites ou ventes comptoir d'un même client, ou
+    facture récapitulative du mois (ventes restées sans facture, établie à la clôture).
+
+    Même suite de numéros que les factures d'une vente : pas de trou ni de doublon entre elles.
+    """
+
+    class Type(models.TextChoices):
+        CLIENT = "client", "Facture groupée"
+        MENSUELLE = "mensuelle", "Facture récapitulative du mois"
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    type = models.CharField(max_length=10, choices=Type.choices, default=Type.CLIENT)
+    client = models.ForeignKey(
+        "crm.Client",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="factures_groupees",
+    )
+    # Copiés à l'émission ; saisis à la main pour une société sans fiche client.
+    client_nom = models.CharField(max_length=200, blank=True)
+    client_adresse = models.CharField(max_length=320, blank=True)
+    client_matricule_fiscal = models.CharField(max_length=30, blank=True)
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    du = models.DateField(help_text="Première vente facturée.")
+    au = models.DateField(help_text="Dernière vente facturée.")
+    devise = models.CharField(max_length=3)
+    total_ht = models.DecimalField(max_digits=14, decimal_places=3)
+    total_tva = models.DecimalField(max_digits=14, decimal_places=3)
+    total_ttc = models.DecimalField(max_digits=14, decimal_places=3)
+    timbre_fiscal = models.DecimalField(max_digits=10, decimal_places=3, default=0)
+    net_a_payer = models.DecimalField(max_digits=14, decimal_places=3)
+    mode_paiement_timbre = models.CharField(max_length=20, blank=True)
+    emise_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-cree_le"]
+        verbose_name = "facture groupée"
+        verbose_name_plural = "factures groupées"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="facture_groupee_sans_doublon"
+            )
+        ]
+
+    def __str__(self):
+        return self.numero
+
+
+class ClotureMois(ModeleDeBase):
+    """Mois clos pour un magasin : les ventes restées sans facture passent sur la facture
+    récapitulative ; plus aucune facture ne se fait ensuite sur une vente de ce mois."""
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    annee = models.PositiveSmallIntegerField()
+    mois = models.PositiveSmallIntegerField()
+    facture = models.OneToOneField(
+        FactureGroupee,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="cloture",
+        help_text="Vide si toutes les ventes du mois étaient déjà facturées.",
+    )
+    cloture_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-annee", "-mois"]
+        verbose_name = "clôture du mois"
+        verbose_name_plural = "clôtures des mois"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "mois"], name="un_mois_clos_une_fois"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.mois:02d}/{self.annee}"
+
+
 class Avoir(ModeleDeBase):
     """Avoir : crédit rendu au client sur une vente (retour d'articles, ou annulation).
 
@@ -307,6 +446,14 @@ class Avoir(ModeleDeBase):
         blank=True,
         related_name="avoirs",
         help_text="Facture corrigée, si la vente avait été facturée.",
+    )
+    facture_groupee = models.ForeignKey(
+        FactureGroupee,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="avoirs",
+        help_text="Facture groupée ou récapitulative corrigée.",
     )
     client = models.ForeignKey(
         "crm.Client", on_delete=models.PROTECT, null=True, blank=True, related_name="avoirs"
@@ -339,9 +486,126 @@ class Avoir(ModeleDeBase):
         return self.numero
 
 
+def _mesure(aide):
+    return models.DecimalField(
+        max_digits=4, decimal_places=1, null=True, blank=True, help_text=aide
+    )
+
+
+class Lunette(models.Model):
+    """Une paire de lunettes d'une visite : sa monture, ses deux verres et leurs suppléments.
+
+    La correction vient d'une ordonnance (``optique.Prescription``, chiffrée) ; la lunette garde
+    les mesures de montage prises par l'opticien (écarts et hauteurs) et l'œil directeur.
+    """
+
+    class Vision(models.TextChoices):
+        LOIN = "loin", "Loin"
+        PRES = "pres", "Près"
+        DOUBLE_FOYER = "double_foyer", "Double foyer"
+        DEGRESSIF = "degressif", "Dégressif"
+        PROGRESSIF = "progressif", "Progressif"
+
+    class Oeil(models.TextChoices):
+        DROIT = "droit", "Droit"
+        GAUCHE = "gauche", "Gauche"
+
+    vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="lunettes")
+    numero = models.PositiveSmallIntegerField(help_text="N° de la lunette dans la visite (1, 2…).")
+    vision = models.CharField(max_length=20, choices=Vision.choices, blank=True)
+    solaire = models.BooleanField(default=False, help_text="Lunette solaire (sinon optique).")
+    inadaptation = models.BooleanField(
+        default=False, help_text="Refaite parce que le client ne s'est pas adapté."
+    )
+    prescription = models.ForeignKey(
+        "optique.Prescription",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="lunettes",
+        help_text="Ordonnance d'où vient la correction ; vide pour une solaire sans correction.",
+    )
+    oeil_directeur = models.CharField(max_length=10, choices=Oeil.choices, blank=True)
+    ecart_d = _mesure("Demi-écart pupillaire de loin, œil droit (mm).")
+    ecart_g = _mesure("Demi-écart pupillaire de loin, œil gauche (mm).")
+    ecart_pres_d = _mesure("Demi-écart de près, œil droit (mm).")
+    ecart_pres_g = _mesure("Demi-écart de près, œil gauche (mm).")
+    hauteur_d = _mesure("Hauteur de montage, œil droit (mm).")
+    hauteur_g = _mesure("Hauteur de montage, œil gauche (mm).")
+    observation = models.TextField(blank=True)
+    client_absent = models.BooleanField(
+        default=False, help_text="Mesures prises sans le client (reprise d'une ancienne lunette)."
+    )
+
+    class Meta:
+        ordering = ["vente", "numero"]
+        verbose_name = "lunette"
+        constraints = [
+            models.UniqueConstraint(fields=["vente", "numero"], name="lunette_numero_unique")
+        ]
+
+    def __str__(self):
+        return f"{self.vente.numero}/{self.numero}"
+
+
+class Lentilles(models.Model):
+    """Lentilles de contact d'une visite : celle de l'œil droit et celle de l'œil gauche.
+
+    La correction (avec rayon et diamètre) vient d'une ordonnance de lentilles du client.
+    """
+
+    vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="lentilles")
+    numero = models.PositiveSmallIntegerField(help_text="N° dans la visite (1, 2…).")
+    prescription = models.ForeignKey(
+        "optique.Prescription",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="lentilles",
+        help_text="Ordonnance de lentilles d'où vient la correction.",
+    )
+    observation = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["vente", "numero"]
+        verbose_name = "lentilles"
+        verbose_name_plural = "lentilles"
+        constraints = [
+            models.UniqueConstraint(fields=["vente", "numero"], name="lentilles_numero_unique")
+        ]
+
+    def __str__(self):
+        return f"{self.vente.numero}/L{self.numero}"
+
+
 class LigneVente(models.Model):
+    class Role(models.TextChoices):
+        MONTURE = "monture", "Monture"
+        VERRE_D = "verre_d", "Verre droit"
+        VERRE_G = "verre_g", "Verre gauche"
+        SUPPLEMENT_D = "supplement_d", "Supplément verre droit"
+        SUPPLEMENT_G = "supplement_g", "Supplément verre gauche"
+        LENTILLE_D = "lentille_d", "Lentille droite"
+        LENTILLE_G = "lentille_g", "Lentille gauche"
+
     vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="lignes")
     article = models.ForeignKey("stock.Article", on_delete=models.PROTECT, related_name="+")
+    lunette = models.ForeignKey(
+        Lunette, on_delete=models.PROTECT, null=True, blank=True, related_name="lignes"
+    )
+    lentilles = models.ForeignKey(
+        Lentilles, on_delete=models.PROTECT, null=True, blank=True, related_name="lignes"
+    )
+    role = models.CharField(
+        max_length=20,
+        choices=Role.choices,
+        blank=True,
+        help_text="Place dans la lunette ou les lentilles.",
+    )
+    numero_lot = models.CharField(
+        "n° de lot", max_length=40, blank=True, help_text="Lentilles, produits : traçabilité."
+    )
+    date_peremption = models.DateField("date de péremption", null=True, blank=True)
     libelle = models.CharField(max_length=200)
     quantite = models.PositiveIntegerField()
     prix_unitaire_ttc = models.DecimalField(max_digits=14, decimal_places=3)
@@ -381,6 +645,16 @@ class Paiement(models.Model):
         CARTE = "carte", "Carte bancaire"
         ESPECES = "especes", "Espèces"
         CHEQUE = "cheque", "Chèque"
+        VIREMENT = "virement", "Virement"
+        TRAITE = "traite", "Traite"
+
+    class Statut(models.TextChoices):
+        ENCAISSE = "encaisse", "Encaissé"
+        IMPAYE = "impaye", "Impayé"
+        REMPLACE = "remplace", "Remplacé"
+
+    # Chèques et traites : remis à la banque à leur échéance, ils peuvent revenir impayés.
+    A_ECHEANCE = (Mode.CHEQUE, Mode.TRAITE)
 
     vente = models.ForeignKey(Vente, on_delete=models.PROTECT, related_name="paiements")
     mode = models.CharField(max_length=20, choices=Mode.choices)
@@ -388,6 +662,24 @@ class Paiement(models.Model):
     recu_le = models.DateTimeField(default=timezone.now)
     recu_par = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, related_name="+"
+    )
+    reference = models.CharField(
+        max_length=60, blank=True, help_text="N° du chèque, de la traite ou du virement."
+    )
+    banque = models.CharField(max_length=100, blank=True)
+    echeance = models.DateField(
+        "échéance", null=True, blank=True, help_text="Chèque ou traite : à remettre à la banque le."
+    )
+    statut = models.CharField(max_length=10, choices=Statut.choices, default=Statut.ENCAISSE)
+    impaye_le = models.DateField(null=True, blank=True)
+    motif_impaye = models.CharField("motif de l'impayé", max_length=200, blank=True)
+    remplace_par = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="remplace",
+        help_text="Changement de chèque : le règlement qui a pris sa place.",
     )
 
     class Meta:
@@ -437,6 +729,22 @@ class PriseEnCharge(ModeleDeBase):
     saisie_par = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
     )
+    bordereau = models.ForeignKey(
+        "BordereauPec",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="prises_en_charge",
+    )
+    montant_regle = models.DecimalField(
+        "montant réglé",
+        max_digits=14,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        help_text="Ce que l'organisme a payé ; l'écart avec le montant revient au client.",
+    )
+    motif_rejet = models.CharField("motif du rejet", max_length=200, blank=True)
 
     class Meta:
         ordering = ["cree_le"]
@@ -447,6 +755,166 @@ class PriseEnCharge(ModeleDeBase):
         return f"{self.organisme} : {self.montant}"
 
     @property
+    def part_organisme(self):
+        """Ce qui reste à la charge de l'organisme : rien si refusée, le réglé s'il a moins payé."""
+        if self.statut == self.Statut.REFUSEE:
+            return Decimal("0")
+        if self.statut == self.Statut.REGLEE and self.montant_regle is not None:
+            return self.montant_regle
+        return self.montant
+
+    @property
     def magasin_id(self):
         """Pour les droits par magasin : celui de la vente."""
         return self.vente.magasin_id
+
+
+class BordereauPec(ModeleDeBase):
+    """Envoi groupé de prises en charge à un organisme (CNAM, assurance, convention).
+
+    On le prépare avec les prises en charge d'un magasin pour un organisme, on l'envoie, puis on
+    saisit le règlement : chaque prise en charge est réglée en entier, en partie ou rejetée. Ce
+    que l'organisme ne paie pas revient à la charge du client.
+    """
+
+    class Statut(models.TextChoices):
+        PREPARATION = "preparation", "En préparation"
+        ENVOYE = "envoye", "Envoyé"
+        REGLE = "regle", "Réglé"
+
+    class Mode(models.TextChoices):
+        VIREMENT = "virement", "Virement"
+        CHEQUE = "cheque", "Chèque"
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    organisme = models.ForeignKey("crm.Organisme", on_delete=models.PROTECT, related_name="+")
+    statut = models.CharField(max_length=12, choices=Statut.choices, default=Statut.PREPARATION)
+    envoye_le = models.DateField("envoyé le", null=True, blank=True)
+    regle_le = models.DateField("réglé le", null=True, blank=True)
+    mode_reglement = models.CharField(
+        "mode de règlement", max_length=10, choices=Mode.choices, blank=True
+    )
+    reference_reglement = models.CharField(
+        "référence du règlement",
+        max_length=60,
+        blank=True,
+        help_text="N° de chèque ou de virement.",
+    )
+    observation = models.CharField(max_length=300, blank=True)
+    cree_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-cree_le"]
+        verbose_name = "bordereau de prise en charge"
+        verbose_name_plural = "bordereaux de prise en charge"
+
+    def __str__(self):
+        return self.numero
+
+
+class DossierSav(ModeleDeBase):
+    """Service après-vente : ce qu'un client rapporte (lunette cassée, réglage, défaut…).
+
+    Le dossier suit des étapes, du dépôt au magasin jusqu'au retour chez le client ; chaque
+    changement d'étape est gardé dans l'historique. Une réparation payante s'encaisse à part,
+    comme une vente au comptoir.
+    """
+
+    class Motif(models.TextChoices):
+        CASSE = "casse", "Casse"
+        REGLAGE = "reglage", "Réglage, ajustage"
+        DEFAUT = "defaut", "Défaut de fabrication"
+        ADAPTATION = "adaptation", "Non-adaptation aux verres"
+        AUTRE = "autre", "Autre"
+
+    class Etape(models.TextChoices):
+        RECU = "recu", "Reçu au magasin"
+        ATELIER = "atelier", "En réparation à l'atelier"
+        FOURNISSEUR = "fournisseur", "Envoyé au fournisseur"
+        PRET = "pret", "Prêt à rendre"
+        RENDU = "rendu", "Rendu au client"
+        ANNULE = "annule", "Annulé"
+
+    OUVERTES = (Etape.RECU, Etape.ATELIER, Etape.FOURNISSEUR, Etape.PRET)
+    # Étapes où le dossier attend un retour : passé la date prévue, il est en retard.
+    EN_ATTENTE = (Etape.RECU, Etape.ATELIER, Etape.FOURNISSEUR)
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    client = models.ForeignKey("crm.Client", on_delete=models.PROTECT, related_name="dossiers_sav")
+    vente = models.ForeignKey(
+        Vente,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="dossiers_sav",
+        help_text="Visite ou vente d'origine de l'article.",
+    )
+    article = models.ForeignKey(
+        "stock.Article", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    designation = models.CharField(
+        "désignation", max_length=200, help_text="Ce que le client rapporte."
+    )
+    motif = models.CharField(max_length=12, choices=Motif.choices)
+    description = models.TextField(blank=True, help_text="Le problème constaté.")
+    sous_garantie = models.BooleanField(default=False)
+    fournisseur = models.ForeignKey(
+        "achats.Fournisseur", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    etape = models.CharField(max_length=12, choices=Etape.choices, default=Etape.RECU)
+    retour_prevu_le = models.DateField("retour prévu le", null=True, blank=True)
+    solution = models.CharField(max_length=300, blank=True, help_text="Ce qui a été fait.")
+    cree_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-cree_le"]
+        verbose_name = "dossier SAV"
+        verbose_name_plural = "dossiers SAV"
+
+    def __str__(self):
+        return self.numero
+
+    @property
+    def est_ouvert(self):
+        return self.etape in self.OUVERTES
+
+    def en_retard(self, aujourdhui):
+        return (
+            self.etape in self.EN_ATTENTE
+            and self.retour_prevu_le is not None
+            and self.retour_prevu_le < aujourdhui
+        )
+
+
+class EvenementSav(models.Model):
+    """Une étape franchie par un dossier SAV, avec son commentaire."""
+
+    dossier = models.ForeignKey(DossierSav, on_delete=models.CASCADE, related_name="evenements")
+    etape = models.CharField(max_length=12, choices=DossierSav.Etape.choices)
+    commentaire = models.CharField(max_length=300, blank=True)
+    le = models.DateTimeField(default=timezone.now)
+    par = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+
+    class Meta:
+        ordering = ["le", "pk"]
+        verbose_name = "étape SAV"
+        verbose_name_plural = "étapes SAV"
+
+    def __str__(self):
+        return f"{self.dossier} : {self.get_etape_display()}"

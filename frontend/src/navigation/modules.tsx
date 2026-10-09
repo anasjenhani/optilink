@@ -3,16 +3,20 @@ import AddBox from "@mui/icons-material/AddBox";
 import AdminPanelSettings from "@mui/icons-material/AdminPanelSettings";
 import ArrowDownward from "@mui/icons-material/ArrowDownward";
 import ArrowUpward from "@mui/icons-material/ArrowUpward";
+import AssignmentReturn from "@mui/icons-material/AssignmentReturn";
 import Badge from "@mui/icons-material/Badge";
 import BeachAccess from "@mui/icons-material/BeachAccess";
+import Block from "@mui/icons-material/Block";
 import Build from "@mui/icons-material/Build";
 import CalendarMonth from "@mui/icons-material/CalendarMonth";
 import CheckCircle from "@mui/icons-material/CheckCircle";
 import CompareArrows from "@mui/icons-material/CompareArrows";
 import CreditCard from "@mui/icons-material/CreditCard";
+import DeleteSweep from "@mui/icons-material/DeleteSweep";
 import Description from "@mui/icons-material/Description";
 import EditNote from "@mui/icons-material/EditNote";
 import EventRepeat from "@mui/icons-material/EventRepeat";
+import Factory from "@mui/icons-material/Factory";
 import FactCheck from "@mui/icons-material/FactCheck";
 import FilterAlt from "@mui/icons-material/FilterAlt";
 import FindInPage from "@mui/icons-material/FindInPage";
@@ -21,12 +25,15 @@ import History from "@mui/icons-material/History";
 import Inventory from "@mui/icons-material/Inventory";
 import Inventory2 from "@mui/icons-material/Inventory2";
 import ListAlt from "@mui/icons-material/ListAlt";
+import LocalOffer from "@mui/icons-material/LocalOffer";
 import LocalShipping from "@mui/icons-material/LocalShipping";
 import Lock from "@mui/icons-material/Lock";
 import LockOpen from "@mui/icons-material/LockOpen";
 import MonitorHeart from "@mui/icons-material/MonitorHeart";
 import MoveDown from "@mui/icons-material/MoveDown";
+import MoveToInbox from "@mui/icons-material/MoveToInbox";
 import Payments from "@mui/icons-material/Payments";
+import Percent from "@mui/icons-material/Percent";
 import People from "@mui/icons-material/People";
 import PersonAddAlt from "@mui/icons-material/PersonAddAlt";
 import PersonSearch from "@mui/icons-material/PersonSearch";
@@ -43,11 +50,13 @@ import Store from "@mui/icons-material/Store";
 import SwapHoriz from "@mui/icons-material/SwapHoriz";
 import Sync from "@mui/icons-material/Sync";
 import TableChart from "@mui/icons-material/TableChart";
+import TrendingUp from "@mui/icons-material/TrendingUp";
 import Today from "@mui/icons-material/Today";
 import TrackChanges from "@mui/icons-material/TrackChanges";
 import Undo from "@mui/icons-material/Undo";
 import UploadFile from "@mui/icons-material/UploadFile";
 import Visibility from "@mui/icons-material/Visibility";
+import VolunteerActivism from "@mui/icons-material/VolunteerActivism";
 import Widgets from "@mui/icons-material/Widgets";
 import type { SvgIconComponent } from "@mui/icons-material";
 import type { ReactNode } from "react";
@@ -56,18 +65,39 @@ import { peut, type EtatSession } from "../api/auth";
 import { AccesSecurite } from "../pages/AccesSecurite";
 import { Accueil } from "../pages/Accueil";
 import { Avoirs } from "../pages/Avoirs";
+import { BonReception } from "../pages/BonReception";
+import { BonRetour, ListeBonsRetour } from "../pages/BonRetour";
 import { Caisse } from "../pages/Caisse";
 import { Catalogue } from "../pages/Catalogue";
 import { Clients } from "../pages/Clients";
+import { CassesVerres } from "../pages/CassesVerres";
 import { Commandes } from "../pages/Commandes";
+import { Corbeille } from "../pages/Corbeille";
+import { CreditClients } from "../pages/CreditClients";
+import { BordereauxPec } from "../pages/BordereauxPec";
 import { PrisesEnCharge } from "../pages/PrisesEnCharge";
+import { Sav } from "../pages/Sav";
+import { Recus } from "../pages/Recus";
+import { ReglementsFournisseurs } from "../pages/ReglementsFournisseurs";
+import { ResteVendeur } from "../pages/ResteVendeur";
 import { Devis } from "../pages/Devis";
+import { ClotureMois, FacturationGroupee } from "../pages/FacturationGroupee";
 import { Factures } from "../pages/Factures";
+import { BonSortie, DemandesTransfert, Reassort, StockALaDate } from "../pages/SortiesStock";
+import { Statistiques } from "../pages/Statistiques";
+import { Fournisseurs } from "../pages/Fournisseurs";
 import { Imports } from "../pages/Imports";
 import { Journee } from "../pages/Journee";
+import { FactureAchat } from "../pages/FactureAchat";
+import { ListeFacturesAchat } from "../pages/ListeFacturesAchat";
+import { ListeReceptions } from "../pages/ListeReceptions";
 import { Magasins } from "../pages/Magasins";
+import { MouvementsStock } from "../pages/MouvementsStock";
 import { RessourcesHumaines } from "../pages/RessourcesHumaines";
 import { Suivi } from "../pages/Suivi";
+import { ListeTransferts, TransfertStock } from "../pages/Transferts";
+import { Inventaire } from "../pages/Inventaire";
+import { ConsulterVisite, HistoriqueVisites, Visites } from "../pages/Visites";
 import { Tresorerie } from "../pages/Tresorerie";
 import { VenteComptoir } from "../pages/VenteComptoir";
 import { Verres } from "../pages/Verres";
@@ -80,6 +110,8 @@ export type Tuile = {
   couleur: string;
   ecran?: () => ReactNode;
   aVenir?: boolean;
+  /** Sous-onglet du module (Administration : RH, Réseau, Sécurité… comme dans /admin/). */
+  categorie?: string;
 };
 
 export type Module = { id: string; libelle: string; tuiles: Tuile[] };
@@ -128,6 +160,7 @@ export function modulesPour(session: EtatSession): Module[] {
   const voirVentes = a("ventes.view_vente");
   const voirClients = a("crm.view_client");
   const voirCatalogue = a("stock.view_article");
+  const declarerCasse = a("achats.add_casseverre");
   const droitsTresorerie = {
     cloturer: a("tresorerie.add_cloturecaisse"),
     depenses: a("tresorerie.add_depensecaisse"),
@@ -137,17 +170,28 @@ export function modulesPour(session: EtatSession): Module[] {
     banque: a("tresorerie.view_operationtresorerie"),
     rapprocher: a("tresorerie.rapprocher_operationtresorerie"),
     gererComptes: a("tresorerie.add_comptetresorerie"),
+    modifierComptes: a("tresorerie.change_comptetresorerie"),
   };
-  const tresorerie = (onglet: keyof typeof droitsTresorerie) =>
-    si(droitsTresorerie[onglet], () => <Tresorerie droits={droitsTresorerie} ongletInitial={ONGLETS_TRESORERIE[onglet]} />);
+  const tresorerie = (onglet: keyof typeof ONGLETS_TRESORERIE) =>
+    si(droitsTresorerie[onglet], () => (
+      <Tresorerie droits={droitsTresorerie} ongletInitial={ONGLETS_TRESORERIE[onglet]} />
+    ));
+  const droitsCredit = { regler: a("ventes.add_vente"), gerer: a("ventes.gerer_impayes") };
+  const droitsReglementsFournisseurs = {
+    regler: a("achats.add_reglementfournisseur"),
+    debiter: a("achats.change_reglementfournisseur"),
+    annuler: a("achats.delete_reglementfournisseur"),
+  };
   const droitsRh = {
     voirEmployes: a("rh.view_employe"),
     creerEmploye: a("rh.add_employe"),
+    modifierEmploye: a("rh.change_employe"),
     voirPresence: a("rh.view_pointage"),
     pointer: a("rh.add_pointage"),
     voirConges: a("rh.view_demandeconge"),
     saisirConge: a("rh.add_demandeconge") && a("rh.view_employe"),
     deciderConge: a("rh.decider_demandeconge"),
+    annulerConge: a("rh.add_demandeconge"),
     voirAcomptes: a("rh.view_acompte"),
     demanderAcompte: a("rh.add_acompte"),
     deciderAcompte: a("rh.decider_acompte"),
@@ -166,7 +210,11 @@ export function modulesPour(session: EtatSession): Module[] {
     />
   ));
   const stock = (famille: "monture" | "verre" | "lentille" | "divers") =>
-    si(voirCatalogue, () => <Catalogue familleInitiale={famille} />);
+    si(voirCatalogue, () => <Catalogue familleInitiale={famille} importer={imports.catalogue} fiche={droitsFiche} />);
+  const droitsFiche = {
+    creer: a("stock.add_article") && a("stock.add_prixarticle"),
+    modifier: a("stock.change_article") && a("stock.add_prixarticle") && a("stock.change_prixarticle"),
+  };
   const imports = {
     catalogue: a("stock.add_article") && a("stock.change_prixarticle"),
     stock: a("stock.add_mouvementstock"),
@@ -174,15 +222,32 @@ export function modulesPour(session: EtatSession): Module[] {
   };
 
   const comptoir = si(vendre, () =>
-            voirClients ? <VenteComptoir creerClient={a("crm.add_client")} /> : <Caisse />,
-          );
+    voirClients ? (
+      <VenteComptoir
+        creerClient={a("crm.add_client")}
+        droits={{
+          remise: a("ventes.appliquer_remise"),
+          voirOrdonnances: a("optique.view_prescription"),
+          saisirOrdonnance: a("optique.add_prescription"),
+        }}
+      />
+    ) : (
+      <Caisse />
+    ),
+  );
 
   const modules: Module[] = [
     {
       id: "vente",
       libelle: "Vente",
       tuiles: [
-        { id: "recherche-verre", libelle: "Recherche Verre", icone: Visibility, couleur: COULEURS.violet, ecran: stock("verre") },
+        {
+          id: "recherche-verre",
+          libelle: "Recherche Verre",
+          icone: Visibility,
+          couleur: COULEURS.violet,
+          ecran: stock("verre"),
+        },
         {
           id: "recherche-monture",
           libelle: "Recherche Monture",
@@ -216,17 +281,24 @@ export function modulesPour(session: EtatSession): Module[] {
                 voirOrdonnances: a("optique.view_prescription"),
                 changerStatut: a("ventes.change_devis"),
                 encaisser: vendre,
+                consulter: a("ventes.view_devis"),
               }}
             />
           )),
         },
-        { id: "clients", libelle: "Clients et ordonnances", icone: People, couleur: COULEURS.turquoise, ecran: clients },
+        {
+          id: "clients",
+          libelle: "Clients et ordonnances",
+          icone: People,
+          couleur: COULEURS.turquoise,
+          ecran: clients,
+        },
         {
           id: "import-clients",
           libelle: "Import Clients",
           icone: UploadFile,
           couleur: COULEURS.bleu,
-          ecran: si(imports.clients, () => <Imports droits={{ catalogue: false, stock: false, clients: true }} />),
+          ecran: si(imports.clients, () => <Imports types={["clients"]} />),
         },
         {
           id: "commandes",
@@ -242,9 +314,27 @@ export function modulesPour(session: EtatSession): Module[] {
           couleur: COULEURS.turquoise,
           ecran: comptoir,
         },
-        { id: "journee", libelle: "Journée de Vente", icone: Today, couleur: COULEURS.vert, ecran: si(voirVentes, () => <Journee />) },
-        aVenir("liste-visites", "Liste Visites", ListAlt, COULEURS.jaune),
-        aVenir("visites-filtre-facture", "Visites Filtre Facture", FilterAlt, COULEURS.jaune),
+        {
+          id: "journee",
+          libelle: "Journée de Vente",
+          icone: Today,
+          couleur: COULEURS.vert,
+          ecran: si(voirVentes, () => <Journee />),
+        },
+        {
+          id: "liste-visites",
+          libelle: "Liste Visites",
+          icone: ListAlt,
+          couleur: COULEURS.jaune,
+          ecran: si(voirVentes, () => <Visites casse={declarerCasse} />),
+        },
+        {
+          id: "visites-filtre-facture",
+          libelle: "Visites Filtre Facture",
+          icone: FilterAlt,
+          couleur: COULEURS.jaune,
+          ecran: si(voirVentes, () => <Visites casse={declarerCasse} factureeInitiale="false" />),
+        },
         {
           id: "suivi-visite",
           libelle: "Suivi Visite",
@@ -252,40 +342,94 @@ export function modulesPour(session: EtatSession): Module[] {
           couleur: COULEURS.orange,
           ecran: si(voirVentes, () => <Suivi modifier={vendre} />),
         },
-        aVenir("consulter-visite", "Consulter Visite", FindInPage, COULEURS.rouge),
+        {
+          id: "consulter-visite",
+          libelle: "Consulter Visite",
+          icone: FindInPage,
+          couleur: COULEURS.rouge,
+          ecran: si(voirVentes, () => <ConsulterVisite casse={declarerCasse} />),
+        },
         aVenir("lunettes-vendues", "Lunettes Vendues", Sell, COULEURS.turquoise),
-        aVenir("liste-recus", "Liste Reçus", ReceiptLong, COULEURS.jaune),
+        {
+          id: "liste-recus",
+          libelle: "Liste Reçus",
+          icone: ReceiptLong,
+          couleur: COULEURS.jaune,
+          ecran: si(voirVentes, () => <Recus />),
+        },
         aVenir("creation-produit", "Demande Création Produit", AddBox, COULEURS.bleu),
         aVenir("prospect", "Prospect Client", PersonSearch, COULEURS.rouge),
         aVenir("code-barre", "Code à barres", QrCode2, COULEURS.bleu),
-        aVenir("historique-visites", "Historique Visites", History, COULEURS.rouge),
-        aVenir("casse-verre", "Casse Verre", Build, COULEURS.vert),
+        {
+          id: "historique-visites",
+          libelle: "Historique Visites",
+          icone: History,
+          couleur: COULEURS.rouge,
+          ecran: si(voirVentes && voirClients, () => <HistoriqueVisites casse={declarerCasse} />),
+        },
+        {
+          id: "casse-verre",
+          libelle: "Casse Verre",
+          icone: Build,
+          couleur: COULEURS.vert,
+          ecran: si(a("achats.view_casseverre"), () => <CassesVerres declarer={declarerCasse} />),
+        },
         aVenir("code-barre-marque", "Code à barres Marque", QrCodeScanner, COULEURS.bleu),
         aVenir("visites-stock", "Visites de Stock", Inventory, COULEURS.brun),
-        aVenir("reste-vendeur", "Reste par Vendeur", Payments, COULEURS.vert),
+        {
+          id: "reste-vendeur",
+          libelle: "Reste par Vendeur",
+          icone: Payments,
+          couleur: COULEURS.vert,
+          ecran: si(voirVentes, () => <ResteVendeur />),
+        },
       ],
     },
     {
       id: "stock",
       libelle: "Stock",
       tuiles: [
-        { id: "stock-monture", libelle: "Stock Monture", icone: Inventory2, couleur: COULEURS.jaune, ecran: stock("monture") },
-        { id: "stock-lentille", libelle: "Stock Lentille", icone: Inventory2, couleur: COULEURS.jaune, ecran: stock("lentille") },
-        { id: "stock-article", libelle: "Stock Article", icone: Inventory2, couleur: COULEURS.jaune, ecran: stock("divers") },
-        { id: "stock-verre", libelle: "Stock Verre", icone: Inventory2, couleur: COULEURS.jaune, ecran: stock("verre") },
+        {
+          id: "stock-monture",
+          libelle: "Stock Monture",
+          icone: Inventory2,
+          couleur: COULEURS.jaune,
+          ecran: stock("monture"),
+        },
+        {
+          id: "stock-lentille",
+          libelle: "Stock Lentille",
+          icone: Inventory2,
+          couleur: COULEURS.jaune,
+          ecran: stock("lentille"),
+        },
+        {
+          id: "stock-article",
+          libelle: "Stock Article",
+          icone: Inventory2,
+          couleur: COULEURS.jaune,
+          ecran: stock("divers"),
+        },
+        {
+          id: "stock-verre",
+          libelle: "Stock Verre",
+          icone: Inventory2,
+          couleur: COULEURS.jaune,
+          ecran: stock("verre"),
+        },
         {
           id: "bon-entree",
           libelle: "Bon Entrée",
           icone: ArrowDownward,
           couleur: COULEURS.rouge,
-          ecran: si(imports.stock, () => <Imports droits={{ catalogue: false, stock: true }} />),
+          ecran: si(imports.stock, () => <Imports types={["stock"]} />),
         },
         {
           id: "import-catalogue",
           libelle: "Import Catalogue",
           icone: UploadFile,
           couleur: COULEURS.bleu,
-          ecran: si(imports.catalogue, () => <Imports droits={{ catalogue: true, stock: false }} />),
+          ecran: si(imports.catalogue, () => <Imports types={["catalogue"]} />),
         },
         {
           id: "commande-verres",
@@ -294,18 +438,150 @@ export function modulesPour(session: EtatSession): Module[] {
           couleur: COULEURS.violet,
           ecran: si(a("achats.add_commandefournisseur"), () => <Verres />),
         },
-        aVenir("inventaire", "Inventaire", Sync, COULEURS.bleu),
-        aVenir("stock-date", "Stock à la Date", CalendarMonth, COULEURS.vert),
+        {
+          id: "bon-reception",
+          libelle: "Bon de Réception",
+          icone: MoveToInbox,
+          couleur: COULEURS.vert,
+          ecran: si(a("achats.add_bonreception") && a("achats.view_fournisseur"), () => (
+            <BonReception droitsFournisseurs={{ creer: a("achats.add_fournisseur"), modifier: false }} />
+          )),
+        },
+        {
+          id: "liste-receptions",
+          libelle: "Liste des Bons de Réception",
+          icone: ListAlt,
+          couleur: COULEURS.brun,
+          ecran: si(a("achats.view_bonreception"), () => <ListeReceptions importer={a("achats.add_bonreception")} />),
+        },
+        {
+          id: "facture-achat",
+          libelle: "Facture Achat",
+          icone: RequestQuote,
+          couleur: COULEURS.violet,
+          ecran: si(a("achats.add_factureachat") && a("achats.view_fournisseur"), () => <FactureAchat />),
+        },
+        {
+          id: "liste-factures-achat",
+          libelle: "Liste des Factures Achat",
+          icone: ReceiptLong,
+          couleur: COULEURS.brun,
+          ecran: si(a("achats.view_factureachat"), () => <ListeFacturesAchat />),
+        },
+        {
+          id: "bon-retour",
+          libelle: "Bon Retour Fournisseur",
+          icone: AssignmentReturn,
+          couleur: COULEURS.rouge,
+          ecran: si(a("achats.add_bonretour") && a("achats.view_fournisseur"), () => <BonRetour />),
+        },
+        {
+          id: "liste-bons-retour",
+          libelle: "Liste des Bons Retour",
+          icone: ListAlt,
+          couleur: COULEURS.brun,
+          ecran: si(a("achats.view_bonretour"), () => <ListeBonsRetour />),
+        },
+        {
+          id: "bon-transfert",
+          libelle: "Bon Transfert",
+          icone: SwapHoriz,
+          couleur: COULEURS.bleu,
+          ecran: si(a("stock.add_transfertstock"), () => <TransfertStock />),
+        },
+        {
+          id: "liste-transferts",
+          libelle: "Liste des Transferts",
+          icone: CompareArrows,
+          couleur: COULEURS.bleu,
+          ecran: si(a("stock.view_transfertstock"), () => (
+            <ListeTransferts recevoir={a("stock.change_transfertstock")} annuler={a("stock.add_transfertstock")} />
+          )),
+        },
+        {
+          id: "fournisseurs",
+          libelle: "Fournisseurs",
+          icone: Factory,
+          couleur: COULEURS.bleu,
+          ecran: si(a("achats.view_fournisseur"), () => (
+            <Fournisseurs droits={{ creer: a("achats.add_fournisseur"), modifier: a("achats.change_fournisseur") }} />
+          )),
+        },
+        {
+          id: "inventaire",
+          libelle: "Inventaire",
+          icone: Sync,
+          couleur: COULEURS.bleu,
+          ecran: si(a("stock.view_inventaire"), () => (
+            <Inventaire
+              droits={{
+                ouvrir: a("stock.add_inventaire"),
+                compter: a("stock.change_inventaire"),
+                valider: a("stock.valider_inventaire"),
+              }}
+            />
+          )),
+        },
+        {
+          id: "stock-date",
+          libelle: "Stock à la Date",
+          icone: CalendarMonth,
+          couleur: COULEURS.vert,
+          ecran: si(a("stock.view_article"), () => <StockALaDate />),
+        },
         aVenir("config-stock", "Config Stock", Widgets, COULEURS.brun),
         aVenir("stock-depense", "Stock Article Dépense", Inventory2, COULEURS.jaune),
-        aVenir("mouvements", "Mouvements de Stock", TableChart, COULEURS.brun),
+        {
+          id: "mouvements",
+          libelle: "Mouvements de Stock",
+          icone: TableChart,
+          couleur: COULEURS.brun,
+          ecran: si(a("stock.view_mouvementstock"), () => <MouvementsStock />),
+        },
         aVenir("stock-total", "Stock Total", Widgets, COULEURS.orange),
-        aVenir("bon-transfert", "Bon Transfert", SwapHoriz, COULEURS.bleu),
-        aVenir("bon-sortie", "Bon Sortie", ArrowUpward, COULEURS.vert),
-        aVenir("demande-transfert", "Demande Transfert", CompareArrows, COULEURS.bleu),
-        aVenir("demande-alimentation", "Demande Alimentation", MoveDown, COULEURS.bleu),
-        aVenir("bon-sortie-casse", "Bon Sortie Casse", ArrowUpward, COULEURS.vert),
-        aVenir("reassort", "Réassort", EventRepeat, COULEURS.orange),
+        {
+          id: "bon-sortie",
+          libelle: "Bon Sortie",
+          icone: ArrowUpward,
+          couleur: COULEURS.vert,
+          ecran: si(a("stock.add_bonsortie"), () => <BonSortie />),
+        },
+        {
+          id: "demande-transfert",
+          libelle: "Demande Transfert",
+          icone: CompareArrows,
+          couleur: COULEURS.bleu,
+          ecran: si(a("stock.view_demandetransfert"), () => (
+            <DemandesTransfert demander={a("stock.add_demandetransfert")} servir={a("stock.change_demandetransfert")} />
+          )),
+        },
+        {
+          id: "demande-alimentation",
+          libelle: "Demande Alimentation",
+          icone: MoveDown,
+          couleur: COULEURS.bleu,
+          ecran: si(a("stock.view_demandetransfert"), () => (
+            <DemandesTransfert
+              alimentation
+              demander={a("stock.add_demandetransfert")}
+              servir={a("stock.change_demandetransfert")}
+            />
+          )),
+        },
+        {
+          id: "bon-sortie-casse",
+          libelle: "Bon Sortie Casse",
+          icone: ArrowUpward,
+          couleur: COULEURS.vert,
+          ecran: si(a("stock.add_bonsortie"), () => <BonSortie casse />),
+        },
+        {
+          id: "reassort",
+          libelle: "Réassort",
+          icone: EventRepeat,
+          couleur: COULEURS.orange,
+          ecran: si(a("stock.add_demandetransfert"), () => <Reassort />),
+        },
         aVenir("comparaison", "Comparaison", CompareArrows, COULEURS.gris),
       ],
     },
@@ -325,7 +601,9 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Remboursement Client",
           icone: Undo,
           couleur: COULEURS.vert,
-          ecran: si(a("ventes.add_avoir"), () => <Avoirs />),
+          ecran: si(a("ventes.add_avoir") || a("ventes.view_avoir"), () => (
+            <Avoirs emettre={a("ventes.add_avoir")} consulter={a("ventes.view_avoir")} />
+          )),
         },
         {
           id: "avance-personnel",
@@ -334,9 +612,27 @@ export function modulesPour(session: EtatSession): Module[] {
           couleur: COULEURS.bleu,
           ecran: si(droitsRh.voirAcomptes, () => <RessourcesHumaines droits={droitsRh} ongletInitial="acomptes" />),
         },
-        aVenir("vente-credit", "Liste Vente à Crédit", ListAlt, COULEURS.brun),
-        aVenir("liste-reglements", "Liste Règlements", ReceiptLong, COULEURS.gris),
-        aVenir("changement-cheques", "Changement Chèques", SwapHoriz, COULEURS.brun),
+        {
+          id: "vente-credit",
+          libelle: "Liste Vente à Crédit",
+          icone: ListAlt,
+          couleur: COULEURS.brun,
+          ecran: si(a("ventes.view_vente"), () => <CreditClients droits={droitsCredit} ongletInitial="ventes" />),
+        },
+        {
+          id: "liste-reglements",
+          libelle: "Liste Règlements",
+          icone: ReceiptLong,
+          couleur: COULEURS.gris,
+          ecran: si(voirVentes, () => <Recus />),
+        },
+        {
+          id: "changement-cheques",
+          libelle: "Changement Chèques",
+          icone: SwapHoriz,
+          couleur: COULEURS.brun,
+          ecran: si(a("ventes.gerer_impayes"), () => <CreditClients droits={droitsCredit} ongletInitial="cheques" />),
+        },
         {
           id: "prises-en-charge",
           libelle: "Prises en Charge (CNAM)",
@@ -346,24 +642,134 @@ export function modulesPour(session: EtatSession): Module[] {
             <PrisesEnCharge modifier={a("ventes.change_priseencharge")} />
           )),
         },
-        aVenir("reglement-credit", "Règlement Crédit", CreditCard, COULEURS.brun),
+        {
+          id: "bordereaux-pec",
+          libelle: "Bordereaux CNAM / Conventions",
+          icone: FactCheck,
+          couleur: COULEURS.orange,
+          ecran: si(a("ventes.view_bordereaupec"), () => (
+            <BordereauxPec preparer={a("ventes.add_bordereaupec")} regler={a("ventes.change_bordereaupec")} />
+          )),
+        },
+        {
+          id: "reglement-credit",
+          libelle: "Règlement Crédit",
+          icone: CreditCard,
+          couleur: COULEURS.brun,
+          ecran: si(a("ventes.add_vente"), () => <CreditClients droits={droitsCredit} ongletInitial="ventes" />),
+        },
         aVenir("transfert-solde", "Transfert Solde", CompareArrows, COULEURS.gris),
-        aVenir("impaye", "Impayé Client", ReportProblem, COULEURS.rouge),
-        aVenir("reglement-impaye", "Règlement Impayé", ReportProblem, COULEURS.rouge),
+        {
+          id: "impaye",
+          libelle: "Impayé Client",
+          icone: ReportProblem,
+          couleur: COULEURS.rouge,
+          ecran: si(a("ventes.view_vente"), () => <CreditClients droits={droitsCredit} ongletInitial="impayes" />),
+        },
+        {
+          id: "liste-noire",
+          libelle: "Liste Noire",
+          icone: Block,
+          couleur: COULEURS.rouge,
+          ecran: si(a("ventes.gerer_impayes"), () => (
+            <CreditClients droits={droitsCredit} ongletInitial="liste-noire" />
+          )),
+        },
+      ],
+    },
+    {
+      id: "reglement-fournisseur",
+      libelle: "Règlement Fournisseur",
+      tuiles: [
+        {
+          id: "nouveau-reglement-fournisseur",
+          libelle: "Règlement Fournisseur",
+          icone: Payments,
+          couleur: COULEURS.vert,
+          ecran: si(a("achats.add_reglementfournisseur"), () => (
+            <ReglementsFournisseurs droits={droitsReglementsFournisseurs} />
+          )),
+        },
+        {
+          id: "liste-reglements-fournisseurs",
+          libelle: "Liste Règlements Fournisseurs",
+          icone: ReceiptLong,
+          couleur: COULEURS.gris,
+          ecran: si(a("achats.view_reglementfournisseur"), () => (
+            <ReglementsFournisseurs droits={droitsReglementsFournisseurs} ongletInitial="liste" />
+          )),
+        },
+        {
+          id: "echeancier-fournisseurs",
+          libelle: "Échéancier Fournisseurs",
+          icone: CalendarMonth,
+          couleur: COULEURS.orange,
+          ecran: si(a("achats.view_reglementfournisseur"), () => (
+            <ReglementsFournisseurs droits={droitsReglementsFournisseurs} ongletInitial="echeancier" />
+          )),
+        },
       ],
     },
     {
       id: "caisse",
       libelle: "Caisse",
       tuiles: [
-        { id: "session-en-cours", libelle: "Session en Cours", icone: LockOpen, couleur: COULEURS.jaune, ecran: tresorerie("cloturer") },
-        { id: "sessions-cloturees", libelle: "Sessions Clôturées", icone: Lock, couleur: COULEURS.jaune, ecran: tresorerie("voirClotures") },
-        { id: "validation", libelle: "Validation Clôtures", icone: CheckCircle, couleur: COULEURS.vert, ecran: tresorerie("verifier") },
-        { id: "operations-diverses", libelle: "Opérations Diverses", icone: Payments, couleur: COULEURS.orange, ecran: tresorerie("depenses") },
-        { id: "versement", libelle: "Versement Espèces", icone: Savings, couleur: COULEURS.vert, ecran: tresorerie("versements") },
-        { id: "bordereau", libelle: "Bordereau de Versement", icone: EditNote, couleur: COULEURS.gris, ecran: tresorerie("versements") },
-        { id: "coffre", libelle: "Coffre et Banque", icone: AccountBalance, couleur: COULEURS.brun, ecran: tresorerie("banque") },
-        aVenir("echeancier", "Échéancier Client", CalendarMonth, COULEURS.vert),
+        {
+          id: "session-en-cours",
+          libelle: "Session en Cours",
+          icone: LockOpen,
+          couleur: COULEURS.jaune,
+          ecran: tresorerie("cloturer"),
+        },
+        {
+          id: "sessions-cloturees",
+          libelle: "Sessions Clôturées",
+          icone: Lock,
+          couleur: COULEURS.jaune,
+          ecran: tresorerie("voirClotures"),
+        },
+        {
+          id: "validation",
+          libelle: "Validation Clôtures",
+          icone: CheckCircle,
+          couleur: COULEURS.vert,
+          ecran: tresorerie("verifier"),
+        },
+        {
+          id: "operations-diverses",
+          libelle: "Opérations Diverses",
+          icone: Payments,
+          couleur: COULEURS.orange,
+          ecran: tresorerie("depenses"),
+        },
+        {
+          id: "versement",
+          libelle: "Versement Espèces",
+          icone: Savings,
+          couleur: COULEURS.vert,
+          ecran: tresorerie("versements"),
+        },
+        {
+          id: "bordereau",
+          libelle: "Bordereau de Versement",
+          icone: EditNote,
+          couleur: COULEURS.gris,
+          ecran: tresorerie("versements"),
+        },
+        {
+          id: "coffre",
+          libelle: "Coffre et Banque",
+          icone: AccountBalance,
+          couleur: COULEURS.brun,
+          ecran: tresorerie("banque"),
+        },
+        {
+          id: "echeancier",
+          libelle: "Échéancier Client",
+          icone: CalendarMonth,
+          couleur: COULEURS.vert,
+          ecran: si(a("ventes.view_vente"), () => <CreditClients droits={droitsCredit} ongletInitial="portefeuille" />),
+        },
         aVenir("export-reglements", "Exportation Règlements", UploadFile, COULEURS.gris),
         aVenir("transfert-reglements", "Transfert Règlements Clients", SwapHoriz, COULEURS.vert),
         aVenir("report-magasin", "Mise à jour Report Magasin", Store, COULEURS.brun),
@@ -373,9 +779,33 @@ export function modulesPour(session: EtatSession): Module[] {
       id: "sav",
       libelle: "SAV",
       tuiles: [
-        aVenir("creation-sav", "Création SAV", Build, COULEURS.gris),
-        aVenir("cloture-sav", "Clôture SAV", Lock, COULEURS.gris),
-        aVenir("visites-sav", "Visites SAV", ListAlt, COULEURS.gris),
+        {
+          id: "dossiers-sav",
+          libelle: "Création / Suivi SAV",
+          icone: Build,
+          couleur: COULEURS.bleu,
+          ecran: si(a("ventes.view_dossiersav"), () => (
+            <Sav creer={a("ventes.add_dossiersav")} modifier={a("ventes.change_dossiersav")} />
+          )),
+        },
+        {
+          id: "sav-en-retard",
+          libelle: "SAV en retard",
+          icone: ReportProblem,
+          couleur: COULEURS.rouge,
+          ecran: si(a("ventes.view_dossiersav"), () => (
+            <Sav creer={false} modifier={a("ventes.change_dossiersav")} filtreInitial="retard" />
+          )),
+        },
+        {
+          id: "cloture-sav",
+          libelle: "Clôture SAV (prêts à rendre)",
+          icone: Lock,
+          couleur: COULEURS.vert,
+          ecran: si(a("ventes.view_dossiersav"), () => (
+            <Sav creer={false} modifier={a("ventes.change_dossiersav")} filtreInitial="pret" />
+          )),
+        },
         aVenir("article-vendu", "Article Vendu", Sell, COULEURS.gris),
       ],
     },
@@ -388,16 +818,72 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Facture",
           icone: Description,
           couleur: COULEURS.violet,
-          ecran: si(a("ventes.add_facture"), () => <Factures />),
+          ecran: si(a("ventes.add_facture") || a("ventes.view_facture"), () => (
+            <Factures generer={a("ventes.add_facture")} consulter={a("ventes.view_facture")} />
+          )),
         },
-        { id: "avoir", libelle: "Avoir", icone: Undo, couleur: COULEURS.rouge, ecran: si(a("ventes.add_avoir"), () => <Avoirs />) },
+        {
+          id: "avoir",
+          libelle: "Avoir",
+          icone: Undo,
+          couleur: COULEURS.rouge,
+          ecran: si(a("ventes.add_avoir") || a("ventes.view_avoir"), () => (
+            <Avoirs emettre={a("ventes.add_avoir")} consulter={a("ventes.view_avoir")} />
+          )),
+        },
         aVenir("ca-previsionnel", "CA Prévisionnel", TableChart, COULEURS.bleu),
-        aVenir("cloture-mois", "Clôture Mois", Lock, COULEURS.brun),
-        aVenir("facturation-vc", "Facturation Vente Comptoir", FactCheck, COULEURS.vert),
-        aVenir("preparation-facturation", "Préparation Facturation", EditNote, COULEURS.violet),
-        aVenir("facturation-visite", "Facturation Visite", FactCheck, COULEURS.violet),
+        {
+          id: "cloture-mois",
+          libelle: "Clôture Mois",
+          icone: Lock,
+          couleur: COULEURS.brun,
+          ecran: si(a("ventes.add_cloturemois"), () => <ClotureMois cloturer />),
+        },
+        {
+          id: "facturation-vc",
+          libelle: "Facturation Vente Comptoir",
+          icone: FactCheck,
+          couleur: COULEURS.vert,
+          ecran: si(a("ventes.add_facturegroupee"), () => <FacturationGroupee comptoir />),
+        },
+        {
+          id: "preparation-facturation",
+          libelle: "Préparation Facturation",
+          icone: EditNote,
+          couleur: COULEURS.violet,
+          ecran: si(a("ventes.view_cloturemois"), () => <ClotureMois />),
+        },
+        {
+          id: "facturation-visite",
+          libelle: "Facturation Visite",
+          icone: FactCheck,
+          couleur: COULEURS.violet,
+          ecran: si(a("ventes.add_facturegroupee"), () => <FacturationGroupee />),
+        },
         aVenir("avoir-financier", "Avoir Financier", Undo, COULEURS.rouge),
       ],
+    },
+    {
+      id: "statistiques",
+      libelle: "Statistiques",
+      tuiles: (
+        [
+          ["montures", "Montures et Marques", Sell, COULEURS.violet],
+          ["verres", "Verres", RemoveRedEye, COULEURS.bleu],
+          ["lentilles", "Lentilles", Visibility, COULEURS.turquoise],
+          ["remises", "Remises", LocalOffer, COULEURS.orange],
+          ["gratuits", "Gratuits", VolunteerActivism, COULEURS.vert],
+          ["ophtalmologues", "Ophtalmologues", Groups, COULEURS.brun],
+          ["tva", "TVA", Percent, COULEURS.gris],
+          ["benefice", "Bénéfice Journalier", TrendingUp, COULEURS.rouge],
+        ] as const
+      ).map(([rapport, libelle, icone, couleur]) => ({
+        id: `stat-${rapport}`,
+        libelle,
+        icone,
+        couleur,
+        ecran: si(a("ventes.consulter_reporting"), () => <Statistiques rapport={rapport} />),
+      })),
     },
     {
       id: "administration",
@@ -405,6 +891,7 @@ export function modulesPour(session: EtatSession): Module[] {
       tuiles: [
         {
           id: "demande-conge",
+          categorie: "Ressources humaines",
           libelle: "Demande de Congé",
           icone: BeachAccess,
           couleur: COULEURS.turquoise,
@@ -412,24 +899,40 @@ export function modulesPour(session: EtatSession): Module[] {
         },
         {
           id: "demande-acompte",
+          categorie: "Ressources humaines",
           libelle: "Demande d'Acompte",
           icone: Savings,
           couleur: COULEURS.vert,
           ecran: () => <RessourcesHumaines droits={droitsRh} ongletInitial="mes-acomptes" />,
         },
-        aVenir("demande-attestation", "Demande d'Attestation", Description, COULEURS.violet),
-        aVenir("demande-pret", "Demande de Prêt", AccountBalance, COULEURS.brun),
-        aVenir("fiche-paie", "Fiche de Paie", ReceiptLong, COULEURS.bleu),
+        {
+          ...aVenir("demande-attestation", "Demande d'Attestation", Description, COULEURS.violet),
+          categorie: "Ressources humaines",
+        },
+        {
+          ...aVenir("demande-pret", "Demande de Prêt", AccountBalance, COULEURS.brun),
+          categorie: "Ressources humaines",
+        },
+        { ...aVenir("fiche-paie", "Fiche de Paie", ReceiptLong, COULEURS.bleu), categorie: "Ressources humaines" },
         {
           id: "rh",
+          categorie: "Ressources humaines",
           libelle: "Ressources Humaines",
           icone: Badge,
           couleur: COULEURS.bleu,
           ecran: () => <RessourcesHumaines droits={droitsRh} />,
         },
-        { id: "magasins", libelle: "Magasins", icone: Store, couleur: COULEURS.brun, ecran: si(a("reseau.view_magasin"), () => <Magasins />) },
+        {
+          id: "magasins",
+          categorie: "Réseau",
+          libelle: "Magasins",
+          icone: Store,
+          couleur: COULEURS.brun,
+          ecran: si(a("reseau.view_magasin"), () => <Magasins />),
+        },
         {
           id: "acces",
+          categorie: "Sécurité",
           libelle: "Accès et Sécurité",
           icone: AdminPanelSettings,
           couleur: COULEURS.rouge,
@@ -447,7 +950,29 @@ export function modulesPour(session: EtatSession): Module[] {
             />
           )),
         },
-        { id: "plateforme", libelle: "État de la Plateforme", icone: MonitorHeart, couleur: COULEURS.vert, ecran: () => <Accueil /> },
+        {
+          id: "corbeille",
+          categorie: "Sécurité",
+          libelle: "Corbeille",
+          icone: DeleteSweep,
+          couleur: COULEURS.gris,
+          ecran: si(a("securite.view_elementcorbeille"), () => (
+            <Corbeille
+              droits={{
+                restaurer: a("securite.restaurer_elementcorbeille"),
+                vider: a("securite.delete_elementcorbeille"),
+              }}
+            />
+          )),
+        },
+        {
+          id: "plateforme",
+          categorie: "Plateforme",
+          libelle: "État de la Plateforme",
+          icone: MonitorHeart,
+          couleur: COULEURS.vert,
+          ecran: () => <Accueil />,
+        },
       ],
     },
   ];

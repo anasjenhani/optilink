@@ -92,8 +92,22 @@ PERMISSIONS_CLIENTS_OPTIQUE = {
 # Paramétrage par pays (taux de TVA, timbre, monnaie) : réglé par l'administrateur, consulté
 # par la direction. Les prix de vente suivent la colonne Stock « Complet ».
 PRIX_COMPLET = ["stock.view_prixarticle", "stock.add_prixarticle", "stock.change_prixarticle"]
+PERMISSIONS_VILLES = [
+    "reseau.view_ville",
+    "reseau.add_ville",
+    "reseau.change_ville",
+    "reseau.delete_ville",
+]
+PERMISSIONS_BANQUES = [
+    "reseau.view_banque",
+    "reseau.add_banque",
+    "reseau.change_banque",
+    "reseau.delete_banque",
+]
 PERMISSIONS_PARAMETRAGE = {
-    "Administrateur": [
+    "Administrateur": PERMISSIONS_VILLES
+    + PERMISSIONS_BANQUES
+    + [
         "reseau.view_pays",
         "reseau.add_pays",
         "reseau.change_pays",
@@ -153,6 +167,83 @@ PERMISSIONS_ACHATS = {
         "achats.change_commandefournisseur",
     ],
     "Commande": COMMANDES_FOURNISSEURS,
+}
+
+# Bons de réception : saisis à l'arrivée de la marchandise par ceux qui réceptionnent les
+# commandes fournisseurs ; vus par la finance (factures fournisseurs à rapprocher).
+RECEPTIONS = ["achats.view_bonreception", "achats.add_bonreception"]
+PERMISSIONS_RECEPTIONS = {
+    "Administrateur Global": RECEPTIONS,
+    "Responsable de magasin": RECEPTIONS,
+    "Opticien": RECEPTIONS,
+    "Achats & Gestionnaire de Stock": RECEPTIONS,
+    "Atelier": RECEPTIONS,
+    "Commande": RECEPTIONS,
+    "Comptabilité & Finance": ["achats.view_bonreception"],
+}
+
+# Factures achat : saisies par les achats et la finance à l'arrivée de la facture fournisseur.
+FACTURES_ACHAT = ["achats.view_factureachat", "achats.add_factureachat"]
+PERMISSIONS_FACTURES_ACHAT = {
+    "Administrateur Global": FACTURES_ACHAT,
+    "Responsable de magasin": FACTURES_ACHAT,
+    "Achats & Gestionnaire de Stock": FACTURES_ACHAT,
+    "Comptabilité & Finance": FACTURES_ACHAT,
+    "Opticien": ["achats.view_factureachat"],
+}
+
+# Bons retour fournisseur : préparés au dépôt central par les achats (non conformes,
+# articles renvoyés) ; vus par la finance (déduits de la facture achat).
+BONS_RETOUR = ["achats.view_bonretour", "achats.add_bonretour"]
+PERMISSIONS_BONS_RETOUR = {
+    "Administrateur Global": BONS_RETOUR,
+    "Responsable de magasin": BONS_RETOUR,
+    "Achats & Gestionnaire de Stock": BONS_RETOUR,
+    "Comptabilité & Finance": ["achats.view_bonretour"],
+}
+
+# Transferts de stock : envoyés par le dépôt (achats), réceptionnés par le magasin
+# destinataire (« change » = réceptionner un transfert reçu).
+TRANSFERTS = [
+    "stock.view_transfertstock",
+    "stock.add_transfertstock",
+    "stock.change_transfertstock",
+]
+PERMISSIONS_TRANSFERTS = {
+    "Administrateur Global": TRANSFERTS,
+    "Responsable de magasin": TRANSFERTS,
+    "Achats & Gestionnaire de Stock": TRANSFERTS,
+    "Opticien": ["stock.view_transfertstock", "stock.change_transfertstock"],
+    "Vendeur": ["stock.view_transfertstock", "stock.change_transfertstock"],
+}
+
+# Inventaires : ouverts et validés par les responsables et le stock ; tout le personnel du
+# magasin peut compter (« change » = saisir le comptage).
+INVENTAIRES = [
+    "stock.view_inventaire",
+    "stock.add_inventaire",
+    "stock.change_inventaire",
+    "stock.valider_inventaire",
+]
+PERMISSIONS_INVENTAIRES = {
+    "Administrateur Global": INVENTAIRES,
+    "Responsable de magasin": INVENTAIRES,
+    "Achats & Gestionnaire de Stock": INVENTAIRES,
+    "Opticien": ["stock.view_inventaire", "stock.change_inventaire"],
+    "Vendeur": ["stock.view_inventaire", "stock.change_inventaire"],
+}
+
+# Casses de verres : déclarées par l'atelier, l'opticien et les responsables, qui
+# recommandent ensuite le verre ; vues par les achats et la finance (coût des casses).
+CASSES = ["achats.view_casseverre", "achats.add_casseverre"]
+PERMISSIONS_CASSES = {
+    "Administrateur Global": CASSES,
+    "Responsable de magasin": CASSES,
+    "Opticien": CASSES,
+    "Atelier": CASSES,
+    "Commande": CASSES,
+    "Achats & Gestionnaire de Stock": ["achats.view_casseverre"],
+    "Comptabilité & Finance": ["achats.view_casseverre"],
 }
 
 # Trésorerie : le caissier clôture sa caisse chaque jour, la finance vérifie et valide.
@@ -255,6 +346,78 @@ PERMISSIONS_PRISES_EN_CHARGE = {
     "Comptabilité & Finance": PEC_SUIVI + ["crm.view_organisme"],
 }
 
+# Bordereaux CNAM et conventions : préparés au magasin, réglés par la finance.
+BORDEREAUX = ["ventes.view_bordereaupec", "ventes.add_bordereaupec", "ventes.change_bordereaupec"]
+PERMISSIONS_BORDEREAUX = {
+    "Responsable de magasin": BORDEREAUX,
+    "Comptabilité & Finance": BORDEREAUX,
+}
+
+# SAV : ouvert par toute l'équipe du magasin, suivi par l'atelier et les opticiens.
+SAV_SUIVI = ["ventes.view_dossiersav", "ventes.add_dossiersav", "ventes.change_dossiersav"]
+PERMISSIONS_SAV = {
+    "Responsable de magasin": SAV_SUIVI,
+    "Opticien": SAV_SUIVI,
+    "Vendeur": SAV_SUIVI,
+    "Atelier": SAV_SUIVI,
+    "Caissier": ["ventes.view_dossiersav", "ventes.add_dossiersav"],
+    "Comptabilité & Finance": ["ventes.view_dossiersav"],
+}
+
+# Règlements fournisseurs : saisis et suivis par la finance (échéancier, retenue à la source).
+REGLEMENTS_FOURNISSEURS = [
+    "achats.view_reglementfournisseur",
+    "achats.add_reglementfournisseur",
+    "achats.change_reglementfournisseur",
+    "achats.delete_reglementfournisseur",
+]
+PERMISSIONS_REGLEMENTS_FOURNISSEURS = {
+    "Comptabilité & Finance": REGLEMENTS_FOURNISSEURS,
+    "Responsable de magasin": ["achats.view_reglementfournisseur"],
+    "Achats & Gestionnaire de Stock": ["achats.view_reglementfournisseur"],
+}
+
+# Crédit client et impayés : le responsable accorde le crédit ; lui et la finance suivent les
+# chèques impayés, les changements de chèque et la liste noire.
+PERMISSIONS_CREDIT_IMPAYES = {
+    "Responsable de magasin": ["ventes.vendre_a_credit", "ventes.gerer_impayes"],
+    "Comptabilité & Finance": ["ventes.gerer_impayes"],
+}
+
+# Facturation groupée et clôture du mois : la clôture est un acte comptable, faite par le
+# responsable ou la comptabilité.
+PERMISSIONS_FACTURATION_GROUPEE = {
+    "Responsable de magasin": [
+        "ventes.view_facturegroupee",
+        "ventes.add_facturegroupee",
+        "ventes.view_cloturemois",
+        "ventes.add_cloturemois",
+    ],
+    "Opticien": ["ventes.view_facturegroupee", "ventes.add_facturegroupee"],
+    "Comptabilité & Finance": [
+        "ventes.view_facturegroupee",
+        "ventes.view_cloturemois",
+        "ventes.add_cloturemois",
+    ],
+}
+
+# Bons de sortie et sorties casse : le responsable et le stock. Demandes de transfert : tout le
+# magasin peut demander ; servir ou refuser revient au magasin sollicité (responsable, stock).
+SORTIES = ["stock.view_bonsortie", "stock.add_bonsortie"]
+DEMANDER = ["stock.view_demandetransfert", "stock.add_demandetransfert"]
+TRAITER = DEMANDER + ["stock.change_demandetransfert"]
+PERMISSIONS_SORTIES_DEMANDES = {
+    "Responsable de magasin": SORTIES + TRAITER,
+    "Achats & Gestionnaire de Stock": SORTIES + TRAITER,
+    "Opticien": DEMANDER,
+    "Vendeur": DEMANDER,
+}
+
+# Corbeille : les responsables restaurent ce qui a été supprimé par erreur dans leur
+# périmètre ; vider définitivement reste à l'administrateur.
+CORBEILLE = ["securite.view_elementcorbeille", "securite.restaurer_elementcorbeille"]
+PERMISSIONS_CORBEILLE = {"Responsable de magasin": CORBEILLE}
+
 for _par_role in (
     PERMISSIONS_CAISSE_STOCK,
     PERMISSIONS_CLIENTS_OPTIQUE,
@@ -263,12 +426,25 @@ for _par_role in (
     PERMISSIONS_DEVIS,
     PERMISSIONS_AVOIRS,
     PERMISSIONS_ACHATS,
+    PERMISSIONS_RECEPTIONS,
+    PERMISSIONS_FACTURES_ACHAT,
+    PERMISSIONS_BONS_RETOUR,
+    PERMISSIONS_TRANSFERTS,
+    PERMISSIONS_INVENTAIRES,
     PERMISSIONS_TRESORERIE,
     PERMISSIONS_BANQUE,
     PERMISSIONS_RH,
     PERMISSIONS_REMUNERATIONS,
     PERMISSIONS_PILOTAGE,
     PERMISSIONS_PRISES_EN_CHARGE,
+    PERMISSIONS_CASSES,
+    PERMISSIONS_BORDEREAUX,
+    PERMISSIONS_SAV,
+    PERMISSIONS_REGLEMENTS_FOURNISSEURS,
+    PERMISSIONS_CREDIT_IMPAYES,
+    PERMISSIONS_FACTURATION_GROUPEE,
+    PERMISSIONS_SORTIES_DEMANDES,
+    PERMISSIONS_CORBEILLE,
 ):
     for _nom, _permissions in _par_role.items():
         ROLES_DE_DEPART[_nom] = ROLES_DE_DEPART[_nom] + _permissions

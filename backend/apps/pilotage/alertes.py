@@ -14,7 +14,7 @@ from apps.reseau.models import Magasin
 from apps.rh.models import Acompte, DemandeConge, Prime
 from apps.stock.models import MouvementStock
 from apps.tresorerie.models import ClotureCaisse, OperationTresorerie
-from apps.ventes.models import Vente
+from apps.ventes.models import DossierSav, Vente
 
 
 @dataclass
@@ -145,6 +145,47 @@ def _versements_en_retard(utilisateur, aujourdhui):
         )
 
 
+def _sav(utilisateur, aujourdhui):
+    magasins = magasins_couverts(utilisateur, "ventes.view_dossiersav")
+    en_retard = (
+        DossierSav.tous.filter(
+            magasin__in=magasins,
+            etape__in=DossierSav.EN_ATTENTE,
+            retour_prevu_le__lt=aujourdhui,
+        )
+        .values("magasin")
+        .annotate(n=Count("pk"))
+    )
+    for magasin, n in _par_magasin(en_retard, magasins):
+        yield Alerte(
+            "sav_en_retard",
+            "haute",
+            "SAV en retard",
+            f"{_pluriel(n, 'dossier')} SAV dont la date de retour prévue est dépassée.",
+            magasin.nom,
+            n,
+            "sav",
+            "dossiers-sav",
+        )
+    prets = (
+        DossierSav.tous.filter(magasin__in=magasins, etape=DossierSav.Etape.PRET)
+        .values("magasin")
+        .annotate(n=Count("pk"))
+    )
+    for magasin, n in _par_magasin(prets, magasins):
+        yield Alerte(
+            "sav_prets",
+            "info",
+            "SAV prêts à rendre",
+            f"{_pluriel(n, 'dossier SAV prêt', 'dossiers SAV prêts')} à rendre : "
+            "prévenir le client.",
+            magasin.nom,
+            n,
+            "sav",
+            "dossiers-sav",
+        )
+
+
 ORDRE = {"haute": 0, "moyenne": 1, "info": 2}
 
 
@@ -152,6 +193,7 @@ def alertes(utilisateur):
     aujourdhui = timezone.localdate()
     trouvees = [
         *_commandes_en_retard(utilisateur, aujourdhui),
+        *_sav(utilisateur, aujourdhui),
         *_stock_faible(utilisateur),
         *_par_statut(
             utilisateur,

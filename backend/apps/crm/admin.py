@@ -1,10 +1,14 @@
 from django.contrib import admin
 
+from apps.reseau.admin import AvecListeVilles
+from core.admin_imports import AvecImport
+
 from .models import Client, Organisme
 
 
 @admin.register(Client)
-class ClientAdmin(admin.ModelAdmin):
+class ClientAdmin(AvecListeVilles, AvecImport, admin.ModelAdmin):
+    imports = ("clients",)
     list_display = (
         "nom",
         "prenom",
@@ -25,6 +29,14 @@ class ClientAdmin(admin.ModelAdmin):
         "matricule_fiscal",
     )
 
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        # Nouveau client : nom, prénom et téléphone obligatoires (les fiches reprises de
+        # l'ancien logiciel sans téléphone restent modifiables).
+        if obj is None and "telephone" in form.base_fields:
+            form.base_fields["telephone"].required = True
+        return form
+
     # Un client garde son historique d'achats et ses ordonnances : on le désactive.
     def has_delete_permission(self, request, obj=None):
         return False
@@ -35,6 +47,4 @@ class OrganismeAdmin(admin.ModelAdmin):
     list_display = ("nom", "type", "pays", "est_actif")
     list_filter = ("type", "pays", "est_actif")
     search_fields = ("nom",)
-
-    def has_delete_permission(self, request, obj=None):
-        return False
+    # Supprimable tant qu'aucun client ni aucune prise en charge ne le cite (sinon : désactiver).

@@ -12,6 +12,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
 
+from apps.reseau.villes import ville_importee
 from apps.stock.imports import Rapport, _Annuler, _booleen, _choix, _message
 
 from .models import Client
@@ -171,6 +172,10 @@ def importer_clients(lignes, *, magasin, apercu=False):
                     continue
                 if ancien:
                     vus[ancien] = numero
+                if "ville" in ligne:
+                    ligne["ville"], alerte = ville_importee(ligne["ville"], magasin.pays)
+                    if alerte:
+                        rapport.alerte(numero, alerte)
                 try:
                     with transaction.atomic():
                         client, cree = _importer_client(ligne, ancien, magasin)
