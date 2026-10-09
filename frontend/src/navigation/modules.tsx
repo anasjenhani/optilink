@@ -68,7 +68,9 @@ import { Clients } from "../pages/Clients";
 import { CassesVerres } from "../pages/CassesVerres";
 import { Commandes } from "../pages/Commandes";
 import { Corbeille } from "../pages/Corbeille";
+import { BordereauxPec } from "../pages/BordereauxPec";
 import { PrisesEnCharge } from "../pages/PrisesEnCharge";
+import { Sav } from "../pages/Sav";
 import { Recus } from "../pages/Recus";
 import { ResteVendeur } from "../pages/ResteVendeur";
 import { Devis } from "../pages/Devis";
@@ -568,6 +570,15 @@ export function modulesPour(session: EtatSession): Module[] {
             <PrisesEnCharge modifier={a("ventes.change_priseencharge")} />
           )),
         },
+        {
+          id: "bordereaux-pec",
+          libelle: "Bordereaux CNAM / Conventions",
+          icone: FactCheck,
+          couleur: COULEURS.orange,
+          ecran: si(a("ventes.view_bordereaupec"), () => (
+            <BordereauxPec preparer={a("ventes.add_bordereaupec")} regler={a("ventes.change_bordereaupec")} />
+          )),
+        },
         aVenir("reglement-credit", "Règlement Crédit", CreditCard, COULEURS.brun),
         aVenir("transfert-solde", "Transfert Solde", CompareArrows, COULEURS.gris),
         aVenir("impaye", "Impayé Client", ReportProblem, COULEURS.rouge),
@@ -637,9 +648,33 @@ export function modulesPour(session: EtatSession): Module[] {
       id: "sav",
       libelle: "SAV",
       tuiles: [
-        aVenir("creation-sav", "Création SAV", Build, COULEURS.gris),
-        aVenir("cloture-sav", "Clôture SAV", Lock, COULEURS.gris),
-        aVenir("visites-sav", "Visites SAV", ListAlt, COULEURS.gris),
+        {
+          id: "dossiers-sav",
+          libelle: "Création / Suivi SAV",
+          icone: Build,
+          couleur: COULEURS.bleu,
+          ecran: si(a("ventes.view_dossiersav"), () => (
+            <Sav creer={a("ventes.add_dossiersav")} modifier={a("ventes.change_dossiersav")} />
+          )),
+        },
+        {
+          id: "sav-en-retard",
+          libelle: "SAV en retard",
+          icone: ReportProblem,
+          couleur: COULEURS.rouge,
+          ecran: si(a("ventes.view_dossiersav"), () => (
+            <Sav creer={false} modifier={a("ventes.change_dossiersav")} filtreInitial="retard" />
+          )),
+        },
+        {
+          id: "cloture-sav",
+          libelle: "Clôture SAV (prêts à rendre)",
+          icone: Lock,
+          couleur: COULEURS.vert,
+          ecran: si(a("ventes.view_dossiersav"), () => (
+            <Sav creer={false} modifier={a("ventes.change_dossiersav")} filtreInitial="pret" />
+          )),
+        },
         aVenir("article-vendu", "Article Vendu", Sell, COULEURS.gris),
       ],
     },

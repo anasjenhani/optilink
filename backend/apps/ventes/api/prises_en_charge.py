@@ -19,6 +19,7 @@ class PriseEnChargeSerializer(serializers.ModelSerializer):
     organisme = serializers.CharField(source="organisme.public_id", read_only=True)
     organisme_nom = serializers.CharField(source="organisme.nom", read_only=True)
     statut_libelle = serializers.CharField(source="get_statut_display", read_only=True)
+    bordereau = serializers.SerializerMethodField()
 
     class Meta:
         model = PriseEnCharge
@@ -35,9 +36,15 @@ class PriseEnChargeSerializer(serializers.ModelSerializer):
             "numero_dossier",
             "statut",
             "statut_libelle",
+            "bordereau",
+            "montant_regle",
+            "motif_rejet",
             "cree_le",
         ]
-        read_only_fields = ["montant", "numero_dossier"]
+        read_only_fields = ["montant", "numero_dossier", "montant_regle", "motif_rejet"]
+
+    def get_bordereau(self, pec) -> str | None:
+        return pec.bordereau.numero if pec.bordereau else None
 
     def get_client(self, pec) -> str | None:
         client = pec.vente.client
@@ -76,7 +83,7 @@ class PriseEnChargeViewSet(
     def get_queryset(self):
         # Les ventes visibles portent déjà le périmètre de magasins de l'utilisateur.
         return PriseEnCharge.objects.filter(vente__in=Vente.objects.all()).select_related(
-            "vente__magasin", "vente__client", "organisme"
+            "vente__magasin", "vente__client", "organisme", "bordereau"
         )
 
     @extend_schema(request=PriseEnChargeSaisieSerializer, responses={201: PriseEnChargeSerializer})
@@ -112,6 +119,14 @@ class PriseEnChargeViewSet(
         saisie = StatutPriseEnChargeSerializer(data=request.data)
         saisie.is_valid(raise_exception=True)
         statut = saisie.validated_data["statut"]
+        if pec.bordereau is not None:
+            return Response(
+                {
+                    "detail": f"Cette prise en charge est dans le bordereau {pec.bordereau} : "
+                    "son règlement se saisit sur le bordereau."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         refusee = PriseEnCharge.Statut.REFUSEE
         if pec.statut == refusee and statut != refusee and pec.montant > pec.vente.reste_a_payer:
             # Le client a déjà réglé cette part entre-temps : on ne la compte pas deux fois.

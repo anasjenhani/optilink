@@ -17,6 +17,14 @@ PRIVILEGES = {
         "crm.view_organisme": "Voir les organismes de prise en charge",
         "crm.add_organisme": "Créer un organisme de prise en charge",
         "crm.change_organisme": "Modifier un organisme de prise en charge",
+        "ventes.view_bordereaupec": "Voir les bordereaux CNAM et conventions",
+        "ventes.add_bordereaupec": "Préparer un bordereau CNAM ou convention",
+        "ventes.change_bordereaupec": "Envoyer un bordereau et saisir son règlement",
+    },
+    "SAV": {
+        "ventes.view_dossiersav": "Voir les dossiers SAV",
+        "ventes.add_dossiersav": "Ouvrir un dossier SAV",
+        "ventes.change_dossiersav": "Faire avancer un dossier SAV et le clôturer",
     },
     "Pilotage": {
         "ventes.consulter_reporting": "Consulter le reporting (chiffre d'affaires, ventes)",

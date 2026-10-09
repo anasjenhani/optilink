@@ -20,6 +20,7 @@ import { changerStatutPec, listerPrisesEnCharge, STATUTS_PEC, type StatutPec } f
 /**
  * Suivi des dossiers de prise en charge (CNAM, assurances, mutuelles) : de la demande au
  * règlement par l'organisme. Une prise en charge refusée redevient à la charge du client.
+ * Une fois dans un bordereau, son règlement se saisit sur le bordereau.
  */
 export function PrisesEnCharge({ modifier }: { modifier: boolean }) {
   const queryClient = useQueryClient();
@@ -68,6 +69,7 @@ export function PrisesEnCharge({ modifier }: { modifier: boolean }) {
                   <TableCell>N° dossier</TableCell>
                   <TableCell align="right">Montant</TableCell>
                   <TableCell>Statut</TableCell>
+                  <TableCell>Bordereau</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -78,9 +80,11 @@ export function PrisesEnCharge({ modifier }: { modifier: boolean }) {
                     <TableCell>{pec.client ?? "—"}</TableCell>
                     <TableCell>{pec.organisme_nom}</TableCell>
                     <TableCell>{pec.numero_dossier || "—"}</TableCell>
-                    <TableCell align="right">{formaterTexte(pec.montant, { devise: pec.devise, decimales: decimales(pec.magasin) })}</TableCell>
+                    <TableCell align="right">
+                      {formaterTexte(pec.montant, { devise: pec.devise, decimales: decimales(pec.magasin) })}
+                    </TableCell>
                     <TableCell>
-                      {modifier ? (
+                      {modifier && !pec.bordereau ? (
                         <TextField
                           select
                           size="small"
@@ -97,9 +101,22 @@ export function PrisesEnCharge({ modifier }: { modifier: boolean }) {
                           ))}
                         </TextField>
                       ) : (
-                        pec.statut_libelle
+                        <>
+                          {pec.statut_libelle}
+                          {pec.montant_regle !== null && pec.montant_regle !== pec.montant && (
+                            <Typography variant="caption" sx={{ display: "block" }} color="text.secondary">
+                              Réglé{" "}
+                              {formaterTexte(pec.montant_regle, {
+                                devise: pec.devise,
+                                decimales: decimales(pec.magasin),
+                              })}
+                              {pec.motif_rejet && ` · ${pec.motif_rejet}`}
+                            </Typography>
+                          )}
+                        </>
                       )}
                     </TableCell>
+                    <TableCell>{pec.bordereau ?? "—"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
