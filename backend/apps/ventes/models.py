@@ -135,6 +135,14 @@ class Vente(ModeleDeBase):
     credit_echeance = models.DateField(
         "crédit à régler le", null=True, blank=True, help_text="Date promise par le client."
     )
+    # Facture regroupant plusieurs visites, ou récapitulative du mois (clôture).
+    facture_groupee = models.ForeignKey(
+        "FactureGroupee",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="ventes",
+    )
 
     objects = ParMagasinManager()
     tous = models.Manager()
@@ -322,6 +330,99 @@ class LigneDevis(models.Model):
         return f"{self.quantite} × {self.libelle}"
 
 
+class FactureGroupee(ModeleDeBase):
+    """Une facture pour plusieurs ventes : visites ou ventes comptoir d'un même client, ou
+    facture récapitulative du mois (ventes restées sans facture, établie à la clôture).
+
+    Même suite de numéros que les factures d'une vente : pas de trou ni de doublon entre elles.
+    """
+
+    class Type(models.TextChoices):
+        CLIENT = "client", "Facture groupée"
+        MENSUELLE = "mensuelle", "Facture récapitulative du mois"
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    type = models.CharField(max_length=10, choices=Type.choices, default=Type.CLIENT)
+    client = models.ForeignKey(
+        "crm.Client",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="factures_groupees",
+    )
+    # Copiés à l'émission ; saisis à la main pour une société sans fiche client.
+    client_nom = models.CharField(max_length=200, blank=True)
+    client_adresse = models.CharField(max_length=320, blank=True)
+    client_matricule_fiscal = models.CharField(max_length=30, blank=True)
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    du = models.DateField(help_text="Première vente facturée.")
+    au = models.DateField(help_text="Dernière vente facturée.")
+    devise = models.CharField(max_length=3)
+    total_ht = models.DecimalField(max_digits=14, decimal_places=3)
+    total_tva = models.DecimalField(max_digits=14, decimal_places=3)
+    total_ttc = models.DecimalField(max_digits=14, decimal_places=3)
+    timbre_fiscal = models.DecimalField(max_digits=10, decimal_places=3, default=0)
+    net_a_payer = models.DecimalField(max_digits=14, decimal_places=3)
+    mode_paiement_timbre = models.CharField(max_length=20, blank=True)
+    emise_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-cree_le"]
+        verbose_name = "facture groupée"
+        verbose_name_plural = "factures groupées"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="facture_groupee_sans_doublon"
+            )
+        ]
+
+    def __str__(self):
+        return self.numero
+
+
+class ClotureMois(ModeleDeBase):
+    """Mois clos pour un magasin : les ventes restées sans facture passent sur la facture
+    récapitulative ; plus aucune facture ne se fait ensuite sur une vente de ce mois."""
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    annee = models.PositiveSmallIntegerField()
+    mois = models.PositiveSmallIntegerField()
+    facture = models.OneToOneField(
+        FactureGroupee,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="cloture",
+        help_text="Vide si toutes les ventes du mois étaient déjà facturées.",
+    )
+    cloture_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-annee", "-mois"]
+        verbose_name = "clôture du mois"
+        verbose_name_plural = "clôtures des mois"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "mois"], name="un_mois_clos_une_fois"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.mois:02d}/{self.annee}"
+
+
 class Avoir(ModeleDeBase):
     """Avoir : crédit rendu au client sur une vente (retour d'articles, ou annulation).
 
@@ -341,6 +442,14 @@ class Avoir(ModeleDeBase):
         blank=True,
         related_name="avoirs",
         help_text="Facture corrigée, si la vente avait été facturée.",
+    )
+    facture_groupee = models.ForeignKey(
+        FactureGroupee,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="avoirs",
+        help_text="Facture groupée ou récapitulative corrigée.",
     )
     client = models.ForeignKey(
         "crm.Client", on_delete=models.PROTECT, null=True, blank=True, related_name="avoirs"

@@ -392,7 +392,7 @@ class VenteSerializer(serializers.ModelSerializer):
         return resume
 
     def get_facture(self, vente) -> str | None:
-        facture = getattr(vente, "facture", None)
+        facture = getattr(vente, "facture", None) or vente.facture_groupee
         return facture.numero if facture else None
 
     def get_verres(self, vente) -> str | None:

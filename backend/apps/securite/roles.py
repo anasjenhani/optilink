@@ -384,6 +384,23 @@ PERMISSIONS_CREDIT_IMPAYES = {
     "Comptabilité & Finance": ["ventes.gerer_impayes"],
 }
 
+# Facturation groupée et clôture du mois : la clôture est un acte comptable, faite par le
+# responsable ou la comptabilité.
+PERMISSIONS_FACTURATION_GROUPEE = {
+    "Responsable de magasin": [
+        "ventes.view_facturegroupee",
+        "ventes.add_facturegroupee",
+        "ventes.view_cloturemois",
+        "ventes.add_cloturemois",
+    ],
+    "Opticien": ["ventes.view_facturegroupee", "ventes.add_facturegroupee"],
+    "Comptabilité & Finance": [
+        "ventes.view_facturegroupee",
+        "ventes.view_cloturemois",
+        "ventes.add_cloturemois",
+    ],
+}
+
 # Corbeille : les responsables restaurent ce qui a été supprimé par erreur dans leur
 # périmètre ; vider définitivement reste à l'administrateur.
 CORBEILLE = ["securite.view_elementcorbeille", "securite.restaurer_elementcorbeille"]
@@ -413,6 +430,7 @@ for _par_role in (
     PERMISSIONS_SAV,
     PERMISSIONS_REGLEMENTS_FOURNISSEURS,
     PERMISSIONS_CREDIT_IMPAYES,
+    PERMISSIONS_FACTURATION_GROUPEE,
     PERMISSIONS_CORBEILLE,
 ):
     for _nom, _permissions in _par_role.items():

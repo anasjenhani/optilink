@@ -95,7 +95,7 @@ class VenteViewSet(
 
     def get_queryset(self):
         return Vente.objects.select_related(
-            "magasin", "vendeur", "client__organisme", "facture"
+            "magasin", "vendeur", "client__organisme", "facture", "facture_groupee"
         ).prefetch_related(
             "lignes__article",
             "lignes__retours",
