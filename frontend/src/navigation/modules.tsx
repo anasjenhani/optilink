@@ -72,6 +72,7 @@ import { BordereauxPec } from "../pages/BordereauxPec";
 import { PrisesEnCharge } from "../pages/PrisesEnCharge";
 import { Sav } from "../pages/Sav";
 import { Recus } from "../pages/Recus";
+import { ReglementsFournisseurs } from "../pages/ReglementsFournisseurs";
 import { ResteVendeur } from "../pages/ResteVendeur";
 import { Devis } from "../pages/Devis";
 import { Factures } from "../pages/Factures";
@@ -166,6 +167,11 @@ export function modulesPour(session: EtatSession): Module[] {
     si(droitsTresorerie[onglet], () => (
       <Tresorerie droits={droitsTresorerie} ongletInitial={ONGLETS_TRESORERIE[onglet]} />
     ));
+  const droitsReglementsFournisseurs = {
+    regler: a("achats.add_reglementfournisseur"),
+    debiter: a("achats.change_reglementfournisseur"),
+    annuler: a("achats.delete_reglementfournisseur"),
+  };
   const droitsRh = {
     voirEmployes: a("rh.view_employe"),
     creerEmploye: a("rh.add_employe"),
@@ -583,6 +589,39 @@ export function modulesPour(session: EtatSession): Module[] {
         aVenir("transfert-solde", "Transfert Solde", CompareArrows, COULEURS.gris),
         aVenir("impaye", "Impayé Client", ReportProblem, COULEURS.rouge),
         aVenir("reglement-impaye", "Règlement Impayé", ReportProblem, COULEURS.rouge),
+      ],
+    },
+    {
+      id: "reglement-fournisseur",
+      libelle: "Règlement Fournisseur",
+      tuiles: [
+        {
+          id: "nouveau-reglement-fournisseur",
+          libelle: "Règlement Fournisseur",
+          icone: Payments,
+          couleur: COULEURS.vert,
+          ecran: si(a("achats.add_reglementfournisseur"), () => (
+            <ReglementsFournisseurs droits={droitsReglementsFournisseurs} />
+          )),
+        },
+        {
+          id: "liste-reglements-fournisseurs",
+          libelle: "Liste Règlements Fournisseurs",
+          icone: ReceiptLong,
+          couleur: COULEURS.gris,
+          ecran: si(a("achats.view_reglementfournisseur"), () => (
+            <ReglementsFournisseurs droits={droitsReglementsFournisseurs} ongletInitial="liste" />
+          )),
+        },
+        {
+          id: "echeancier-fournisseurs",
+          libelle: "Échéancier Fournisseurs",
+          icone: CalendarMonth,
+          couleur: COULEURS.orange,
+          ecran: si(a("achats.view_reglementfournisseur"), () => (
+            <ReglementsFournisseurs droits={droitsReglementsFournisseurs} ongletInitial="echeancier" />
+          )),
+        },
       ],
     },
     {

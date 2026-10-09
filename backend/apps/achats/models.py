@@ -447,3 +447,87 @@ class LigneRetour(models.Model):
 
     def __str__(self):
         return f"{self.quantite} × {self.designation}"
+
+
+class ReglementFournisseur(ModeleDeBase):
+    """Paiement d'un fournisseur : il solde des factures achat du magasin, en tout ou en partie.
+
+    Ce qui n'est pas imputé sur une facture reste une avance, à imputer plus tard. La retenue à
+    la source, gardée par le magasin pour l'État, compte dans ce qui est réglé au fournisseur :
+    réglé = versé + retenue. Un chèque ou une traite a une échéance : il figure à l'échéancier
+    jusqu'à ce que la banque le débite.
+    """
+
+    class Mode(models.TextChoices):
+        ESPECES = "especes", "Espèces"
+        CHEQUE = "cheque", "Chèque"
+        VIREMENT = "virement", "Virement"
+        TRAITE = "traite", "Traite"
+
+    class Statut(models.TextChoices):
+        A_ECHOIR = "a_echoir", "À échoir"
+        DEBITE = "debite", "Débité"
+
+    magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    numero = models.CharField(max_length=40, unique=True)
+    annee = models.PositiveSmallIntegerField()
+    sequence = models.PositiveIntegerField()
+    fournisseur = models.ForeignKey(
+        Fournisseur, on_delete=models.PROTECT, related_name="reglements"
+    )
+    date_reglement = models.DateField("date du règlement")
+    mode = models.CharField(max_length=10, choices=Mode.choices)
+    reference = models.CharField(
+        max_length=60, blank=True, help_text="N° du chèque, de la traite ou du virement."
+    )
+    banque = models.CharField(max_length=100, blank=True)
+    echeance = models.DateField("échéance", null=True, blank=True)
+    statut = models.CharField(max_length=10, choices=Statut.choices, default=Statut.DEBITE)
+    debite_le = models.DateField(null=True, blank=True)
+    montant = models.DecimalField("montant versé", max_digits=14, decimal_places=3)
+    taux_retenue = models.DecimalField(
+        "taux de retenue à la source (%)", max_digits=5, decimal_places=2, default=0
+    )
+    retenue = models.DecimalField("retenue à la source", max_digits=14, decimal_places=3, default=0)
+    observation = models.TextField(blank=True)
+    cree_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+
+    objects = ParMagasinManager()
+    tous = models.Manager()
+
+    class Meta:
+        ordering = ["-date_reglement", "-sequence"]
+        verbose_name = "règlement fournisseur"
+        verbose_name_plural = "règlements fournisseurs"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin", "annee", "sequence"], name="reglement_fournisseur_sans_doublon"
+            )
+        ]
+
+    def __str__(self):
+        return self.numero
+
+    @property
+    def total_regle(self):
+        return self.montant + self.retenue
+
+
+class ImputationReglement(models.Model):
+    """Part d'un règlement fournisseur affectée à une facture achat."""
+
+    reglement = models.ForeignKey(
+        ReglementFournisseur, on_delete=models.CASCADE, related_name="imputations"
+    )
+    facture = models.ForeignKey(FactureAchat, on_delete=models.PROTECT, related_name="imputations")
+    montant = models.DecimalField(max_digits=14, decimal_places=3)
+    le = models.DateField()
+
+    class Meta:
+        verbose_name = "imputation de règlement"
+        verbose_name_plural = "imputations de règlement"
+
+    def __str__(self):
+        return f"{self.reglement} → {self.facture} : {self.montant}"
