@@ -48,6 +48,8 @@ def decrire(fiche):
             if fiche.addition:
                 puissance += f" add {_signe(fiche.addition)}"
         morceaux += [
+            "solaire" if fiche.categorie == Lentille.Categorie.SOLAIRE else "",
+            fiche.couleur,
             fiche.get_renouvellement_display(),
             fiche.get_type_display(),
             f"R {fiche.rayon}" if fiche.rayon else "",

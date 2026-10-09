@@ -14,6 +14,7 @@ import Typography from "@mui/material/Typography";
 import { useEffect, useState } from "react";
 
 import {
+  CATEGORIES_LENTILLE,
   type FicheArticle as Fiche,
   FABRICATIONS_VERRE,
   GEOMETRIES,
@@ -66,8 +67,18 @@ const CHAMPS: Partial<Record<FamilleArticle, Champ[]>> = {
     { cle: "photochromique", label: "Photochromique", nature: "case" },
   ],
   lentille: [
+    {
+      cle: "categorie",
+      label: "Famille",
+      nature: "texte",
+      options: CATEGORIES_LENTILLE,
+      requis: true,
+      largeur: 170,
+      defaut: "optique",
+    },
     { cle: "marque", label: "Marque", nature: "texte" },
     { cle: "modele", label: "Modèle", nature: "texte" },
+    { cle: "couleur", label: "Couleur", nature: "texte", largeur: 180 },
     {
       cle: "renouvellement",
       label: "Renouvellement",

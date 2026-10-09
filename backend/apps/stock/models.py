@@ -282,10 +282,20 @@ class Lentille(Caracteristiques):
         TORIQUE = "torique", "Torique"
         MULTIFOCALE = "multifocale", "Multifocale"
 
+    class Categorie(models.TextChoices):
+        OPTIQUE = "optique", "Lentille optique"
+        SOLAIRE = "solaire", "Lentille solaire"
+
     article = models.OneToOneField(
         Article, on_delete=models.CASCADE, primary_key=True, related_name="lentille"
     )
+    categorie = models.CharField(
+        "famille", max_length=10, choices=Categorie.choices, default=Categorie.OPTIQUE
+    )
     modele = models.CharField("modèle", max_length=100, blank=True)
+    couleur = models.CharField(
+        max_length=60, blank=True, help_text="Couleur de la lentille ; vide si transparente."
+    )
     renouvellement = models.CharField(max_length=20, choices=Renouvellement.choices)
     type = models.CharField(max_length=20, choices=Type.choices, default=Type.SPHERIQUE)
     rayon = models.DecimalField(

@@ -99,8 +99,10 @@ class LentilleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lentille
         fields = [
+            "categorie",
             "marque",
             "modele",
+            "couleur",
             "renouvellement",
             "type",
             "rayon",

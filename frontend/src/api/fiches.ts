@@ -82,6 +82,11 @@ export const FABRICATIONS_VERRE = [
   { valeur: "stock", libelle: "Stock fournisseur" },
 ] as const;
 
+export const CATEGORIES_LENTILLE = [
+  { valeur: "optique", libelle: "Lentille optique" },
+  { valeur: "solaire", libelle: "Lentille solaire" },
+] as const;
+
 export const TYPES_LENTILLE = [
   { valeur: "spherique", libelle: "Sphérique" },
   { valeur: "torique", libelle: "Torique" },
@@ -104,8 +109,10 @@ export type FicheVerre = {
 };
 
 export type FicheLentille = {
+  categorie: string;
   marque: string;
   modele: string;
+  couleur: string;
   renouvellement: string;
   type: string;
   rayon: string | null;

@@ -7,6 +7,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from openpyxl import Workbook
 
 from apps.achats.models import Fournisseur
+from apps.stock.api.serializers import decrire
 from apps.stock.models import Article, MouvementStock, PrixArticle, stock_disponible
 
 DROITS_CATALOGUE = (
@@ -27,7 +28,7 @@ CATALOGUE = "\n".join(
         "Ray-Ban;RB5154;écaille;51;21;145;Cerclée;;;;",
         "VER-1;Verre progressif 1.6;verre;essilor tunisie;;180;7;Essilor;;;;;;;Progressif;1,600;;",
         "LEN-1;Lentilles journalières;Lentille;Johnson & Johnson Vision;;85,5;7;Acuvue;Moist;"
-        ";;;;Sphérique;;;Journalière;30",
+        "Ocean Blue;;;;Sphérique;;;Journalière;30",
         "DIV-1;Étui rigide;Divers;Luxottica Tunisie;3700000000017;25;19;;;;;;;;;;;",
     ]
 )
@@ -107,6 +108,7 @@ def test_import_du_catalogue_csv(logisticien, tunis, fournisseurs):
     assert (verre.verre.geometrie, str(verre.verre.indice)) == ("progressif", "1.600")
     lentille = Article.objects.get(reference="LEN-1").lentille
     assert (lentille.renouvellement, lentille.lentilles_par_boite) == ("journaliere", 30)
+    assert (lentille.categorie, lentille.couleur) == ("optique", "Ocean Blue")
     prix = PrixArticle.objects.get(article__reference="LEN-1", pays=tunis.pays)
     assert (str(prix.prix_vente_ttc), prix.tva.taux) == ("85.500", 7)
     assert not hasattr(Article.objects.get(reference="DIV-1"), "monture")
@@ -116,6 +118,19 @@ def test_import_du_catalogue_csv(logisticien, tunis, fournisseurs):
     assert importer(logisticien, fichier(modifie)).json()["modifies"] == 4
     assert str(PrixArticle.objects.get(article=monture).prix_vente_ttc) == "499.000"
     assert Article.objects.count() == 4
+
+
+def test_lentille_solaire_de_couleur(logisticien, fournisseurs):
+    contenu = (
+        "reference;libelle;famille;fournisseur;prix_ttc;tva;categorie;couleur;renouvellement\n"
+        "167;I SEE COLOR FRECH MINT;Lentille;Johnson & Johnson Vision;35;19;Lentille solaire;"
+        "FRECH MINT;Trimestrielle\n"
+    )
+    reponse = importer(logisticien, fichier(contenu))
+    assert reponse.status_code == 200, reponse.json()
+    lentille = Article.objects.get(reference="167").lentille
+    assert (lentille.categorie, lentille.couleur) == ("solaire", "FRECH MINT")
+    assert decrire(lentille).startswith("solaire · FRECH MINT · Trimestrielle")
 
 
 def test_import_excel_avec_code_barres_numerique(logisticien, fournisseurs):
