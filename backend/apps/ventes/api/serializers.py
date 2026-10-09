@@ -241,6 +241,13 @@ class LunetteClientSerializer(LunetteSerializer):
 class PaiementSaisieSerializer(serializers.Serializer):
     mode = serializers.ChoiceField(choices=Paiement.Mode.choices)
     montant = serializers.DecimalField(max_digits=14, decimal_places=3, min_value=Decimal("0.001"))
+    reference = serializers.CharField(
+        required=False, allow_blank=True, max_length=60, help_text="N° du chèque, de la traite…"
+    )
+    banque = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    echeance = serializers.DateField(
+        required=False, allow_null=True, help_text="Chèque ou traite : à remettre le."
+    )
 
 
 class VenteSaisieSerializer(serializers.Serializer):
@@ -268,6 +275,10 @@ class VenteSaisieSerializer(serializers.Serializer):
     lentilles = LentillesSaisieSerializer(
         many=True, required=False, help_text="Lentilles droite et gauche ; articles dans lignes."
     )
+    a_credit = serializers.BooleanField(
+        default=False, help_text="Vente à crédit : le client réglera le reste plus tard."
+    )
+    credit_echeance = serializers.DateField(required=False, allow_null=True)
 
 
 class ReglementSerializer(serializers.Serializer):
@@ -278,6 +289,10 @@ class LivraisonSerializer(serializers.Serializer):
     paiements = PaiementSaisieSerializer(
         many=True, required=False, help_text="Solde encaissé à la livraison, s'il reste dû."
     )
+    a_credit = serializers.BooleanField(
+        default=False, help_text="Livrer à crédit : le client réglera le reste plus tard."
+    )
+    credit_echeance = serializers.DateField(required=False, allow_null=True)
 
 
 class LigneVenteSerializer(serializers.ModelSerializer):
@@ -316,7 +331,7 @@ class LigneVenteSerializer(serializers.ModelSerializer):
 class PaiementSerializer(serializers.ModelSerializer):
     class Meta:
         model = Paiement
-        fields = ["mode", "montant", "recu_le"]
+        fields = ["mode", "montant", "recu_le", "reference", "banque", "echeance", "statut"]
 
 
 class VenteSerializer(serializers.ModelSerializer):
@@ -365,6 +380,7 @@ class VenteSerializer(serializers.ModelSerializer):
             "lunettes",
             "lentilles",
             "paiements",
+            "credit_echeance",
         ]
 
     def get_client(self, vente) -> dict | None:
@@ -395,6 +411,8 @@ def client_resume(client):
         "nom": str(client),
         "societe": client.societe,
         "matricule_fiscal": client.matricule_fiscal,
+        "liste_noire": client.liste_noire,
+        "motif_liste_noire": client.motif_liste_noire,
     }
 
 

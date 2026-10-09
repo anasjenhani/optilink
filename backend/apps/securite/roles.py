@@ -377,6 +377,13 @@ PERMISSIONS_REGLEMENTS_FOURNISSEURS = {
     "Achats & Gestionnaire de Stock": ["achats.view_reglementfournisseur"],
 }
 
+# Crédit client et impayés : le responsable accorde le crédit ; lui et la finance suivent les
+# chèques impayés, les changements de chèque et la liste noire.
+PERMISSIONS_CREDIT_IMPAYES = {
+    "Responsable de magasin": ["ventes.vendre_a_credit", "ventes.gerer_impayes"],
+    "Comptabilité & Finance": ["ventes.gerer_impayes"],
+}
+
 # Corbeille : les responsables restaurent ce qui a été supprimé par erreur dans leur
 # périmètre ; vider définitivement reste à l'administrateur.
 CORBEILLE = ["securite.view_elementcorbeille", "securite.restaurer_elementcorbeille"]
@@ -405,6 +412,7 @@ for _par_role in (
     PERMISSIONS_BORDEREAUX,
     PERMISSIONS_SAV,
     PERMISSIONS_REGLEMENTS_FOURNISSEURS,
+    PERMISSIONS_CREDIT_IMPAYES,
     PERMISSIONS_CORBEILLE,
 ):
     for _nom, _permissions in _par_role.items():

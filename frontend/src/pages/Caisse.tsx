@@ -29,14 +29,17 @@ import {
   TYPES_VENTE,
   type Article,
   type ModePaiement,
+  type Piece,
   type RoleLigne,
   type SaisieLentilles,
   type SaisieLunette,
   type TypeVente,
   type Vente,
 } from "../api/caisse";
+import { lireSession, peut } from "../api/auth";
 import { listerMagasins } from "../api/magasins";
 import { enUnites, formater, formaterTexte, versTexte, type Monnaie } from "../api/monnaie";
+import { ChampsPiece, ChoixMode, piece } from "./ChampsPaiement";
 import { FicheLentilles, type LentilleChoisie } from "./FicheLentilles";
 import { ChampPeniche, FicheLunette, type ArticleLunette } from "./FicheLunette";
 
@@ -68,12 +71,6 @@ export type DroitsLunette = {
   voirOrdonnances: boolean;
   saisirOrdonnance: boolean;
 };
-
-const MODES: { valeur: ModePaiement; libelle: string }[] = [
-  { valeur: "carte", libelle: "Carte bancaire" },
-  { valeur: "especes", libelle: "Espèces" },
-  { valeur: "cheque", libelle: "Chèque" },
-];
 
 /**
  * Vente au comptoir guidée : le client (ou ``null`` pour un client de passage) et le magasin
@@ -114,6 +111,12 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
   const equipement = (l: Ligne) =>
     l.lunette !== undefined ? `L${l.lunette}` : l.lentilles !== undefined ? `C${l.lentilles}` : null;
   const [mode, setMode] = useState<ModePaiement>("carte");
+  const [pieceSaisie, setPiece] = useState<Piece>({});
+  const session = useQuery({ queryKey: ["session"], queryFn: lireSession });
+  const peutCredit = peut(session.data, "ventes.vendre_a_credit");
+  // Vente à crédit : le client emporte ses articles, paie une partie (ou rien) maintenant.
+  const [aCredit, setACredit] = useState(false);
+  const [creditEcheance, setCreditEcheance] = useState("");
   const [derniereVente, setDerniereVente] = useState<Vente | null>(null);
   // Commande : acompte maintenant, solde à la livraison. Obligatoire dès qu'un article est
   // commandé au fournisseur (verres…).
@@ -155,6 +158,8 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
   const commande = enCommande || commandeImposee;
   const maxPeniche = magasins.data?.find((m) => m.id === magasin)?.nombre_peniches;
   const montantAcompte = Math.min(unites(acompte || "0"), total);
+  const credit = aCredit && !commande && Boolean(client) && peutCredit;
+  const montantMaintenant = commande || credit ? montantAcompte : total;
 
   const vente = useMutation({
     mutationFn: () =>
@@ -174,14 +179,10 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
         ...(lunettes.length ? { lunettes } : {}),
         ...(jeuxLentilles.length ? { lentilles: jeuxLentilles } : {}),
         paiements:
-          commande && montantAcompte === 0
+          montantMaintenant === 0
             ? []
-            : [
-                {
-                  mode,
-                  montant: versTexte(commande ? montantAcompte : total, monnaie.decimales),
-                },
-              ],
+            : [{ mode, montant: versTexte(montantMaintenant, monnaie.decimales), ...piece(mode, pieceSaisie) }],
+        ...(credit ? { a_credit: true, credit_echeance: creditEcheance || null } : {}),
         ...(commande
           ? {
               commande: true,
@@ -196,6 +197,9 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
       setLunettes([]);
       setJeuxLentilles([]);
       setEnCommande(false);
+      setACredit(false);
+      setCreditEcheance("");
+      setPiece({});
       setAcompte("");
       setLivraisonPrevue("");
       setPeniche("");
@@ -532,6 +536,13 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
             </>
           )}
 
+          {client?.liste_noire && (
+            <Alert severity="warning">
+              Client en liste noire{client.motif_liste_noire ? ` (${client.motif_liste_noire})` : ""} : ni chèque, ni
+              traite, ni crédit.
+            </Alert>
+          )}
+
           <FormControlLabel
             control={
               <Checkbox
@@ -568,23 +579,37 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
             </Stack>
           )}
 
-          <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
+          {client && !commande && peutCredit && !client.liste_noire && (
+            <FormControlLabel
+              control={<Checkbox checked={aCredit} onChange={(e) => setACredit(e.target.checked)} />}
+              label="Vente à crédit : le client emporte ses articles et réglera le reste plus tard"
+            />
+          )}
+          {credit && (
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <TextField
+                label="Payé maintenant"
+                type="number"
+                value={acompte}
+                onChange={(e) => setAcompte(e.target.value)}
+                helperText={`Reste à crédit : ${formater(total - montantAcompte, monnaie)}`}
+              />
+              <TextField
+                label="À régler le"
+                type="date"
+                value={creditEcheance}
+                onChange={(e) => setCreditEcheance(e.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+            </Stack>
+          )}
+
+          <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
             <Typography variant="h5" sx={{ flexGrow: 1 }}>
               Total : {formater(total, monnaie)}
             </Typography>
-            <TextField
-              select
-              size="small"
-              label="Paiement"
-              value={mode}
-              onChange={(e) => setMode(e.target.value as ModePaiement)}
-            >
-              {MODES.map((m) => (
-                <MenuItem key={m.valeur} value={m.valeur}>
-                  {m.libelle}
-                </MenuItem>
-              ))}
-            </TextField>
+            <ChoixMode valeur={mode} onChange={setMode} />
+            <ChampsPiece mode={mode} valeur={pieceSaisie} onChange={setPiece} />
             <Button
               variant="contained"
               size="large"
@@ -606,6 +631,9 @@ export function Caisse({ parcours }: { parcours?: Parcours } = {}) {
               {derniereVente.peniche && `, péniche ${derniereVente.peniche}`}
               {derniereVente.statut === "en_commande" &&
                 `, reste ${formaterTexte(derniereVente.reste_a_payer, { devise: derniereVente.devise, decimales: monnaie.decimales })} à la livraison`}
+              {derniereVente.statut === "livree" &&
+                Number(derniereVente.reste_a_payer) > 0 &&
+                `, reste ${formaterTexte(derniereVente.reste_a_payer, { devise: derniereVente.devise, decimales: monnaie.decimales })} à crédit`}
               .
               {parcours && (
                 <Button size="small" sx={{ ml: 2 }} onClick={parcours.onNouvelleVente}>

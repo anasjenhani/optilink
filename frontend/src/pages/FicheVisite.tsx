@@ -95,15 +95,7 @@ function DeclarerCasse({ verre, onFait }: { verre: VerreCommande; onFait: () => 
 }
 
 /** Fiche complète d'une visite, avec la déclaration de casse des verres reçus. */
-export function FicheVisite({
-  id,
-  casse = false,
-  onFermer,
-}: {
-  id: string;
-  casse?: boolean;
-  onFermer: () => void;
-}) {
+export function FicheVisite({ id, casse = false, onFermer }: { id: string; casse?: boolean; onFermer: () => void }) {
   const queryClient = useQueryClient();
   const fiche = useQuery({ queryKey: ["fiche-visite", id], queryFn: () => ficheVisite(id) });
   const montant = useMontant();
@@ -123,13 +115,12 @@ export function FicheVisite({
               {v.etat_libelle && <Chip label={`Suivi : ${v.etat_libelle}`} />}
               {v.peniche !== null && <Chip label={`Péniche ${v.peniche}`} variant="outlined" />}
               {v.facture && <Chip label={`Facture ${v.facture}`} color="success" variant="outlined" />}
-              {Number(v.reste_a_payer) > 0 && (
-                <Chip label={`Reste à payer ${m(v.reste_a_payer)}`} color="warning" />
-              )}
+              {Number(v.reste_a_payer) > 0 && <Chip label={`Reste à payer ${m(v.reste_a_payer)}`} color="warning" />}
             </Stack>
             <Typography variant="body2" color="text.secondary">
               {dateHeure(v.cree_le)} · {v.magasin_nom} · vendeur {v.vendeur_nom}
-              {v.livraison_prevue_le && ` · livraison prévue le ${new Date(v.livraison_prevue_le).toLocaleDateString("fr-FR")}`}
+              {v.livraison_prevue_le &&
+                ` · livraison prévue le ${new Date(v.livraison_prevue_le).toLocaleDateString("fr-FR")}`}
             </Typography>
 
             <Section titre="Client">
@@ -195,7 +186,9 @@ export function FicheVisite({
               )}
               {v.reglements.map((r, i) => (
                 <Typography key={i} variant="body2">
-                  {dateHeure(r.recu_le)} · {r.mode_libelle} · {m(r.montant)}
+                  {dateHeure(r.recu_le)} · {r.mode_libelle}
+                  {r.reference ? ` n° ${r.reference}` : ""} · {m(r.montant)}
+                  {r.statut && r.statut !== "encaisse" ? ` · ${r.statut_libelle}` : ""}
                   {r.recu_par && ` · encaissé par ${r.recu_par}`}
                 </Typography>
               ))}
@@ -214,14 +207,22 @@ export function FicheVisite({
                     <Stack direction="row" sx={{ alignItems: "center", flexWrap: "wrap", gap: 1 }}>
                       <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }}>
                         {verre.libelle} · {verre.fournisseur} · {verre.commande_fournisseur} ·{" "}
-                        {verre.statut === "recue" ? `reçu le ${dateHeure(verre.recu_le ?? "")}` : verre.statut === "envoyee" ? "en attente du fournisseur" : "commande annulée"}
+                        {verre.statut === "recue"
+                          ? `reçu le ${dateHeure(verre.recu_le ?? "")}`
+                          : verre.statut === "envoyee"
+                            ? "en attente du fournisseur"
+                            : "commande annulée"}
                       </Typography>
                       {verre.casse && <Chip size="small" color="error" label={`Cassé : ${verre.casse}`} />}
-                      {casse && verre.statut === "recue" && !verre.casse && v.statut === "en_commande" && casseDe !== verre.id && (
-                        <Button size="small" color="warning" onClick={() => setCasseDe(verre.id)}>
-                          Casse
-                        </Button>
-                      )}
+                      {casse &&
+                        verre.statut === "recue" &&
+                        !verre.casse &&
+                        v.statut === "en_commande" &&
+                        casseDe !== verre.id && (
+                          <Button size="small" color="warning" onClick={() => setCasseDe(verre.id)}>
+                            Casse
+                          </Button>
+                        )}
                     </Stack>
                     {casseDe === verre.id && (
                       <DeclarerCasse

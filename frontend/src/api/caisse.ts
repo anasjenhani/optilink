@@ -30,7 +30,18 @@ export const FAMILLES: { valeur: Famille; libelle: string }[] = [
   { valeur: "supplement", libelle: "Suppléments verre" },
 ];
 
-export type ModePaiement = "carte" | "especes" | "cheque";
+export type ModePaiement = "carte" | "especes" | "cheque" | "virement" | "traite";
+
+export const MODES_PAIEMENT: { valeur: ModePaiement; libelle: string }[] = [
+  { valeur: "especes", libelle: "Espèces" },
+  { valeur: "carte", libelle: "Carte bancaire" },
+  { valeur: "cheque", libelle: "Chèque" },
+  { valeur: "virement", libelle: "Virement" },
+  { valeur: "traite", libelle: "Traite" },
+];
+
+/** Chèque, traite ou virement : n° de la pièce, banque et, pour chèque et traite, échéance. */
+export type Piece = { reference?: string; banque?: string; echeance?: string | null };
 
 export type Vente = {
   id: string;
@@ -47,7 +58,16 @@ export type Vente = {
   /** Verres commandés au fournisseur ; null si la commande n'en comporte pas. */
   verres?: "a_commander" | "commandes" | "recus" | null;
   facture: string | null;
-  client: { id: string; nom: string; matricule_fiscal: string; organisme?: string | null } | null;
+  client: {
+    id: string;
+    nom: string;
+    matricule_fiscal: string;
+    organisme?: string | null;
+    liste_noire?: boolean;
+    motif_liste_noire?: string;
+  } | null;
+  /** Vente à crédit : date à laquelle le client a promis de régler le reste. */
+  credit_echeance?: string | null;
   lignes: {
     id: number;
     libelle: string;
@@ -174,7 +194,10 @@ export type SaisieVente = {
     /** Verre : plage de puissances choisie, dont le prix s'applique. */
     plage?: number;
   }[];
-  paiements: { mode: ModePaiement; montant: string }[];
+  paiements: ({ mode: ModePaiement; montant: string } & Piece)[];
+  /** Vente à crédit : le client emporte ses articles et réglera le reste plus tard. */
+  a_credit?: boolean;
+  credit_echeance?: string | null;
   /** Paires de lunettes ; leurs articles sont dans ``lignes`` (``lunette`` = rang dans cette liste). */
   lunettes?: SaisieLunette[];
   /** Commande : acompte maintenant (paiements, éventuellement vides), solde à la livraison. */
@@ -184,7 +207,7 @@ export type SaisieVente = {
   peniche?: number;
 };
 
-export type Reglement = { mode: ModePaiement; montant: string };
+export type Reglement = { mode: ModePaiement; montant: string } & Piece;
 
 /** Ce que le vendeur vend au comptoir ; chaque type regroupe des familles d'articles. */
 export type TypeVente = "optique" | "solaire" | "lentille" | "produit";
@@ -296,8 +319,11 @@ export const reglerCommande = (vente: string, reglement: Reglement) =>
   appeler<Vente>(`/api/v1/ventes/${vente}/reglement/`, { methode: "POST", corps: { paiements: [reglement] } });
 
 /** Livre la commande ; le solde éventuel est encaissé en même temps. */
-export const livrerCommande = (vente: string, solde: Reglement | null) =>
+export const livrerCommande = (vente: string, solde: Reglement | null, credit?: { echeance: string | null }) =>
   appeler<Vente>(`/api/v1/ventes/${vente}/livrer/`, {
     methode: "POST",
-    corps: solde ? { paiements: [solde] } : {},
+    corps: {
+      ...(solde ? { paiements: [solde] } : {}),
+      ...(credit ? { a_credit: true, credit_echeance: credit.echeance } : {}),
+    },
   });

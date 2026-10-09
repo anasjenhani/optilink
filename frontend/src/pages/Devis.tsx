@@ -30,7 +30,8 @@ import Typography from "@mui/material/Typography";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { chercherArticles, type Article, type ModePaiement } from "../api/caisse";
+import { chercherArticles, type Article, type ModePaiement, type Piece } from "../api/caisse";
+import { ChampsPiece, ChoixMode, piece } from "./ChampsPaiement";
 import { chercherClients, listerPrescriptions, type Client } from "../api/clients";
 import {
   accepterDevis,
@@ -66,12 +67,6 @@ const STATUTS: Record<StatutDevis, { libelle: string; couleur: "default" | "info
   refuse: { libelle: "Refusé", couleur: "error" },
   encaisse: { libelle: "Encaissé", couleur: "default" },
 };
-
-const MODES: { valeur: ModePaiement; libelle: string }[] = [
-  { valeur: "carte", libelle: "Carte bancaire" },
-  { valeur: "especes", libelle: "Espèces" },
-  { valeur: "cheque", libelle: "Chèque" },
-];
 
 const dateCourte = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("fr-FR");
 
@@ -286,6 +281,7 @@ export function Devis({ droits }: { droits: DroitsDevis }) {
   const [recherche, setRecherche] = useState("");
   const [lignes, setLignes] = useState<Ligne[]>([]);
   const [mode, setMode] = useState<ModePaiement>("carte");
+  const [pieceSaisie, setPiece] = useState<Piece>({});
   // Devis avec verres à commander : acompte à l'encaissement, solde à la livraison.
   const [enCommande, setEnCommande] = useState(false);
   const [acompte, setAcompte] = useState("");
@@ -350,10 +346,11 @@ export function Devis({ droits }: { droits: DroitsDevis }) {
       if (quoi === "accepter") return accepterDevis(devis.id).then((d) => `Devis ${d.numero} accepté.`);
       if (quoi === "refuser") return refuserDevis(devis.id).then((d) => `Devis ${d.numero} refusé.`);
       const montant = enCommande ? acompte || "0" : devis.total_ttc;
-      return encaisserDevis(devis.id, { mode, montant }, enCommande, Number(peniche)).then((vente) =>
-        vente.statut === "en_commande"
-          ? `Devis ${devis.numero} passé en commande ${vente.numero} : reste ${formaterTexte(vente.reste_a_payer, monnaie)} à la livraison.`
-          : `Devis ${devis.numero} encaissé : ticket ${vente.numero}.`,
+      return encaisserDevis(devis.id, { mode, montant, ...piece(mode, pieceSaisie) }, enCommande, Number(peniche)).then(
+        (vente) =>
+          vente.statut === "en_commande"
+            ? `Devis ${devis.numero} passé en commande ${vente.numero} : reste ${formaterTexte(vente.reste_a_payer, monnaie)} à la livraison.`
+            : `Devis ${devis.numero} encaissé : ticket ${vente.numero}.`,
       );
     },
     onSuccess: (texte) => {
@@ -594,20 +591,8 @@ export function Devis({ droits }: { droits: DroitsDevis }) {
                   </Typography>
                   {droits.encaisser && (
                     <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ alignItems: "center" }}>
-                      <TextField
-                        select
-                        size="small"
-                        label="Paiement à l'encaissement"
-                        value={mode}
-                        onChange={(e) => setMode(e.target.value as ModePaiement)}
-                        sx={{ minWidth: 220 }}
-                      >
-                        {MODES.map((m) => (
-                          <MenuItem key={m.valeur} value={m.valeur}>
-                            {m.libelle}
-                          </MenuItem>
-                        ))}
-                      </TextField>
+                      <ChoixMode valeur={mode} onChange={setMode} label="Paiement à l'encaissement" />
+                      <ChampsPiece mode={mode} valeur={pieceSaisie} onChange={setPiece} />
                       <FormControlLabel
                         control={<Checkbox checked={enCommande} onChange={(e) => setEnCommande(e.target.checked)} />}
                         label="En commande (verres à commander, lunette optique ou applique : péniche)"

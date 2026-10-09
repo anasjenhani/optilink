@@ -9,6 +9,10 @@ PRIVILEGES = {
         "ventes.view_vente": "Voir les ventes et les commandes",
         "ventes.add_vente": "Encaisser (caisse, acomptes, livraisons)",
         "ventes.appliquer_remise": "Accorder une remise",
+        "ventes.vendre_a_credit": "Vendre à crédit (remettre au client sans qu'il ait soldé)",
+        "ventes.gerer_impayes": (
+            "Gérer les chèques impayés, les changements de chèque et la liste noire"
+        ),
     },
     "Prises en charge": {
         "ventes.view_priseencharge": "Voir les prises en charge (CNAM, assurances, mutuelles)",

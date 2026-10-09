@@ -2,6 +2,9 @@ import { appeler } from "./client";
 
 export type Client = {
   id: string;
+  /** Liste noire : plus de chèque, de traite ni de crédit. */
+  liste_noire?: boolean;
+  motif_liste_noire?: string;
   /** N° de fiche, attribué par le serveur à la création. */
   numero: number;
   /** N° de la fiche dans l'ancien logiciel, gardé à l'import. */

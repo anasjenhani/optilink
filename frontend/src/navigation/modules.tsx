@@ -6,6 +6,7 @@ import ArrowUpward from "@mui/icons-material/ArrowUpward";
 import AssignmentReturn from "@mui/icons-material/AssignmentReturn";
 import Badge from "@mui/icons-material/Badge";
 import BeachAccess from "@mui/icons-material/BeachAccess";
+import Block from "@mui/icons-material/Block";
 import Build from "@mui/icons-material/Build";
 import CalendarMonth from "@mui/icons-material/CalendarMonth";
 import CheckCircle from "@mui/icons-material/CheckCircle";
@@ -68,6 +69,7 @@ import { Clients } from "../pages/Clients";
 import { CassesVerres } from "../pages/CassesVerres";
 import { Commandes } from "../pages/Commandes";
 import { Corbeille } from "../pages/Corbeille";
+import { CreditClients } from "../pages/CreditClients";
 import { BordereauxPec } from "../pages/BordereauxPec";
 import { PrisesEnCharge } from "../pages/PrisesEnCharge";
 import { Sav } from "../pages/Sav";
@@ -167,6 +169,7 @@ export function modulesPour(session: EtatSession): Module[] {
     si(droitsTresorerie[onglet], () => (
       <Tresorerie droits={droitsTresorerie} ongletInitial={ONGLETS_TRESORERIE[onglet]} />
     ));
+  const droitsCredit = { regler: a("ventes.add_vente"), gerer: a("ventes.gerer_impayes") };
   const droitsReglementsFournisseurs = {
     regler: a("achats.add_reglementfournisseur"),
     debiter: a("achats.change_reglementfournisseur"),
@@ -558,7 +561,13 @@ export function modulesPour(session: EtatSession): Module[] {
           couleur: COULEURS.bleu,
           ecran: si(droitsRh.voirAcomptes, () => <RessourcesHumaines droits={droitsRh} ongletInitial="acomptes" />),
         },
-        aVenir("vente-credit", "Liste Vente à Crédit", ListAlt, COULEURS.brun),
+        {
+          id: "vente-credit",
+          libelle: "Liste Vente à Crédit",
+          icone: ListAlt,
+          couleur: COULEURS.brun,
+          ecran: si(a("ventes.view_vente"), () => <CreditClients droits={droitsCredit} ongletInitial="ventes" />),
+        },
         {
           id: "liste-reglements",
           libelle: "Liste Règlements",
@@ -566,7 +575,13 @@ export function modulesPour(session: EtatSession): Module[] {
           couleur: COULEURS.gris,
           ecran: si(voirVentes, () => <Recus />),
         },
-        aVenir("changement-cheques", "Changement Chèques", SwapHoriz, COULEURS.brun),
+        {
+          id: "changement-cheques",
+          libelle: "Changement Chèques",
+          icone: SwapHoriz,
+          couleur: COULEURS.brun,
+          ecran: si(a("ventes.gerer_impayes"), () => <CreditClients droits={droitsCredit} ongletInitial="cheques" />),
+        },
         {
           id: "prises-en-charge",
           libelle: "Prises en Charge (CNAM)",
@@ -585,10 +600,30 @@ export function modulesPour(session: EtatSession): Module[] {
             <BordereauxPec preparer={a("ventes.add_bordereaupec")} regler={a("ventes.change_bordereaupec")} />
           )),
         },
-        aVenir("reglement-credit", "Règlement Crédit", CreditCard, COULEURS.brun),
+        {
+          id: "reglement-credit",
+          libelle: "Règlement Crédit",
+          icone: CreditCard,
+          couleur: COULEURS.brun,
+          ecran: si(a("ventes.add_vente"), () => <CreditClients droits={droitsCredit} ongletInitial="ventes" />),
+        },
         aVenir("transfert-solde", "Transfert Solde", CompareArrows, COULEURS.gris),
-        aVenir("impaye", "Impayé Client", ReportProblem, COULEURS.rouge),
-        aVenir("reglement-impaye", "Règlement Impayé", ReportProblem, COULEURS.rouge),
+        {
+          id: "impaye",
+          libelle: "Impayé Client",
+          icone: ReportProblem,
+          couleur: COULEURS.rouge,
+          ecran: si(a("ventes.view_vente"), () => <CreditClients droits={droitsCredit} ongletInitial="impayes" />),
+        },
+        {
+          id: "liste-noire",
+          libelle: "Liste Noire",
+          icone: Block,
+          couleur: COULEURS.rouge,
+          ecran: si(a("ventes.gerer_impayes"), () => (
+            <CreditClients droits={droitsCredit} ongletInitial="liste-noire" />
+          )),
+        },
       ],
     },
     {
@@ -677,7 +712,13 @@ export function modulesPour(session: EtatSession): Module[] {
           couleur: COULEURS.brun,
           ecran: tresorerie("banque"),
         },
-        aVenir("echeancier", "Échéancier Client", CalendarMonth, COULEURS.vert),
+        {
+          id: "echeancier",
+          libelle: "Échéancier Client",
+          icone: CalendarMonth,
+          couleur: COULEURS.vert,
+          ecran: si(a("ventes.view_vente"), () => <CreditClients droits={droitsCredit} ongletInitial="portefeuille" />),
+        },
         aVenir("export-reglements", "Exportation Règlements", UploadFile, COULEURS.gris),
         aVenir("transfert-reglements", "Transfert Règlements Clients", SwapHoriz, COULEURS.vert),
         aVenir("report-magasin", "Mise à jour Report Magasin", Store, COULEURS.brun),
