@@ -22,6 +22,8 @@ class TypeDocument(models.TextChoices):
     SAV = "sav", "Dossier SAV"
     BORDEREAU_PEC = "bord_pec", "Bordereau de prise en charge"
     REGLEMENT_FOURNISSEUR = "reg_fourn", "Règlement fournisseur"
+    BON_SORTIE = "bon_sortie", "Bon de sortie"
+    DEMANDE_TRANSFERT = "dem_transf", "Demande de transfert"
 
 
 # Préfixe du numéro : M01-T2026-000001 pour un ticket, M01-F2026-000001 pour une facture,
@@ -43,6 +45,8 @@ PREFIXES = {
     TypeDocument.SAV: "S",
     TypeDocument.BORDEREAU_PEC: "BP",
     TypeDocument.REGLEMENT_FOURNISSEUR: "RF",
+    TypeDocument.BON_SORTIE: "BS",
+    TypeDocument.DEMANDE_TRANSFERT: "DT",
 }
 
 
