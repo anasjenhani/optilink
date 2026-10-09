@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .api.fiches import FicheArticleViewSet
 from .api.imports import ImportCatalogueView, ImportStockView, ImportVerresView, ModeleImportView
 from .api.inventaires import InventaireViewSet
+from .api.peremptions import PeremptionViewSet
 from .api.sorties import BonSortieViewSet, DemandeTransfertViewSet, StockADateViewSet
 from .api.transferts import TransfertViewSet
 from .api.views import ArticleViewSet, MouvementStockViewSet
@@ -17,6 +18,7 @@ router.register("inventaires", InventaireViewSet, basename="inventaire")
 router.register("bons-sortie", BonSortieViewSet, basename="bon-sortie")
 router.register("demandes-transfert", DemandeTransfertViewSet, basename="demande-transfert")
 router.register("stock-a-date", StockADateViewSet, basename="stock-a-date")
+router.register("peremptions-lentilles", PeremptionViewSet, basename="peremption-lentille")
 
 urlpatterns = [
     path("imports/catalogue/", ImportCatalogueView.as_view(), name="import-catalogue"),

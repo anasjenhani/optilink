@@ -4,10 +4,12 @@ import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
+import Checkbox from "@mui/material/Checkbox";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import IconButton from "@mui/material/IconButton";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
@@ -32,6 +34,7 @@ import {
   demanderTransfert,
   listerBonsSortie,
   listerDemandes,
+  lirePeremptions,
   lireStockADate,
   proposerReassort,
   refuserDemande,
@@ -39,6 +42,7 @@ import {
   sortirDuStock,
   type BonSortie as Bon,
   type DemandeTransfert,
+  type EtatPeremption,
   type TypeSortie,
 } from "../api/sorties";
 import { AjoutArticle } from "./BonReception";
@@ -835,6 +839,105 @@ export function StockALaDate() {
                 </TableBody>
               </Table>
             </TableContainer>
+          )}
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+const ETATS_PEREMPTION: Record<EtatPeremption, { libelle: string; couleur: string }> = {
+  perimee: { libelle: "Périmée", couleur: "error.main" },
+  proche: { libelle: "Bientôt", couleur: "warning.main" },
+  inconnue: { libelle: "À dater", couleur: "text.secondary" },
+  ok: { libelle: "", couleur: "text.primary" },
+};
+
+/** « Péremption Lentilles » : lentilles en stock avec leurs dates ; périmées et proches en tête. */
+export function PeremptionLentilles() {
+  const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
+  const [magasinChoisi, setMagasin] = useState("");
+  const magasin = magasins.data?.find((m) => m.id === magasinChoisi) ?? magasins.data?.[0];
+  const [jours, setJours] = useState("90");
+  const [toutes, setToutes] = useState(false);
+  const delai = Math.max(Number(jours) || 0, 0);
+  const liste = useQuery({
+    queryKey: ["peremptions", magasin?.id, delai],
+    queryFn: () => lirePeremptions(magasin!.id, delai),
+    enabled: Boolean(magasin),
+  });
+  const lignes = (liste.data ?? []).filter((l) => toutes || l.etat !== "ok");
+  const compte = (etat: EtatPeremption) => (liste.data ?? []).filter((l) => l.etat === etat).length;
+
+  return (
+    <Card>
+      <CardContent>
+        <Stack spacing={2}>
+          <Typography variant="h6" component="h2">
+            Péremption des lentilles
+          </Typography>
+          <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: "wrap", alignItems: "center" }}>
+            {(magasins.data?.length ?? 0) > 1 && (
+              <ChoixMagasin
+                label="Magasin"
+                magasins={magasins.data!}
+                valeur={magasin?.id ?? ""}
+                onChange={setMagasin}
+              />
+            )}
+            <TextField
+              size="small"
+              label="Bientôt : dans les"
+              value={jours}
+              onChange={(ev) => setJours(ev.target.value.replace(/\D/g, ""))}
+              slotProps={{ htmlInput: { inputMode: "numeric" }, input: { endAdornment: "jours" } }}
+              sx={{ width: 170 }}
+            />
+            <FormControlLabel
+              control={<Checkbox checked={toutes} onChange={(ev) => setToutes(ev.target.checked)} />}
+              label="Voir aussi les lentilles sans souci"
+            />
+          </Stack>
+          {liste.isError && <Alert severity="error">{liste.error.message}</Alert>}
+          {liste.data && (
+            <Typography>
+              {`${compte("perimee")} périmées · ${compte("proche")} bientôt périmées · ${compte("inconnue")} à dater (au prochain inventaire des lentilles)`}
+            </Typography>
+          )}
+          {lignes.length > 0 && (
+            <TableContainer sx={{ maxHeight: 520 }}>
+              <Table stickyHeader size="small" aria-label="Péremption des lentilles">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Référence</TableCell>
+                    <TableCell>Lentille</TableCell>
+                    <TableCell align="right">Stock</TableCell>
+                    <TableCell>Péremption</TableCell>
+                    <TableCell />
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {lignes.map((l) => (
+                    <TableRow key={l.article}>
+                      <TableCell>{l.reference}</TableCell>
+                      <TableCell>{l.libelle}</TableCell>
+                      <TableCell align="right">{l.stock}</TableCell>
+                      <TableCell>
+                        {l.lots
+                          .map((lot) => `${lot.quantite} × ${lot.date ? dateCourte(lot.date) : "date inconnue"}`)
+                          .join(" · ")}
+                      </TableCell>
+                      <TableCell sx={{ color: ETATS_PEREMPTION[l.etat].couleur, fontWeight: 700 }}>
+                        {ETATS_PEREMPTION[l.etat].libelle}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+          {liste.data && lignes.length === 0 && (
+            <Typography color="text.secondary">Aucune lentille périmée, bientôt périmée ou à dater.</Typography>
           )}
         </Stack>
       </CardContent>

@@ -548,6 +548,12 @@ class LigneTransfert(models.Model):
     transfert = models.ForeignKey(TransfertStock, on_delete=models.CASCADE, related_name="lignes")
     article = models.ForeignKey(Article, on_delete=models.PROTECT, related_name="+")
     quantite = models.PositiveIntegerField("quantité")
+    peremptions = models.JSONField(
+        "dates de péremption",
+        default=list,
+        blank=True,
+        help_text="Lentilles : [{date, quantite}] des pièces envoyées (date vide : inconnue).",
+    )
 
     class Meta:
         verbose_name = "ligne de transfert"
@@ -768,6 +774,12 @@ class LigneInventaire(models.Model):
     stock_theorique = models.IntegerField("stock de l'application", null=True, blank=True)
     ecart = models.IntegerField(null=True, blank=True)
     observation = models.CharField(max_length=200, blank=True)
+    date_peremption = models.DateField(
+        "péremption",
+        null=True,
+        blank=True,
+        help_text="Lentilles : date de péremption la plus proche des boîtes comptées.",
+    )
 
     class Meta:
         verbose_name = "ligne d'inventaire"

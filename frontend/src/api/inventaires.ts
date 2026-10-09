@@ -13,6 +13,8 @@ export type LigneInventaire = {
   comptee: boolean;
   ecart: number;
   observation: string;
+  /** Lentilles : péremption la plus proche des boîtes comptées. */
+  date_peremption: string | null;
 };
 
 export type InventaireResume = {
@@ -57,6 +59,7 @@ export type Comptage = {
   quantite?: number;
   remplacer?: boolean;
   observation?: string;
+  date_peremption?: string | null;
 };
 
 export type OuvertureInventaire = {

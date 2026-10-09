@@ -15,6 +15,7 @@ import CreditCard from "@mui/icons-material/CreditCard";
 import DeleteSweep from "@mui/icons-material/DeleteSweep";
 import Description from "@mui/icons-material/Description";
 import EditNote from "@mui/icons-material/EditNote";
+import EventBusy from "@mui/icons-material/EventBusy";
 import EventRepeat from "@mui/icons-material/EventRepeat";
 import Factory from "@mui/icons-material/Factory";
 import FactCheck from "@mui/icons-material/FactCheck";
@@ -83,7 +84,7 @@ import { ResteVendeur } from "../pages/ResteVendeur";
 import { Devis } from "../pages/Devis";
 import { ClotureMois, FacturationGroupee } from "../pages/FacturationGroupee";
 import { Factures } from "../pages/Factures";
-import { BonSortie, DemandesTransfert, Reassort, StockALaDate } from "../pages/SortiesStock";
+import { BonSortie, DemandesTransfert, PeremptionLentilles, Reassort, StockALaDate } from "../pages/SortiesStock";
 import { Statistiques } from "../pages/Statistiques";
 import { Fournisseurs } from "../pages/Fournisseurs";
 import { Imports } from "../pages/Imports";
@@ -529,6 +530,13 @@ export function modulesPour(session: EtatSession): Module[] {
           icone: CalendarMonth,
           couleur: COULEURS.vert,
           ecran: si(a("stock.view_article"), () => <StockALaDate />),
+        },
+        {
+          id: "peremption-lentilles",
+          libelle: "Péremption Lentilles",
+          icone: EventBusy,
+          couleur: COULEURS.rouge,
+          ecran: si(a("stock.view_article"), () => <PeremptionLentilles />),
         },
         aVenir("config-stock", "Config Stock", Widgets, COULEURS.brun),
         aVenir("stock-depense", "Stock Article Dépense", Inventory2, COULEURS.jaune),

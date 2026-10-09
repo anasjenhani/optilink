@@ -156,6 +156,32 @@ function CaseObservation({
   );
 }
 
+/** Péremption d'une lentille comptée : la date la plus proche des boîtes, enregistrée dès qu'elle change. */
+function CasePeremption({
+  ligne,
+  actif,
+  onCorrige,
+}: {
+  ligne: LigneInventaire;
+  actif: boolean;
+  onCorrige: (date: string | null) => void;
+}) {
+  if (ligne.famille !== "lentille") return null;
+  if (!actif || !ligne.comptee) {
+    return <>{ligne.date_peremption ? new Date(ligne.date_peremption).toLocaleDateString("fr-FR") : ""}</>;
+  }
+  return (
+    <TextField
+      size="small"
+      type="date"
+      value={ligne.date_peremption ?? ""}
+      onChange={(e) => onCorrige(e.target.value || null)}
+      slotProps={{ htmlInput: { "aria-label": `Péremption ${ligne.libelle}` } }}
+      sx={{ width: 160, "& input": { py: 0.5 } }}
+    />
+  );
+}
+
 /** Comptage d'un inventaire : scan ou recherche, écarts avec le stock, validation. */
 function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventaire; onRetour: () => void }) {
   const queryClient = useQueryClient();
@@ -231,6 +257,7 @@ function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventai
   const peutCompter = (enCours && droits.compter) || (aVerifier && droits.valider);
   const ecartsSeuls = ecartsChoisi ?? aVerifier;
   const lignes = ecartsSeuls ? inv.lignes.filter((l) => l.ecart !== 0) : inv.lignes;
+  const avecPeremption = inv.lignes.some((l) => l.famille === "lentille");
   const somme = (f: (l: LigneInventaire) => number) => inv.lignes.reduce((s, l) => s + f(l), 0);
   const avecEcart = inv.lignes.filter((l) => l.ecart !== 0).length;
   const nonComptes = inv.lignes.filter((l) => !l.comptee).length;
@@ -345,6 +372,7 @@ function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventai
               <TableCell sx={ENTETE} align="right">
                 Écart
               </TableCell>
+              {avecPeremption && <TableCell sx={ENTETE}>Péremption</TableCell>}
               <TableCell sx={ENTETE}>Observation</TableCell>
               {peutCompter && <TableCell sx={ENTETE} />}
             </TableRow>
@@ -372,6 +400,22 @@ function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventai
                 <TableCell align="right" sx={{ color: couleurEcart(l.ecart), fontWeight: 700 }}>
                   {signe(l.ecart)}
                 </TableCell>
+                {avecPeremption && (
+                  <TableCell>
+                    <CasePeremption
+                      ligne={l}
+                      actif={peutCompter}
+                      onCorrige={(date) =>
+                        compterEnFile({
+                          article: l.article,
+                          quantite: l.quantite_comptee,
+                          remplacer: true,
+                          date_peremption: date,
+                        })
+                      }
+                    />
+                  </TableCell>
+                )}
                 <TableCell>
                   <CaseObservation
                     ligne={l}
@@ -412,6 +456,7 @@ function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventai
                 <TableCell align="right">{somme((l) => l.stock_theorique)}</TableCell>
                 <TableCell align="right">{somme((l) => l.quantite_comptee)}</TableCell>
                 <TableCell align="right">{signe(somme((l) => l.ecart))}</TableCell>
+                {avecPeremption && <TableCell />}
                 <TableCell />
                 {peutCompter && <TableCell />}
               </TableRow>
