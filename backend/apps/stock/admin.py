@@ -6,6 +6,10 @@ from core.admin_imports import AvecImport
 from .admin_saisie import saisir_inventaire, saisir_transfert
 from .models import (
     Article,
+    ArticleLentille,
+    ArticleMonture,
+    ArticleProduit,
+    ArticleVerre,
     BonSortie,
     CouleurVerre,
     DemandeTransfert,
@@ -138,6 +142,67 @@ class ArticleAdmin(AvecImport, admin.ModelAdmin):
             .get_queryset(request)
             .select_related("monture", "verre", "lentille", "fournisseur")
         )
+
+
+class _ArticlesDeLaFamilleAdmin(ArticleAdmin):
+    """Les articles d'une famille (Verres, Montures, Lentilles, Produits), avec leur import.
+
+    Mêmes droits que les articles : ce sont les mêmes fiches, triées par famille.
+    """
+
+    list_filter = ("sur_commande", "fournisseur", "est_actif")
+    exclude = ("famille",)
+
+    @property
+    def famille(self):
+        return self.model.famille_affichee
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(famille=self.famille)
+
+    def get_inlines(self, request, obj):
+        fiche = CARACTERISTIQUES.get(self.famille)
+        inlines = [fiche, PrixArticleInline] if fiche else [PrixArticleInline]
+        return [*inlines, PlageVerreInline] if self.famille == Article.Famille.VERRE else inlines
+
+    def save_model(self, request, obj, form, change):
+        obj.famille = self.famille
+        super().save_model(request, obj, form, change)
+
+    def _droit(self, request, action):
+        return request.user.has_perm(f"stock.{action}_article")
+
+    def has_view_permission(self, request, obj=None):
+        return self._droit(request, "view") or self._droit(request, "change")
+
+    def has_add_permission(self, request):
+        return self._droit(request, "add")
+
+    def has_change_permission(self, request, obj=None):
+        return self._droit(request, "change")
+
+    def has_delete_permission(self, request, obj=None):
+        return self._droit(request, "delete")
+
+
+@admin.register(ArticleVerre)
+class ArticleVerreAdmin(_ArticlesDeLaFamilleAdmin):
+    imports = ("verres",)
+
+
+@admin.register(ArticleMonture)
+class ArticleMontureAdmin(_ArticlesDeLaFamilleAdmin):
+    imports = ("montures",)
+
+
+@admin.register(ArticleLentille)
+class ArticleLentilleAdmin(_ArticlesDeLaFamilleAdmin):
+    imports = ("lentilles",)
+
+
+@admin.register(ArticleProduit)
+class ArticleProduitAdmin(_ArticlesDeLaFamilleAdmin):
+    imports = ("produits",)
 
 
 @admin.register(MouvementStock)

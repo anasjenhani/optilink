@@ -12,7 +12,14 @@ from apps.achats.imports import COLONNES_FOURNISSEURS, COLONNES_RECEPTIONS
 from apps.crm.imports import COLONNES_CLIENTS
 from apps.optique.imports import COLONNES_OPHTALMOLOGUES
 from apps.securite.imports import COLONNES_UTILISATEURS
-from apps.stock.imports import COLONNES_CATALOGUE, COLONNES_STOCK, COLONNES_VERRES
+from apps.stock.imports import (
+    COLONNES_CATALOGUE,
+    COLONNES_LENTILLES,
+    COLONNES_MONTURES,
+    COLONNES_PRODUITS,
+    COLONNES_STOCK,
+    COLONNES_VERRES,
+)
 from apps.stock.imports_referentiels import LISTES
 
 
@@ -156,6 +163,115 @@ MODELES = {
                 "calibre": "51",
                 "pont": "21",
                 "branche": "145",
+            }
+        ],
+    ),
+    "montures": Modele(
+        titre="Montures",
+        colonnes=COLONNES_MONTURES,
+        obligatoires={"reference", "libelle", "fournisseur"},
+        aide=_COMMUN_ARTICLES
+        | {
+            "prix_achat_ht": "Prix d'achat HT avant remise.",
+            "categorie": "Lunette Optique (par défaut), Lunette Solaire ou Lunette Applique.",
+            "couleur": "Couleur de la monture.",
+            "couleur_verres": "Couleur des verres (solaires).",
+            "matiere": "Acétate, Titane, Acier, TR90, Corne, Bois ou Métal.",
+            "type": "Cerclée, Semi-cerclée ou Percée (vide = aucun).",
+            "forme": "Ronde, rectangle, papillon…",
+            "genre": "Homme, Femme, Mixte ou Enfant.",
+            "tranche_age": "Adulte, Junior, Enfant ou Bébé.",
+            "calibre": "Taille (mm).",
+            "pont": "Pont (mm).",
+            "branche": "Longueur de branche (mm).",
+        },
+        exemples=[
+            {
+                "reference": "MON-RB5154",
+                "libelle": "Ray-Ban RB5154 écaille",
+                "fournisseur": "Luxottica Tunisie",
+                "code_barres": "8053672000001",
+                "prix_ttc": "450,000",
+                "tva": "19",
+                "prix_achat_ht": "220,000",
+                "categorie": "Lunette Optique",
+                "marque": "Ray-Ban",
+                "modele": "RB5154",
+                "couleur": "Écaille",
+                "matiere": "Acétate",
+                "type": "Cerclée",
+                "calibre": "51",
+                "pont": "21",
+                "branche": "145",
+            }
+        ],
+    ),
+    "lentilles": Modele(
+        titre="Lentilles",
+        colonnes=COLONNES_LENTILLES,
+        obligatoires={"reference", "libelle", "fournisseur", "renouvellement"},
+        aide=_COMMUN_ARTICLES
+        | {
+            "sur_commande": "oui pour une lentille commandée pour chaque client (plage de "
+            "puissances), non pour une lentille de stock.",
+            "prix_achat_ht": "Prix d'achat HT avant remise.",
+            "categorie": "Lentille optique (par défaut) ou Lentille solaire.",
+            "couleur": "Couleur de la lentille (vide si transparente).",
+            "type": "Sphérique (par défaut), Torique ou Multifocale.",
+            "renouvellement": "Journalière, Bimensuelle, Mensuelle, Trimestrielle ou Annuelle.",
+            "rayon": "Rayon de courbure (mm).",
+            "diametre": "Diamètre (mm).",
+            "puissance": "Sphère (-6,00…) ; vide pour une lentille sur commande.",
+            "cylindre": "Cylindre des toriques.",
+            "axe": "Axe des toriques (0 à 180).",
+            "addition": "Addition des multifocales.",
+            "lentilles_par_boite": "Nombre de lentilles par boîte.",
+        },
+        exemples=[
+            {
+                "reference": "LEN-000314",
+                "libelle": "biofinity SPH : -6.00",
+                "fournisseur": "SICOM",
+                "code_barres": "314",
+                "sur_commande": "non",
+                "prix_ttc": "25,000",
+                "tva": "19",
+                "prix_achat_ht": "13,000",
+                "categorie": "Lentille optique",
+                "marque": "biofinity",
+                "type": "Sphérique",
+                "renouvellement": "Mensuelle",
+                "puissance": "-6,00",
+                "lentilles_par_boite": "3",
+            },
+            {
+                "reference": "LEN-000167",
+                "libelle": "I SEE COLOR FRECH MINT",
+                "fournisseur": "OPTY GROS",
+                "prix_ttc": "35,000",
+                "tva": "19",
+                "categorie": "Lentille optique",
+                "marque": "I SEE COLOR",
+                "couleur": "FRECH MINT",
+                "renouvellement": "Trimestrielle",
+                "puissance": "0",
+            },
+        ],
+    ),
+    "produits": Modele(
+        titre="Produits",
+        colonnes=COLONNES_PRODUITS,
+        obligatoires={"reference", "libelle", "fournisseur"},
+        aide=_COMMUN_ARTICLES | {"prix_achat_ht": "Prix d'achat HT avant remise."},
+        exemples=[
+            {
+                "reference": "ETUI-RIGIDE",
+                "libelle": "Étui rigide",
+                "fournisseur": "Luxottica Tunisie",
+                "code_barres": "3700000000017",
+                "prix_ttc": "25,000",
+                "tva": "19",
+                "prix_achat_ht": "8,000",
             }
         ],
     ),

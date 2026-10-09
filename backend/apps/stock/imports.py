@@ -231,6 +231,52 @@ COLONNES_CATALOGUE = [
     "lentilles_par_boite",
 ]
 COLONNES_STOCK = ["code_barres", "reference", "quantite"]
+_COMMUN = [
+    "reference",
+    "libelle",
+    "fournisseur",
+    "reference_fournisseur",
+    "code_barres",
+    "prix_ttc",
+    "tva",
+    "prix_achat_ht",
+]
+# Modèles « montures », « lentilles », « produits » : les colonnes utiles à la famille.
+COLONNES_MONTURES = [
+    *_COMMUN,
+    "categorie",
+    "marque",
+    "modele",
+    "couleur",
+    "couleur_verres",
+    "matiere",
+    "type",
+    "forme",
+    "genre",
+    "tranche_age",
+    "calibre",
+    "pont",
+    "branche",
+]
+COLONNES_LENTILLES = [
+    *_COMMUN[:5],
+    "sur_commande",
+    *_COMMUN[5:],
+    "categorie",
+    "marque",
+    "modele",
+    "couleur",
+    "type",
+    "renouvellement",
+    "rayon",
+    "diametre",
+    "puissance",
+    "cylindre",
+    "axe",
+    "addition",
+    "lentilles_par_boite",
+]
+COLONNES_PRODUITS = list(_COMMUN)
 # Modèle « verres » : les colonnes du catalogue utiles aux verres, famille implicite.
 COLONNES_VERRES = [
     "reference",
@@ -382,7 +428,9 @@ def _importer_article(ligne, pays, fournisseurs, taux, imposee=None):
     if not famille:
         raise ValidationError("famille : obligatoire.")
     if imposee and famille != imposee:
-        raise ValidationError(f"famille : ce fichier n'importe que des {imposee}s.")
+        raise ValidationError(
+            f"famille : ce fichier n'importe que la famille {Article.Famille(imposee).label}."
+        )
     fournisseur = fournisseurs.get(normaliser(ligne["fournisseur"])) or fournisseurs.get(
         ligne["fournisseur"].strip()
     )
