@@ -159,7 +159,8 @@ export type FicheArticle = {
     date_bl: string;
     numero_bl: string;
   } | null;
-  stocks: { magasin: string; stock: number }[];
+  /** Une ligne par dépôt de chaque magasin. */
+  stocks: { magasin: string; depot?: string; stock: number }[];
   cree_par: string | null;
   cree_le: string;
 };
@@ -171,6 +172,7 @@ export type SaisieFiche = Partial<
 export type Mouvement = {
   horodatage: string;
   magasin: string;
+  depot?: string;
   type: string;
   quantite: number;
   reference: string;

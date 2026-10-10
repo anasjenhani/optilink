@@ -211,12 +211,12 @@ class ArticleProduitAdmin(_ArticlesDeLaFamilleAdmin):
 @admin.register(MouvementStock)
 class MouvementStockAdmin(AvecImport, admin.ModelAdmin):
     imports = ("stock",)
-    list_display = ("horodatage", "magasin", "article", "type", "quantite", "reference")
-    list_filter = ("type", "magasin")
+    list_display = ("horodatage", "magasin", "depot", "article", "type", "quantite", "reference")
+    list_filter = ("type", "magasin", "depot")
     search_fields = ("article__reference", "reference")
 
     def get_queryset(self, request):
-        return MouvementStock.tous.select_related("magasin", "article")
+        return MouvementStock.tous.select_related("magasin", "depot", "article")
 
     # Le stock ne se corrige que par un nouveau mouvement, jamais en modifiant l'historique.
     def has_change_permission(self, request, obj=None):
@@ -234,13 +234,22 @@ class LigneTransfertInline(admin.TabularInline):
 
 @admin.register(TransfertStock)
 class TransfertStockAdmin(admin.ModelAdmin):
-    list_display = ("numero", "cree_le", "magasin", "destination", "statut", "recu_le")
+    list_display = (
+        "numero",
+        "cree_le",
+        "depot_origine",
+        "depot_destination",
+        "statut",
+        "recu_le",
+    )
     list_filter = ("statut", "magasin", "destination")
     search_fields = ("numero",)
     inlines = [LigneTransfertInline]
 
     def get_queryset(self, request):
-        return TransfertStock.tous.select_related("magasin", "destination")
+        return TransfertStock.tous.select_related(
+            "magasin", "destination", "depot_origine", "depot_destination"
+        )
 
     # « Ajouter » envoie le transfert par le même service que l'application ; le magasin de
     # destination le réceptionne dans l'application. Un transfert ne se modifie pas.
@@ -264,13 +273,13 @@ class LigneInventaireInline(admin.TabularInline):
 
 @admin.register(Inventaire)
 class InventaireAdmin(admin.ModelAdmin):
-    list_display = ("numero", "cree_le", "magasin", "famille", "statut", "valide_le")
+    list_display = ("numero", "cree_le", "magasin", "depot", "famille", "statut", "valide_le")
     list_filter = ("statut", "magasin", "famille")
     search_fields = ("numero",)
     inlines = [LigneInventaireInline]
 
     def get_queryset(self, request):
-        return Inventaire.tous.select_related("magasin")
+        return Inventaire.tous.select_related("magasin", "depot")
 
     # « Ajouter » crée l'inventaire (et de premiers comptages) par le même service que
     # l'application ; le comptage et la validation finale se poursuivent dans l'application.
@@ -399,7 +408,7 @@ class BonSortieAdmin(LectureSeule, admin.ModelAdmin):
     inlines = [LigneSortieInline]
 
     def get_queryset(self, request):
-        return BonSortie.tous.select_related("magasin")
+        return BonSortie.tous.select_related("magasin", "depot")
 
 
 class LigneDemandeInline(LectureSeule, admin.TabularInline):

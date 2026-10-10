@@ -283,6 +283,7 @@ MODELES = {
             "code_barres": "Code-barres de l'article (ou la référence).",
             "reference": "Référence de l'article si pas de code-barres.",
             "quantite": "Nombre d'articles reçus.",
+            "depot": "Code du dépôt du magasin (ex. DEPCEN) ; vide : son dépôt de vente.",
         },
         exemples=[{"code_barres": "8053672000001", "quantite": "3"}],
     ),

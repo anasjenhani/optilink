@@ -1,23 +1,31 @@
 """Dépôt central : la marchandise des fournisseurs y est reçue, contrôlée et facturée.
 
-Quand la société d'un magasin a un dépôt central, les BL des articles de stock, les factures
-achat et les bons retour se saisissent au dépôt. Un magasin saisit seulement le BL des verres
-commandés pour ses clients ; ce BL reste géré par le dépôt (facture, bon retour). Une société
-sans dépôt garde tout au magasin.
+Le dépôt central est rattaché à un magasin. Quand la société a un dépôt central, les BL des
+articles de stock, les factures achat et les bons retour se saisissent au magasin qui l'abrite,
+et les articles entrent dans le dépôt central. Un autre magasin saisit seulement le BL des
+verres commandés pour ses clients ; ce BL reste géré au dépôt (facture, bon retour). Une
+société sans dépôt central garde tout au magasin.
+
+Les fonctions ci-dessous renvoient des magasins : le « dépôt » est le magasin qui l'abrite.
 """
 
-from apps.reseau.models import Magasin
+from apps.reseau.models import Depot, Magasin
 
 
 def depot_de(magasin):
-    """Dépôt central actif de la société du magasin (le magasin lui-même s'il en est un)."""
+    """Magasin qui abrite le dépôt central actif de la société (le magasin lui-même, s'il
+    l'abrite)."""
     if magasin.est_depot:
         return magasin
-    return (
-        Magasin.tous.filter(societe_id=magasin.societe_id, type=Magasin.Type.DEPOT, est_actif=True)
+    central = (
+        Depot.objects.filter(
+            magasin__societe_id=magasin.societe_id, type=Depot.Type.CENTRAL, est_actif=True
+        )
+        .select_related("magasin")
         .order_by("code")
         .first()
     )
+    return Magasin.tous.get(pk=central.magasin_id) if central else None
 
 
 def magasins_geres(magasin):

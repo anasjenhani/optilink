@@ -27,6 +27,8 @@ class Migration(migrations.Migration):
         ("auth", "0012_alter_user_first_name_max_length"),
         ("contenttypes", "0002_remove_content_type_name"),
         ("reseau", "0004_code_numerique"),
+        # Les affectations de securite pointent encore vers les régions jusqu'à securite 0004.
+        ("securite", "0003_journaux_en_ajout_seul"),
     ]
 
     operations = [

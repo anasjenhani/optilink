@@ -11,8 +11,19 @@ afterEach(() => vi.unstubAllGlobals());
 
 const PAYS = { devise: "TND", decimales: 3 };
 const MAGASINS = [
-  { id: "m1", nom: "Tunis Centre", societe_id: "s1", type: "magasin", pays: PAYS },
-  { id: "d1", nom: "Dépôt central", societe_id: "s1", type: "depot", pays: PAYS },
+  { id: "m2", nom: "Lac", societe_id: "s1", type: "magasin", pays: PAYS },
+  {
+    id: "m1",
+    nom: "Tunis Centre",
+    societe_id: "s1",
+    type: "magasin",
+    depot_central: true,
+    pays: PAYS,
+    depots: [
+      { id: "v1", code: "T01", nom: "Dépôt Tunis Centre", type: "vente" },
+      { id: "c1", code: "DEPCEN", nom: "Dépôt central", type: "central" },
+    ],
+  },
 ];
 const ETUI = {
   article: "a2",
@@ -99,13 +110,18 @@ function afficher(droits = { ouvrir: true, compter: true, valider: true }) {
 
 test("ouvrir un inventaire au dépôt, scanner, voir l'écart puis valider", async () => {
   const appels = afficher();
-  expect(await screen.findByText("Dépôt central (dépôt central)")).toBeInTheDocument();
+  // Le magasin du dépôt central d'abord ; son dépôt de vente est choisi par défaut.
+  expect(await screen.findByText("Tunis Centre (dépôt central)")).toBeInTheDocument();
+  expect(screen.getByText("Dépôt Tunis Centre")).toBeInTheDocument();
+  fireEvent.mouseDown(screen.getByLabelText("Dépôt"));
+  fireEvent.click(await screen.findByRole("option", { name: "Dépôt central" }));
   fireEvent.mouseDown(screen.getByLabelText("Nature"));
   fireEvent.click(await screen.findByRole("option", { name: "Lunette Solaire" }));
   fireEvent.click(screen.getByRole("button", { name: "Créer un inventaire" }));
   expect(await screen.findByText("Inventaire DEP-IN2026-000001")).toBeInTheDocument();
   expect(appels.find((a) => a.url === "/api/v1/inventaires/" && a.methode === "POST")?.corps).toEqual({
-    magasin: "d1",
+    magasin: "m1",
+    depot: "c1",
     famille: "monture",
     marque: "",
     nature: "solaire",

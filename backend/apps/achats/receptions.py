@@ -171,7 +171,7 @@ def enregistrer_reception(
     taux_remise_ex=Decimal("0"),
     observation="",
 ):
-    """Enregistre le bon : stock du magasin, verres des clients reçus, totaux figés.
+    """Enregistre le bon : stock du dépôt de réception, verres des clients reçus, totaux figés.
 
     ``lignes`` : [{"article", "quantite", "prix_achat_ht", "taux_remise", "taux_tva",
     "non_conforme", "motif", "ligne_commande"?, "numero_serie"?, "numero_lot"?,
@@ -209,8 +209,10 @@ def enregistrer_reception(
     )
     annee = _aujourd_hui(pays).year
     sequence = _prochain_numero(magasin, annee, TypeDocument.RECEPTION)
+    depot_stock = magasin.depot_de_reception
     bon = BonReception.tous.create(
         magasin=magasin,
+        depot=depot_stock,
         numero=_numero(magasin, TypeDocument.RECEPTION, annee, sequence),
         annee=annee,
         sequence=sequence,
@@ -248,6 +250,7 @@ def enregistrer_reception(
         if not ligne["non_conforme"] and commande is None:
             MouvementStock.tous.create(
                 magasin=magasin,
+                depot=depot_stock,
                 article=article,
                 quantite=ligne["quantite"],
                 type=MouvementStock.Type.RECEPTION,

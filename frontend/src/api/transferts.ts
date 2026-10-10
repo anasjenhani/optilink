@@ -16,6 +16,8 @@ export type TransfertResume = {
   magasin_id: string;
   destination: string;
   destination_id: string;
+  depot_origine: string;
+  depot_destination: string;
   statut: "envoye" | "recu" | "annule";
   statut_libelle: string;
   total_articles: number | null;
@@ -33,6 +35,8 @@ export type Transfert = TransfertResume & { lignes: LigneTransfert[] };
 export type SaisieTransfert = {
   magasin: string;
   destination: string;
+  depot_origine?: string;
+  depot_destination?: string;
   observation: string;
   lignes: { article: string; quantite: number }[];
 };

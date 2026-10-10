@@ -11,8 +11,26 @@ afterEach(() => vi.unstubAllGlobals());
 
 const PAYS = { devise: "TND", decimales: 3 };
 const MAGASINS = [
-  { id: "m1", nom: "Tunis Centre", societe_id: "s1", type: "magasin", pays: PAYS },
-  { id: "d1", nom: "Dépôt central", societe_id: "s1", type: "depot", pays: PAYS },
+  {
+    id: "m1",
+    nom: "Tunis Centre",
+    societe_id: "s1",
+    type: "magasin",
+    depot_central: true,
+    pays: PAYS,
+    depots: [
+      { id: "v1", code: "T01", nom: "Dépôt Tunis Centre", type: "vente" },
+      { id: "c1", code: "DEPCEN", nom: "Dépôt central", type: "central" },
+    ],
+  },
+  {
+    id: "m2",
+    nom: "Lac",
+    societe_id: "s1",
+    type: "magasin",
+    pays: PAYS,
+    depots: [{ id: "v2", code: "T02", nom: "Dépôt Lac", type: "vente" }],
+  },
 ];
 const MONTURE = {
   id: "a1",
@@ -28,10 +46,12 @@ const MONTURE = {
 const TRANSFERT = {
   id: "t1",
   numero: "DEP-TR2026-000001",
-  magasin: "Dépôt central",
-  magasin_id: "d1",
-  destination: "Tunis Centre",
-  destination_id: "m1",
+  magasin: "Tunis Centre",
+  magasin_id: "m1",
+  depot_origine: "Dépôt central",
+  destination: "Lac",
+  destination_id: "m2",
+  depot_destination: "Dépôt Lac",
   statut: "envoye",
   statut_libelle: "Envoyé (en route)",
   total_articles: 2,
@@ -75,25 +95,29 @@ function afficher(ecran: React.ReactNode) {
   return appels;
 }
 
-test("le dépôt envoie des articles de son stock à un magasin", async () => {
+test("le dépôt central envoie des articles de son stock au dépôt d'un magasin", async () => {
   const appels = afficher(<TransfertStock />);
   // Le dépôt central est proposé d'abord comme départ.
-  expect(await screen.findByText("Dépôt central (dépôt central)")).toBeInTheDocument();
-  fireEvent.mouseDown(screen.getByLabelText("Vers le magasin"));
-  fireEvent.click(await screen.findByRole("option", { name: "Tunis Centre" }));
+  expect(await screen.findByText("Dépôt central (Tunis Centre)")).toBeInTheDocument();
+  fireEvent.mouseDown(screen.getByLabelText("Vers le dépôt"));
+  // Le dépôt de vente du même magasin est aussi proposé.
+  expect(await screen.findByRole("option", { name: "Dépôt Tunis Centre (Tunis Centre)" })).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("option", { name: "Dépôt Lac (Lac)" }));
 
   fireEvent.change(screen.getByLabelText(/Ajouter un article/), { target: { value: "RB" } });
   fireEvent.click(await screen.findByText("Ray-Ban RB5154"));
   const lignes = screen.getByRole("table", { name: "Articles à transférer" });
   fireEvent.change(within(lignes).getByLabelText("Quantité Ray-Ban RB5154"), { target: { value: "5" } });
-  expect(screen.getByText("Quantité supérieure au stock du magasin de départ.")).toBeInTheDocument();
+  expect(screen.getByText("Quantité supérieure au stock du dépôt de départ.")).toBeInTheDocument();
   fireEvent.change(within(lignes).getByLabelText("Quantité Ray-Ban RB5154"), { target: { value: "2" } });
   fireEvent.click(screen.getByRole("button", { name: "Envoyer" }));
 
-  expect(await screen.findByText(/Transfert DEP-TR2026-000001 envoyé à Tunis Centre/)).toBeInTheDocument();
+  expect(await screen.findByText(/Transfert DEP-TR2026-000001 envoyé à Lac · Dépôt Lac/)).toBeInTheDocument();
   expect(appels.find((a) => a.url === "/api/v1/transferts/" && a.methode === "POST")?.corps).toEqual({
-    magasin: "d1",
-    destination: "m1",
+    magasin: "m1",
+    destination: "m2",
+    depot_origine: "c1",
+    depot_destination: "v2",
     observation: "",
     lignes: [{ article: "a1", quantite: 2 }],
   });
@@ -111,7 +135,7 @@ test("le dépôt annule un transfert pas encore reçu", async () => {
   const appels = afficher(<ListeTransferts recevoir={false} annuler />);
   fireEvent.click(await screen.findByText("DEP-TR2026-000001"));
   fireEvent.click(await screen.findByRole("button", { name: "Annuler le transfert" }));
-  expect(screen.getByText(/Les articles reviennent au stock de Dépôt central/)).toBeInTheDocument();
+  expect(screen.getByText(/Les articles reviennent au dépôt Tunis Centre · Dépôt central/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Oui, annuler" }));
   expect(await screen.findByText(/Annulé le .* par achats/)).toBeInTheDocument();
   expect(appels.some((a) => a.url === "/api/v1/transferts/t1/annuler/" && a.methode === "POST")).toBe(true);

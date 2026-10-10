@@ -26,9 +26,11 @@ def _lentille(reference):
 
 @pytest.fixture
 def depot(tunis):
-    return Magasin.tous.create(
-        code="DEP", nom="Dépôt central", societe=tunis.societe, pays=tunis.pays, type="depot"
+    depot = Magasin.tous.create(
+        code="DEP", nom="Dépôt central", societe=tunis.societe, pays=tunis.pays
     )
+    depot.depots.update(type="central", nom="Dépôt central")
+    return depot
 
 
 def _recevoir(depot, article, quantite, peremption, bl, auteur):
@@ -55,7 +57,7 @@ def _recevoir(depot, article, quantite, peremption, bl, auteur):
 def _resume(magasin):
     return [
         (r["article"].reference, r["etat"], [(lot["date"], lot["quantite"]) for lot in r["lots"]])
-        for r in peremptions(magasin, NOVEMBRE)
+        for r in peremptions(magasin.depot_de_reception, NOVEMBRE)
     ]
 
 

@@ -165,7 +165,7 @@ def _verifier_equipements(equipements, lignes, client, *, cle, places, nom, type
 
 def _stocks(magasin, articles):
     lignes = (
-        MouvementStock.tous.filter(magasin=magasin, article__in=articles)
+        MouvementStock.tous.filter(depot=magasin.depot_de_vente, article__in=articles)
         .values("article_id")
         .annotate(total=Sum("quantite"))
     )
@@ -356,9 +356,11 @@ def enregistrer_vente(
         )
         for article, quantite, remise, ttc, _, prix, taux, ligne in detail
     )
+    depot = magasin.depot_de_vente
     MouvementStock.tous.bulk_create(
         MouvementStock(
             magasin=magasin,
+            depot=depot,
             article=article,
             quantite=-quantite,
             type=MouvementStock.Type.VENTE,
@@ -743,9 +745,11 @@ def _emettre(*, vente, retours, motif, emetteur, mode_remboursement, annulation)
         )
         for ligne, quantite, remis_en_stock, ttc, _ in detail
     )
+    depot = vente.magasin.depot_de_vente
     MouvementStock.tous.bulk_create(
         MouvementStock(
             magasin=vente.magasin,
+            depot=depot,
             article=ligne.article,
             quantite=quantite,
             type=MouvementStock.Type.RETOUR,

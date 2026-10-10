@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 from django.utils.html import format_html, format_html_join
 
 from .banques import valider_banque
-from .models import Banque, Magasin, Pays, Societe, TauxTva, Ville
+from .models import Banque, Depot, Magasin, Pays, Societe, TauxTva, Ville
 from .pays_du_monde import CHAMPS, pays_du_monde
 from .villes import normaliser, valider_ville
 
@@ -306,11 +306,42 @@ class SocieteAdmin(AvecListeVilles, AvecListeBanques, admin.ModelAdmin):
         )
 
 
+class DepotInline(admin.TabularInline):
+    """Le dépôt de vente est créé avec le magasin ; on y ajoute un dépôt central, casse…"""
+
+    model = Depot
+    fields = ("code", "nom", "type", "est_actif")
+    extra = 0
+    can_delete = False
+
+
 @admin.register(Magasin)
 class MagasinAdmin(AvecListeVilles, admin.ModelAdmin):
-    list_display = ("code", "nom", "type", "pays", "societe", "ville", "est_actif")
-    list_filter = ("type", "pays", "societe", "est_actif")
+    list_display = ("code", "nom", "depots_du_magasin", "pays", "societe", "ville", "est_actif")
+    list_filter = ("pays", "societe", "est_actif")
     search_fields = ("code", "nom", "ville")
+    inlines = [DepotInline]
+
+    @admin.display(description="dépôts")
+    def depots_du_magasin(self, magasin):
+        return ", ".join(d.code for d in magasin.depots.all() if d.est_actif)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).prefetch_related("depots")
+
+
+# Un dépôt ne se supprime pas (son stock et ses mouvements y restent) : on le désactive.
+@admin.register(Depot)
+class DepotAdmin(admin.ModelAdmin):
+    list_display = ("code", "nom", "type", "magasin", "est_actif")
+    list_filter = ("type", "magasin__societe", "est_actif")
+    search_fields = ("code", "nom", "magasin__nom")
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("magasin")
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Ville)

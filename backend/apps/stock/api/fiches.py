@@ -249,13 +249,15 @@ class FicheArticleSerializer(serializers.ModelSerializer):
     def get_stocks(self, article) -> list:
         quantites = dict(
             MouvementStock.objects.filter(article=article)
-            .values("magasin")
+            .values("depot")
             .annotate(total=Sum("quantite"))
-            .values_list("magasin", "total")
+            .values_list("depot", "total")
         )
         return [
-            {"magasin": m.nom, "stock": quantites.get(m.pk, 0)}
-            for m in Magasin.objects.order_by("nom")
+            {"magasin": m.nom, "depot": d.nom, "stock": quantites.get(d.pk, 0)}
+            for m in Magasin.objects.prefetch_related("depots").order_by("nom")
+            for d in m.depots.all()
+            if d.est_actif or quantites.get(d.pk)
         ]
 
     def validate_reference(self, valeur):
@@ -459,7 +461,7 @@ class FicheArticleViewSet(
         article = self.get_object()
         mouvements = (
             MouvementStock.objects.filter(article=article)
-            .select_related("magasin", "utilisateur")
+            .select_related("magasin", "depot", "utilisateur")
             .order_by("-horodatage")[:200]
         )
         return Response(
@@ -467,6 +469,7 @@ class FicheArticleViewSet(
                 {
                     "horodatage": m.horodatage,
                     "magasin": m.magasin.nom,
+                    "depot": m.depot.nom,
                     "type": m.get_type_display(),
                     "quantite": m.quantite,
                     "reference": m.reference,

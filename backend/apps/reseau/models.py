@@ -195,9 +195,7 @@ class Societe(ModeleDeBase):
 
 
 class Magasin(ModeleDeBase):
-    class Type(models.TextChoices):
-        MAGASIN = "magasin", "Magasin"
-        DEPOT = "depot", "Dépôt central"
+    """Point de vente. Son stock est rangé dans ses dépôts (voir ``Depot``)."""
 
     code = models.CharField(max_length=20, unique=True)
     nom = models.CharField(max_length=100)
@@ -209,13 +207,6 @@ class Magasin(ModeleDeBase):
     code_postal = models.CharField(max_length=10, blank=True)
     ville = models.CharField(max_length=100, blank=True)
     telephone = models.CharField(max_length=20, blank=True)
-    type = models.CharField(
-        max_length=10,
-        choices=Type.choices,
-        default=Type.MAGASIN,
-        help_text="Dépôt central : la marchandise des fournisseurs y est reçue et contrôlée "
-        "(BL, factures achat, bons retour), puis envoyée aux magasins par transfert.",
-    )
     nombre_peniches = models.PositiveSmallIntegerField(
         "nombre de péniches",
         default=200,
@@ -233,6 +224,83 @@ class Magasin(ModeleDeBase):
     def __str__(self):
         return f"{self.code} {self.nom}"
 
+    def save(self, *args, **kwargs):
+        nouveau = self._state.adding
+        super().save(*args, **kwargs)
+        if nouveau and not Depot.objects.filter(magasin=self).exists():
+            code = self.code if not Depot.objects.filter(code=self.code).exists() else ""
+            Depot.objects.create(
+                magasin=self,
+                code=code or f"{self.code}-V"[:20],
+                nom=f"Dépôt {self.nom}"[:100],
+                type=Depot.Type.VENTE,
+            )
+
     @property
     def est_depot(self):
-        return self.type == self.Type.DEPOT
+        """Le magasin abrite le dépôt central : les achats de sa société s'y saisissent."""
+        return self.depots.filter(type=Depot.Type.CENTRAL, est_actif=True).exists()
+
+    @property
+    def depot_de_vente(self):
+        """Dépôt dont sortent les ventes : le dépôt de vente, à défaut le premier dépôt actif."""
+        depots = sorted(
+            (d for d in self.depots.all() if d.est_actif),
+            key=lambda d: (d.type != Depot.Type.VENTE, d.code),
+        )
+        if not depots:
+            raise Depot.DoesNotExist(f"Le magasin {self.nom} n'a aucun dépôt actif.")
+        return depots[0]
+
+    @property
+    def depot_de_reception(self):
+        """Dépôt où entre la marchandise des fournisseurs : le dépôt central s'il est ici."""
+        central = self.depots.filter(type=Depot.Type.CENTRAL, est_actif=True).first()
+        return central or self.depot_de_vente
+
+
+class Depot(ModeleDeBase):
+    """Lieu de stockage rattaché à un magasin, comme dans l'ancien logiciel (DEPTN, DEPCEN…).
+
+    Le stock se compte par dépôt. Chaque magasin a son dépôt de vente, dont sortent les ventes.
+    Le dépôt central reçoit la marchandise des fournisseurs de toute la société, puis l'envoie
+    aux magasins par transfert ; le magasin qui l'abrite saisit les achats (BL, factures, bons
+    retour). Le dépôt casse garde les articles cassés ou défectueux.
+    """
+
+    class Type(models.TextChoices):
+        VENTE = "vente", "Dépôt de vente"
+        CENTRAL = "central", "Dépôt central"
+        CASSE = "casse", "Dépôt casse"
+
+    magasin = models.ForeignKey(Magasin, on_delete=models.PROTECT, related_name="depots")
+    code = models.CharField(max_length=20, unique=True, help_text="Ex. DEPTN, DEPCEN, DEPCAS.")
+    nom = models.CharField(max_length=100)
+    type = models.CharField(max_length=10, choices=Type.choices, default=Type.VENTE)
+    est_actif = models.BooleanField("actif", default=True)
+
+    class Meta:
+        ordering = ["magasin__code", "code"]
+        verbose_name = "dépôt"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["magasin"],
+                condition=models.Q(type="vente"),
+                name="un_depot_de_vente_par_magasin",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.code} {self.nom}"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.type == self.Type.CENTRAL and self.est_actif and self.magasin_id:
+            autres = Depot.objects.filter(
+                type=self.Type.CENTRAL, est_actif=True, magasin__societe_id=self.magasin.societe_id
+            ).exclude(pk=self.pk)
+            if autres.exists():
+                raise ValidationError(
+                    {"type": f"La société a déjà un dépôt central : {autres.first()}."}
+                )

@@ -23,7 +23,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { useState } from "react";
 
 import type { Article } from "../api/caisse";
-import { depotDabord, listerMagasins } from "../api/magasins";
+import { depotsDe, libelleDepot, listerMagasins } from "../api/magasins";
 import {
   envoyerTransfert,
   type FiltresTransferts,
@@ -32,6 +32,7 @@ import {
   recevoirTransfert,
   annulerTransfert,
   type Transfert,
+  type TransfertResume,
 } from "../api/transferts";
 import { AjoutArticle } from "./BonReception";
 import { dateCourte, imprimer } from "./FactureAchat";
@@ -40,6 +41,11 @@ import { BANDEAU, BORDEAUX, BOUTON, useApaise } from "./RechercheClients";
 const ENTETE = { color: BORDEAUX, fontWeight: 700, bgcolor: "grey.100", whiteSpace: "nowrap" } as const;
 
 type Ligne = { article: Article; quantite: string };
+
+/** « Tunis Centre · Dépôt central » : le magasin et son dépôt. */
+const origineDe = (t: TransfertResume) => (t.depot_origine ? `${t.magasin} · ${t.depot_origine}` : t.magasin);
+const destinationDe = (t: TransfertResume) =>
+  t.depot_destination ? `${t.destination} · ${t.depot_destination}` : t.destination;
 
 function Bandeau({ titre }: { titre: string }) {
   return (
@@ -72,7 +78,7 @@ th { background: #eee; text-align: left; }
 .signatures { display: flex; gap: 20mm; margin-top: 12mm; }
 </style></head><body>
 <h1>Bon de Transfert ${e(t.numero)}</h1>
-<p>De : <strong>${e(t.magasin)}</strong> · Vers : <strong>${e(t.destination)}</strong> · Envoyé le ${dateCourte(t.cree_le)} par ${e(t.envoye_par)}</p>
+<p>De : <strong>${e(origineDe(t))}</strong> · Vers : <strong>${e(destinationDe(t))}</strong> · Envoyé le ${dateCourte(t.cree_le)} par ${e(t.envoye_par)}</p>
 <table><thead><tr><th>Code</th><th>Article</th><th class="n">Quantité</th><th>Reçu (✓)</th></tr></thead><tbody>${lignes}</tbody>
 <tfoot><tr><th colspan="2">Total</th><th class="n">${t.total_articles ?? 0}</th><th></th></tr></tfoot></table>
 ${t.observation ? `<p>Observation : ${e(t.observation)}</p>` : ""}
@@ -80,16 +86,19 @@ ${t.observation ? `<p>Observation : ${e(t.observation)}</p>` : ""}
 </body></html>`;
 }
 
-/** « Bon Transfert » : le dépôt central envoie des articles de son stock à un magasin. */
+/** « Bon Transfert » : un dépôt (le dépôt central en général) envoie des articles à un autre dépôt,
+ * d'un autre magasin ou du même (vers le dépôt casse…). */
 export function TransfertStock() {
   const queryClient = useQueryClient();
   const magasins = useQuery({ queryKey: ["magasins"], queryFn: listerMagasins });
-  const liste = magasins.data ? depotDabord(magasins.data) : undefined;
+  const liste = magasins.data ? depotsDe(magasins.data) : undefined;
   const [departChoisi, setDepart] = useState("");
-  const depart = liste?.find((m) => m.id === departChoisi) ?? liste?.[0];
-  const destinations = (liste ?? []).filter((m) => depart && m.id !== depart.id && m.societe_id === depart.societe_id);
+  const depart = liste?.find((d) => d.id === departChoisi) ?? liste?.[0];
+  const destinations = (liste ?? []).filter(
+    (d) => depart && d.id !== depart.id && d.magasin.societe_id === depart.magasin.societe_id,
+  );
   const [destinationChoisie, setDestination] = useState("");
-  const destination = destinations.find((m) => m.id === destinationChoisie);
+  const destination = destinations.find((d) => d.id === destinationChoisie);
   const [lignes, setLignes] = useState<Ligne[]>([]);
   const [observation, setObservation] = useState("");
   const [envoye, setEnvoye] = useState<Transfert | null>(null);
@@ -102,21 +111,23 @@ export function TransfertStock() {
     );
   const total = lignes.reduce((s, l) => s + (Number(l.quantite) || 0), 0);
   const manque = !depart
-    ? "Aucun magasin de départ."
+    ? "Aucun dépôt de départ."
     : !destination
-      ? "Choisissez le magasin destinataire."
+      ? "Choisissez le dépôt destinataire."
       : lignes.length === 0
         ? "Ajoutez au moins un article."
         : lignes.some((l) => !(Number(l.quantite) >= 1))
           ? "Chaque ligne doit avoir une quantité."
           : lignes.find((l) => l.article.stock !== null && Number(l.quantite) > l.article.stock)
-            ? "Quantité supérieure au stock du magasin de départ."
+            ? "Quantité supérieure au stock du dépôt de départ."
             : "";
   const envoi = useMutation({
     mutationFn: () =>
       envoyerTransfert({
-        magasin: depart!.id,
-        destination: destination!.id,
+        magasin: depart!.magasin.id,
+        destination: destination!.magasin.id,
+        depot_origine: depart!.id,
+        depot_destination: destination!.id,
         observation,
         lignes: lignes.map((l) => ({ article: l.article.id, quantite: Number(l.quantite) })),
       }),
@@ -132,51 +143,51 @@ export function TransfertStock() {
     <Stack spacing={1.5}>
       <Bandeau titre="Bon Transfert" />
       <Typography variant="body2" color="text.secondary">
-        Les articles sortent du stock de départ à l'envoi et entrent dans le stock du magasin quand il réceptionne le
-        transfert (Liste des Transferts › Réceptionner).
+        Les articles sortent du dépôt de départ à l'envoi et entrent dans le dépôt destinataire quand son magasin
+        réceptionne le transfert (Liste des Transferts › Réceptionner).
       </Typography>
       <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: "wrap" }}>
         <TextField
           select
           size="small"
-          label="Départ"
+          label="Dépôt de départ"
           value={depart?.id ?? ""}
           onChange={(e) => {
             setDepart(e.target.value);
             setLignes([]);
             setDestination("");
           }}
-          sx={{ width: 240 }}
+          sx={{ width: 300 }}
         >
-          {(liste ?? []).map((m) => (
-            <MenuItem key={m.id} value={m.id}>
-              {m.nom}
-              {m.type === "depot" ? " (dépôt central)" : ""}
+          {(liste ?? []).map((d) => (
+            <MenuItem key={d.id} value={d.id}>
+              {libelleDepot(d)}
             </MenuItem>
           ))}
         </TextField>
         <TextField
           select
           size="small"
-          label="Vers le magasin"
+          label="Vers le dépôt"
           value={destination?.id ?? ""}
           onChange={(e) => setDestination(e.target.value)}
-          sx={{ width: 240, bgcolor: "#fffde7" }}
+          sx={{ width: 300, bgcolor: "#fffde7" }}
           slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
         >
           <MenuItem value="" disabled>
             Choisir
           </MenuItem>
-          {destinations.map((m) => (
-            <MenuItem key={m.id} value={m.id}>
-              {m.nom}
+          {destinations.map((d) => (
+            <MenuItem key={d.id} value={d.id}>
+              {libelleDepot(d)}
             </MenuItem>
           ))}
         </TextField>
       </Stack>
       {depart && (
         <AjoutArticle
-          magasin={depart.id}
+          magasin={depart.magasin.id}
+          depot={depart.id}
           famille=""
           avecStock
           onAjoute={(a) => {
@@ -269,8 +280,8 @@ export function TransfertStock() {
             </Button>
           }
         >
-          Transfert {envoye.numero} envoyé à {envoye.destination} ({envoye.total_articles} article(s)). Il entrera dans
-          son stock à la réception.
+          Transfert {envoye.numero} envoyé à {destinationDe(envoye)} ({envoye.total_articles} article(s)). Il entrera
+          dans ce dépôt à la réception.
         </Alert>
       )}
       <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end", alignItems: "center" }}>
@@ -336,7 +347,7 @@ function DetailTransfert({
         {t && (
           <Stack spacing={1.5}>
             <Typography>
-              De <strong>{t.magasin}</strong> vers <strong>{t.destination}</strong> · envoyé le{" "}
+              De <strong>{origineDe(t)}</strong> vers <strong>{destinationDe(t)}</strong> · envoyé le{" "}
               {new Date(t.cree_le).toLocaleString("fr-FR")} par {t.envoye_par}
             </Typography>
             <Typography
@@ -391,7 +402,7 @@ function DetailTransfert({
                   </Stack>
                 }
               >
-                Annuler ce transfert ? Les articles reviennent au stock de {t.magasin}.
+                Annuler ce transfert ? Les articles reviennent au dépôt {origineDe(t)}.
               </Alert>
             )}
           </Stack>
@@ -502,8 +513,8 @@ export function ListeTransferts({ recevoir, annuler = false }: { recevoir: boole
               >
                 <TableCell>{t.numero}</TableCell>
                 <TableCell>{dateCourte(t.cree_le)}</TableCell>
-                <TableCell>{t.magasin}</TableCell>
-                <TableCell>{t.destination}</TableCell>
+                <TableCell>{origineDe(t)}</TableCell>
+                <TableCell>{destinationDe(t)}</TableCell>
                 <TableCell align="right">{t.total_articles ?? 0}</TableCell>
                 <TableCell
                   sx={{

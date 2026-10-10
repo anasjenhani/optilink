@@ -1,8 +1,8 @@
-"""Inventaire : comptage physique du stock d'un magasin et correction du stock à la validation.
+"""Inventaire : comptage physique du stock d'un dépôt et correction du stock à la validation.
 
 Le stock de l'application est relu au moment de la validation : les ventes ou réceptions faites
 pendant le comptage sont donc prises en compte. Un article en stock mais non compté est
-considéré comme absent : l'inventaire couvre tout son périmètre (tout le stock du magasin, ou
+considéré comme absent : l'inventaire couvre tout son périmètre (tout le stock du dépôt, ou
 une famille, une marque, une nature de monture, un fournisseur).
 """
 
@@ -50,11 +50,9 @@ def perimetre(inventaire):
 
 
 def stocks_theoriques(inventaire):
-    """{article_id: stock} des articles du périmètre ayant un stock non nul dans le magasin."""
+    """{article_id: stock} des articles du périmètre ayant un stock non nul dans le dépôt."""
     totaux = (
-        MouvementStock.tous.filter(
-            _filtre(inventaire, "article__"), magasin_id=inventaire.magasin_id
-        )
+        MouvementStock.tous.filter(_filtre(inventaire, "article__"), depot_id=inventaire.depot_id)
         .values("article_id")
         .annotate(stock=Sum("quantite"))
     )
@@ -113,28 +111,43 @@ def etat(inventaire):
 
 @transaction.atomic
 def ouvrir_inventaire(
-    *, magasin, auteur, famille="", marque="", nature="", fournisseur=None, observation=""
+    *,
+    magasin,
+    auteur,
+    famille="",
+    marque="",
+    nature="",
+    fournisseur=None,
+    observation="",
+    depot=None,
 ):
-    """Ouvre le comptage ; une marque ou une nature limite l'inventaire aux montures."""
+    """Ouvre le comptage d'un dépôt (par défaut : le dépôt de vente du magasin) ; une marque ou
+    une nature limite l'inventaire aux montures."""
     if not magasin.est_actif:
         raise InventaireImpossible(f"Le magasin {magasin.nom} n'est plus actif.")
+    depot = depot or magasin.depot_de_vente
+    if depot.magasin_id != magasin.pk:
+        raise InventaireImpossible(f"Le dépôt {depot.nom} n'est pas un dépôt de {magasin.nom}.")
+    if not depot.est_actif:
+        raise InventaireImpossible(f"Le dépôt {depot.nom} n'est plus actif.")
     marque = marque.strip()
     if marque or nature:
         if famille and famille != Article.Famille.MONTURE:
             raise InventaireImpossible("La marque et la nature concernent les montures.")
         famille = Article.Famille.MONTURE
-    # Un comptage à la fois par magasin : deux inventaires sur les mêmes articles
+    # Un comptage à la fois par dépôt : deux inventaires sur les mêmes articles
     # corrigeraient deux fois le stock.
-    deja = Inventaire.tous.filter(magasin=magasin, statut__in=OUVERTS).first()
+    deja = Inventaire.tous.filter(depot=depot, statut__in=OUVERTS).first()
     if deja:
         raise InventaireImpossible(
-            f"L'inventaire {deja.numero} est déjà en cours dans ce magasin : "
+            f"L'inventaire {deja.numero} est déjà en cours dans ce dépôt : "
             "validez-le ou annulez-le d'abord."
         )
     annee = _aujourd_hui(magasin.pays).year
     sequence = _prochain_numero(magasin, annee, TypeDocument.INVENTAIRE)
     return Inventaire.tous.create(
         magasin=magasin,
+        depot=depot,
         numero=_numero(magasin, TypeDocument.INVENTAIRE, annee, sequence),
         annee=annee,
         sequence=sequence,
@@ -265,6 +278,7 @@ def valider_inventaire(inventaire, *, auteur, observation):
         if ligne["ecart"]:
             MouvementStock.tous.create(
                 magasin_id=inventaire.magasin_id,
+                depot_id=inventaire.depot_id,
                 article=ligne["article"],
                 quantite=ligne["ecart"],
                 type=MouvementStock.Type.AJUSTEMENT,
