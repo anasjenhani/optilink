@@ -1,4 +1,4 @@
-"""API des transferts de stock (dépôt central vers magasin)."""
+"""API des transferts de stock (d'un dépôt à un autre : du dépôt central vers un magasin…)."""
 
 import uuid
 
@@ -19,6 +19,7 @@ from ..transferts import (
     envoyer_transfert,
     recevoir_transfert,
 )
+from .sorties import _depot
 
 
 class LigneTransfertSaisieSerializer(serializers.Serializer):
@@ -28,7 +29,18 @@ class LigneTransfertSaisieSerializer(serializers.Serializer):
 
 class TransfertSaisieSerializer(serializers.Serializer):
     magasin = serializers.UUIDField(help_text="Magasin de départ (le dépôt central en général).")
-    destination = serializers.UUIDField()
+    destination = serializers.UUIDField(help_text="Magasin destinataire (peut être le même).")
+    depot_origine = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="Dépôt de départ ; par défaut le dépôt central du magasin s'il l'abrite, sinon "
+        "son dépôt de vente.",
+    )
+    depot_destination = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="Dépôt destinataire ; par défaut le dépôt de vente du magasin destinataire.",
+    )
     observation = serializers.CharField(required=False, allow_blank=True)
     lignes = LigneTransfertSaisieSerializer(many=True)
 
@@ -57,6 +69,8 @@ class TransfertListeSerializer(serializers.ModelSerializer):
     magasin_id = serializers.UUIDField(source="magasin.public_id", read_only=True)
     destination = serializers.CharField(source="destination.nom", read_only=True)
     destination_id = serializers.UUIDField(source="destination.public_id", read_only=True)
+    depot_origine = serializers.CharField(source="depot_origine.nom", read_only=True)
+    depot_destination = serializers.CharField(source="depot_destination.nom", read_only=True)
     statut_libelle = serializers.CharField(source="get_statut_display", read_only=True)
     total_articles = serializers.IntegerField(read_only=True)
     envoye_par = serializers.SerializerMethodField()
@@ -72,6 +86,8 @@ class TransfertListeSerializer(serializers.ModelSerializer):
             "magasin_id",
             "destination",
             "destination_id",
+            "depot_origine",
+            "depot_destination",
             "statut",
             "statut_libelle",
             "total_articles",
@@ -130,7 +146,13 @@ class TransfertViewSet(
     def get_queryset(self):
         transferts = (
             TransfertStock.tous.select_related(
-                "magasin", "destination", "envoye_par", "recu_par", "annule_par"
+                "magasin",
+                "destination",
+                "depot_origine",
+                "depot_destination",
+                "envoye_par",
+                "recu_par",
+                "annule_par",
             )
             .prefetch_related(
                 Prefetch("lignes", queryset=LigneTransfert.objects.select_related("article"))
@@ -207,6 +229,10 @@ class TransfertViewSet(
                 lignes=lignes,
                 auteur=request.user,
                 observation=donnees.get("observation", ""),
+                depot_origine=_depot(
+                    magasin, donnees.get("depot_origine"), magasin.depot_de_reception
+                ),
+                depot_destination=_depot(destination, donnees.get("depot_destination")),
             )
         except TransfertImpossible as erreur:
             return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)

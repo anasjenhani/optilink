@@ -22,6 +22,7 @@ from django.urls import path, reverse
 from apps.achats.imports import importer_fournisseurs, importer_receptions
 from apps.crm.imports import importer_clients
 from apps.optique.imports import importer_ophtalmologues
+from apps.reseau.imports import importer_depots
 from apps.reseau.models import Magasin
 from apps.securite.imports import importer_utilisateurs
 from apps.stock.imports import (
@@ -127,6 +128,11 @@ TRAITEMENTS = {
         ("optique.add_ophtalmologue", "optique.change_ophtalmologue"),
         lambda lignes, m, u, piece, apercu: importer_ophtalmologues(lignes, apercu=apercu),
         aide="Le fichier « Medecin » de l'ancien logiciel s'importe tel quel.",
+    ),
+    "depots": Traitement(
+        ("reseau.add_depot", "reseau.change_depot"),
+        lambda lignes, m, u, piece, apercu: importer_depots(lignes, apercu=apercu),
+        aide="Le fichier « Depot » de l'ancien logiciel s'importe tel quel.",
     ),
     "utilisateurs": Traitement(
         ("securite.add_utilisateur", "securite.add_affectation"),

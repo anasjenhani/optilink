@@ -132,7 +132,7 @@ function Mouvements({ article, onFerme }: { article: string; onFerme: () => void
               {mouvements.data?.map((m, i) => (
                 <TableRow key={i}>
                   <TableCell>{new Date(m.horodatage).toLocaleString("fr-FR")}</TableCell>
-                  <TableCell>{m.magasin}</TableCell>
+                  <TableCell>{m.depot ? `${m.magasin} · ${m.depot}` : m.magasin}</TableCell>
                   <TableCell>{m.type}</TableCell>
                   <TableCell>{m.reference}</TableCell>
                   <TableCell>{m.utilisateur}</TableCell>
@@ -401,8 +401,8 @@ export function OngletStock({ chargee }: { chargee: FicheArticle | undefined }) 
       </TableHead>
       <TableBody>
         {chargee.stocks.map((s) => (
-          <TableRow key={s.magasin}>
-            <TableCell>{s.magasin}</TableCell>
+          <TableRow key={`${s.magasin}-${s.depot ?? ""}`}>
+            <TableCell>{s.depot ? `${s.magasin} · ${s.depot}` : s.magasin}</TableCell>
             <TableCell align="right">{s.stock}</TableCell>
           </TableRow>
         ))}

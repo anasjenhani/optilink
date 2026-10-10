@@ -109,11 +109,13 @@ def _lignes(magasin, fournisseur, lignes):
                 "non_conforme": False,
             }
         )
+    depot = magasin.depot_de_reception
     for article, quantite in quantites.items():
-        disponible = stock_disponible(magasin, article)
+        disponible = stock_disponible(magasin, article, depot)
         if quantite > disponible:
             raise RetourImpossible(
-                f"{article.libelle} : {quantite} à renvoyer, {disponible} en stock à {magasin.nom}."
+                f"{article.libelle} : {quantite} à renvoyer, {disponible} en stock au dépôt "
+                f"{depot.nom}."
             )
     return completes
 
@@ -169,6 +171,7 @@ def enregistrer_retour(
         if ligne["ligne_reception"] is None:
             MouvementStock.tous.create(
                 magasin=magasin,
+                depot=magasin.depot_de_reception,
                 article=ligne["article"],
                 quantite=-ligne["quantite"],
                 type=MouvementStock.Type.RETOUR_FOURNISSEUR,

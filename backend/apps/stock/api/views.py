@@ -128,6 +128,12 @@ class _RechercheVerres:
                 OpenApiTypes.UUID,
                 description="Ajoute stock et prix dans ce magasin (articles vendables seulement)",
             ),
+            OpenApiParameter(
+                "depot",
+                OpenApiTypes.UUID,
+                description="Avec ``magasin`` : le stock de ce dépôt du magasin (par défaut : son "
+                "dépôt de vente)",
+            ),
         ]
     )
 )
@@ -190,8 +196,20 @@ class ArticleViewSet(_RechercheVerres, viewsets.ReadOnlyModelViewSet):
             taux_tva=Subquery(tarif.values("tva__taux")),
             devise=Value(magasin.pays.devise, output_field=CharField()),
         )
+        depot = None
+        if self.request.query_params.get("depot"):
+            try:
+                depot = magasin.depots.filter(
+                    public_id=uuid.UUID(self.request.query_params["depot"])
+                ).first()
+            except ValueError:
+                pass
+            if depot is None:
+                raise ValidationError({"depot": "Ce dépôt n'est pas un dépôt du magasin."})
         stock = (
-            MouvementStock.tous.filter(magasin=magasin, article=OuterRef("pk"))
+            MouvementStock.tous.filter(
+                depot=depot or magasin.depot_de_vente, article=OuterRef("pk")
+            )
             .values("article")
             .annotate(total=Sum("quantite"))
             .values("total")
@@ -203,6 +221,7 @@ class ArticleViewSet(_RechercheVerres, viewsets.ReadOnlyModelViewSet):
     list=extend_schema(
         parameters=[
             OpenApiParameter("magasin", OpenApiTypes.UUID, description="Mouvements de ce magasin"),
+            OpenApiParameter("depot", OpenApiTypes.UUID, description="Mouvements de ce dépôt"),
             OpenApiParameter(
                 "article",
                 OpenApiTypes.STR,
@@ -226,7 +245,7 @@ class MouvementStockViewSet(
 
     def get_queryset(self):
         mouvements = MouvementStock.objects.select_related(
-            "magasin", "article", "utilisateur"
+            "magasin", "depot", "article", "utilisateur"
         ).order_by("-horodatage", "-pk")
         if self.action != "list":
             return mouvements
@@ -237,6 +256,12 @@ class MouvementStockViewSet(
                 mouvements = mouvements.filter(magasin__public_id=uuid.UUID(magasin))
             except ValueError:
                 raise ValidationError({"magasin": "Identifiant invalide."}) from None
+        depot = parametres.get("depot", "").strip()
+        if depot:
+            try:
+                mouvements = mouvements.filter(depot__public_id=uuid.UUID(depot))
+            except ValueError:
+                raise ValidationError({"depot": "Identifiant invalide."}) from None
         article = parametres.get("article", "").strip()
         if article:
             mouvements = mouvements.filter(

@@ -3,7 +3,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.reseau.models import Magasin
+from apps.reseau.models import Depot, Magasin
 
 from ..models import Article, Lentille, Monture, MouvementStock, Verre
 
@@ -120,6 +120,14 @@ class ArticleSerializer(serializers.ModelSerializer):
 
 class MouvementStockSerializer(serializers.ModelSerializer):
     magasin = serializers.SlugRelatedField(slug_field="public_id", queryset=Magasin.objects)
+    depot = serializers.SlugRelatedField(
+        slug_field="public_id",
+        queryset=Depot.objects.filter(est_actif=True),
+        required=False,
+        allow_null=True,
+        help_text="Par défaut : le dépôt de vente du magasin.",
+    )
+    depot_nom = serializers.CharField(source="depot.nom", read_only=True)
     article = serializers.SlugRelatedField(slug_field="public_id", queryset=Article.objects)
     type = serializers.ChoiceField(
         choices=[MouvementStock.Type.RECEPTION, MouvementStock.Type.AJUSTEMENT]
@@ -139,6 +147,8 @@ class MouvementStockSerializer(serializers.ModelSerializer):
             "id",
             "magasin",
             "magasin_nom",
+            "depot",
+            "depot_nom",
             "article",
             "article_reference",
             "article_libelle",
@@ -167,4 +177,7 @@ class MouvementStockSerializer(serializers.ModelSerializer):
             )
         if donnees["type"] == MouvementStock.Type.RECEPTION and donnees["quantite"] < 0:
             raise serializers.ValidationError({"quantite": "Une réception est positive."})
+        depot = donnees.get("depot")
+        if depot is not None and depot.magasin_id != donnees["magasin"].pk:
+            raise serializers.ValidationError({"depot": "Ce dépôt n'est pas un dépôt du magasin."})
         return donnees

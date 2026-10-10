@@ -51,7 +51,7 @@ def rechercher_verres(magasin, *, texte="", sphere=None, cylindre=None):
         plages.setdefault(plage.article_id, []).append(plage)
     en_magasin = [a.pk for a in articles if not a.sur_commande]
     stocks = dict(
-        MouvementStock.tous.filter(magasin=magasin, article__in=en_magasin)
+        MouvementStock.tous.filter(depot=magasin.depot_de_vente, article__in=en_magasin)
         .values_list("article")
         .annotate(total=Sum("quantite"))
     )

@@ -21,8 +21,9 @@ TRAITER = (
 @pytest.fixture
 def depot(tunis, monture):
     depot = Magasin.tous.create(
-        code="DEP", nom="Dépôt central", societe=tunis.societe, pays=tunis.pays, type="depot"
+        code="DEP", nom="Dépôt central", societe=tunis.societe, pays=tunis.pays
     )
+    depot.depots.update(type="central", nom="Dépôt central")
     MouvementStock.tous.create(magasin=depot, article=monture, quantite=10, type="reception")
     return depot
 

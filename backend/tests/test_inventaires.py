@@ -33,7 +33,7 @@ def auteur(creer_utilisateur):
 def test_valider_corrige_le_stock_et_compte_zero_les_absents(tunis, monture, etui, auteur):
     inventaire = ouvrir_inventaire(magasin=tunis, auteur=auteur)
     assert inventaire.numero.startswith("T01-IN")
-    with pytest.raises(InventaireImpossible, match="déjà en cours dans ce magasin"):
+    with pytest.raises(InventaireImpossible, match="déjà en cours dans ce dépôt"):
         ouvrir_inventaire(magasin=tunis, auteur=auteur, famille="monture")
 
     # Scan de l'étui deux fois, monture non comptée.
@@ -205,7 +205,7 @@ def test_ajouter_un_inventaire_dans_l_admin(creer_utilisateur, client_de, tunis,
         "lignes-2-article": "",
         "lignes-2-quantite": "1",
     }
-    entete = {"magasin": tunis.pk, "famille": "divers", "observation": "Fin de mois"}
+    entete = {"depot": tunis.depot_de_vente.pk, "famille": "divers", "observation": "Fin de mois"}
     reponse = navigateur.post("/admin/stock/inventaire/add/", {**entete, **lignes})
     assert reponse.status_code == 302, reponse.context["entete"].errors
     inventaire = Inventaire.tous.get()
