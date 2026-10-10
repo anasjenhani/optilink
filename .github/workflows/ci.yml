@@ -9,6 +9,20 @@ permissions:
   contents: read
 
 jobs:
+  historique:
+    # Chaque modification proposée ajoute sa ligne à CHANGELOG.md (sauf la branche de
+    # qualification, qui ne fait que reprendre main).
+    if: github.event_name == 'pull_request' && github.head_ref != 'claude/qualification'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: CHANGELOG.md complété
+        run: |
+          git diff --name-only "origin/${{ github.base_ref }}...HEAD" | grep -qx CHANGELOG.md \
+            || { echo "Ajoutez une ligne à CHANGELOG.md, section « En cours »."; exit 1; }
+
   backend:
     runs-on: ubuntu-24.04
     defaults:
@@ -55,6 +69,10 @@ jobs:
         run: pytest
       - name: Schéma OpenAPI valide
         run: python manage.py spectacular --validate --fail-on-warn > /dev/null
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.test
+      - name: Schéma de la base à jour (docs/base-de-donnees.md)
+        run: python manage.py schema_bd --check
         env:
           DJANGO_SETTINGS_MODULE: config.settings.test
 

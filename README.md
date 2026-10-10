@@ -26,7 +26,14 @@ backend/
 frontend/
   src/           application React
   nginx/         configurations HTTP (dev) et HTTPS (production)
+docs/
+  base-de-donnees.md  schéma de la base, généré depuis les modèles
+CHANGELOG.md     historique des changements, une ligne par modification
 ```
+
+Après toute modification d'un modèle, `python manage.py schema_bd` régénère le schéma de
+la base ; la CI échoue s'il n'est plus à jour, et si une modification proposée n'ajoute pas
+sa ligne à `CHANGELOG.md`.
 
 ## Pays : Tunisie d'abord, puis d'autres pays
 
