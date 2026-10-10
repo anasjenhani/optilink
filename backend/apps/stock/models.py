@@ -100,6 +100,45 @@ class Article(ModeleDeBase):
         return getattr(self, self.famille, None)
 
 
+# Les articles d'une famille, présentés à part dans l'administration (Verres, Montures…).
+
+
+class ArticleVerre(Article):
+    famille_affichee = Article.Famille.VERRE
+
+    class Meta:
+        proxy = True
+        verbose_name = "verre"
+        verbose_name_plural = "verres"
+
+
+class ArticleMonture(Article):
+    famille_affichee = Article.Famille.MONTURE
+
+    class Meta:
+        proxy = True
+        verbose_name = "monture"
+        verbose_name_plural = "montures"
+
+
+class ArticleLentille(Article):
+    famille_affichee = Article.Famille.LENTILLE
+
+    class Meta:
+        proxy = True
+        verbose_name = "lentille"
+        verbose_name_plural = "lentilles"
+
+
+class ArticleProduit(Article):
+    famille_affichee = Article.Famille.DIVERS
+
+    class Meta:
+        proxy = True
+        verbose_name = "produit"
+        verbose_name_plural = "produits"
+
+
 class Caracteristiques(models.Model):
     """Fiche propre à une famille, rattachée à un seul article de cette famille."""
 

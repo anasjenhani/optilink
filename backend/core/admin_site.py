@@ -19,6 +19,39 @@ ONGLETS = [
 ]
 ONGLET_DE = {app: onglet for onglet, _, apps in ONGLETS for app in apps}
 
+# L'application stock en sections par type d'article ; le reste va dans « Stock ».
+SECTIONS_STOCK = [
+    (
+        "Verres",
+        [
+            "ArticleVerre",
+            "FamilleVerre",
+            "SousFamilleVerre",
+            "CouleurVerre",
+            "DiametreVerre",
+            "MatiereVerre",
+        ],
+    ),
+    ("Montures", ["ArticleMonture", "MarqueMonture"]),
+    ("Lentilles", ["ArticleLentille"]),
+    ("Produits", ["ArticleProduit"]),
+]
+
+
+def _sections(app):
+    """L'application stock découpée en Verres, Montures, Lentilles, Produits, puis Stock."""
+    if app["app_label"] != "stock":
+        return [app]
+    par_nom = {modele["object_name"]: modele for modele in app["models"]}
+    sections = []
+    for titre, noms in SECTIONS_STOCK:
+        modeles = [par_nom.pop(nom) for nom in noms if nom in par_nom]
+        if modeles:
+            sections.append({**app, "name": titre, "models": modeles})
+    if par_nom:
+        sections.append({**app, "models": list(par_nom.values())})
+    return sections
+
 
 class OptiLinkAdminSite(OTPAdminSite):
     site_header = "OptiLink · Administration"
@@ -69,6 +102,7 @@ class OptiLinkAdminSite(OTPAdminSite):
                 droits = [m for m in securite["models"] if m["object_name"] == "ModificationDroits"]
                 securite["models"] = [m for m in securite["models"] if m not in droits]
                 journal["models"] = droits + journal["models"]
+        apps = [section for app in apps for section in _sections(app)]
         if app_label:
             return [app for app in apps if app["app_label"] == app_label]
         return apps
