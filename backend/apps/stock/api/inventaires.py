@@ -26,10 +26,14 @@ from ..inventaires import (
     valider_inventaire,
 )
 from ..models import Article, Inventaire, Monture
+from .sorties import _depot
 
 
 class OuvertureSerializer(serializers.Serializer):
     magasin = serializers.UUIDField()
+    depot = serializers.UUIDField(
+        required=False, allow_null=True, help_text="Par défaut : le dépôt de vente du magasin."
+    )
     famille = serializers.ChoiceField(
         choices=Article.Famille.choices, required=False, allow_blank=True
     )
@@ -99,6 +103,8 @@ class InventaireListeSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source="public_id", read_only=True)
     magasin = serializers.CharField(source="magasin.nom", read_only=True)
     magasin_id = serializers.UUIDField(source="magasin.public_id", read_only=True)
+    depot = serializers.CharField(source="depot.nom", read_only=True)
+    depot_id = serializers.UUIDField(source="depot.public_id", read_only=True)
     famille_libelle = serializers.SerializerMethodField()
     perimetre = serializers.SerializerMethodField()
     fournisseur = serializers.CharField(source="fournisseur.nom", default="", read_only=True)
@@ -115,6 +121,8 @@ class InventaireListeSerializer(serializers.ModelSerializer):
             "numero",
             "magasin",
             "magasin_id",
+            "depot",
+            "depot_id",
             "famille",
             "famille_libelle",
             "marque",
@@ -196,7 +204,12 @@ class InventaireViewSet(
     def get_queryset(self):
         inventaires = (
             Inventaire.objects.select_related(
-                "magasin", "fournisseur", "cree_par", "valide_par", "comptage_termine_par"
+                "magasin",
+                "depot",
+                "fournisseur",
+                "cree_par",
+                "valide_par",
+                "comptage_termine_par",
             )
             .annotate(articles_comptes=Count("lignes", filter=Q(lignes__quantite_comptee__gt=0)))
             .order_by("-cree_le")
@@ -245,6 +258,7 @@ class InventaireViewSet(
                 nature=donnees.get("nature", ""),
                 fournisseur=fournisseur,
                 observation=donnees.get("observation", ""),
+                depot=_depot(magasin, donnees.get("depot")),
             )
         except InventaireImpossible as erreur:
             return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)

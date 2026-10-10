@@ -1,4 +1,4 @@
-"""Péremption des lentilles en stock d'un magasin."""
+"""Péremption des lentilles en stock d'un dépôt."""
 
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
@@ -8,7 +8,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
 from ..peremptions import peremptions
-from .sorties import _magasin
+from .sorties import _depot, _magasin
 
 
 class LotPeremptionSerializer(serializers.Serializer):
@@ -35,6 +35,9 @@ class PeremptionViewSet(viewsets.ViewSet):
         parameters=[
             OpenApiParameter("magasin", OpenApiTypes.UUID, required=True),
             OpenApiParameter(
+                "depot", OpenApiTypes.UUID, description="Par défaut : le dépôt de vente."
+            ),
+            OpenApiParameter(
                 "jours", OpenApiTypes.INT, description="« Proche » : dans ce délai (90 jours)."
             ),
         ],
@@ -50,5 +53,6 @@ class PeremptionViewSet(viewsets.ViewSet):
             jours = int(request.query_params.get("jours") or 90)
         except ValueError:
             raise ValidationError({"jours": "Nombre de jours invalide."}) from None
-        lignes = peremptions(magasin, timezone.localdate(), proche_jours=max(jours, 0))
+        depot = _depot(magasin, request.query_params.get("depot"))
+        lignes = peremptions(depot, timezone.localdate(), proche_jours=max(jours, 0))
         return Response(PeremptionSerializer(lignes, many=True).data)

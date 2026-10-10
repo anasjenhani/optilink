@@ -50,6 +50,8 @@ def test_liste_detaillee_plus_recents_d_abord(affecter, client_de, mouvements):
         "id": m["reception"].pk,
         "magasin": str(m["reception"].magasin.public_id),
         "magasin_nom": "Lille",
+        "depot": str(m["reception"].depot.public_id),
+        "depot_nom": "Dépôt Lille",
         "article": str(m["reception"].article.public_id),
         "article_reference": "MON-1",
         "article_libelle": "Monture titane",

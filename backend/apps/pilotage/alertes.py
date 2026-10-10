@@ -78,11 +78,12 @@ def _stock_faible(utilisateur):
     magasins = magasins_couverts(utilisateur, "stock.view_article")
     seuil = settings.STOCK_ALERTE_SEUIL
     # Seuls les articles déjà entrés dans le magasin sont suivis ; les verres, commandés pour
-    # chaque client, n'ont pas de stock.
+    # chaque client, n'ont pas de stock. Le dépôt casse ne compte pas.
     lignes = (
         MouvementStock.tous.filter(
             magasin__in=magasins, article__est_actif=True, article__sur_commande=False
         )
+        .exclude(depot__type="casse")
         .values("magasin", "article__libelle")
         .annotate(stock=Sum("quantite"))
         .filter(stock__lte=seuil)

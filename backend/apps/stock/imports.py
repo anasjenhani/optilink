@@ -230,7 +230,7 @@ COLONNES_CATALOGUE = [
     "addition",
     "lentilles_par_boite",
 ]
-COLONNES_STOCK = ["code_barres", "reference", "quantite"]
+COLONNES_STOCK = ["code_barres", "reference", "quantite", "depot"]
 _COMMUN = [
     "reference",
     "libelle",
@@ -532,7 +532,14 @@ def _importer_plage(article, ligne, pays, plages):
 
 
 def importer_stock(lignes, *, magasin, utilisateur, piece="", apercu=False):
-    """Réceptions de stock dans ``magasin`` : article par code-barres ou référence, quantité."""
+    """Réceptions de stock dans ``magasin`` : article par code-barres ou référence, quantité.
+
+    La colonne facultative ``depot`` (code du dépôt, ex. DEPCEN) choisit le dépôt du magasin ;
+    vide : son dépôt de vente.
+    """
+    from apps.reseau.models import Depot
+
+    depots = {d.code.upper(): d for d in Depot.objects.filter(magasin=magasin, est_actif=True)}
     rapport = Rapport(apercu=apercu, lignes=len(lignes))
     colonnes = set(lignes[0][1]) if lignes else set()
     if "quantite" not in colonnes or not colonnes & {"code_barres", "reference"}:
@@ -565,18 +572,29 @@ def importer_stock(lignes, *, magasin, utilisateur, piece="", apercu=False):
                 if not quantite or quantite < 0:
                     rapport.erreur(numero, "quantite : un nombre entier positif.")
                     continue
-                if article.pk not in stocks:
-                    stocks[article.pk] = stock_disponible(magasin, article)
-                avant = stocks[article.pk]
-                stocks[article.pk] = avant + quantite
+                code_depot = ligne.get("depot", "").strip().upper()
+                if code_depot and code_depot not in depots:
+                    rapport.erreur(
+                        numero,
+                        f"depot : « {code_depot} » n'est pas un dépôt actif de {magasin.nom} "
+                        f"({', '.join(sorted(depots)) or 'aucun'}).",
+                    )
+                    continue
+                depot = depots[code_depot] if code_depot else magasin.depot_de_vente
+                cle = (depot.pk, article.pk)
+                if cle not in stocks:
+                    stocks[cle] = stock_disponible(magasin, article, depot)
+                avant = stocks[cle]
+                stocks[cle] = avant + quantite
                 if avant > 0:
                     rapport.alerte(
                         numero,
-                        f"{article.reference} déjà en stock à {magasin.nom} : {avant} ; "
+                        f"{article.reference} déjà en stock au dépôt {depot.nom} : {avant} ; "
                         f"{avant + quantite} après l'entrée.",
                     )
                 MouvementStock.tous.create(
                     magasin=magasin,
+                    depot=depot,
                     article=article,
                     quantite=quantite,
                     type=MouvementStock.Type.RECEPTION,

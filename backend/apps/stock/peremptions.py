@@ -1,4 +1,4 @@
-"""Péremption des lentilles en stock.
+"""Péremption des lentilles en stock, dépôt par dépôt.
 
 Le stock d'une lentille est fait des dernières pièces entrées (on vend et on envoie d'abord les
 plus anciennes) : on remonte les entrées, de la plus récente à la plus ancienne, jusqu'à couvrir
@@ -24,9 +24,9 @@ from .models import (
 )
 
 
-def _stocks(magasin, articles=None):
+def _stocks(depot, articles=None):
     mouvements = MouvementStock.tous.filter(
-        magasin=magasin, article__famille=Article.Famille.LENTILLE, article__sur_commande=False
+        depot=depot, article__famille=Article.Famille.LENTILLE, article__sur_commande=False
     )
     if articles is not None:
         mouvements = mouvements.filter(article__in=articles)
@@ -41,19 +41,19 @@ def _date(texte):
     return date.fromisoformat(texte) if texte else None
 
 
-def lots(magasin, stocks):
+def lots(depot, stocks):
     """{article_id: {date ou None: quantité}} des pièces en stock (``stocks`` : {id: stock})."""
     from apps.achats.models import LigneReception
 
     entrees = defaultdict(list)  # article_id → [(instant, {date: quantité})]
     for ligne in LigneReception.objects.filter(
-        bon__magasin=magasin, article_id__in=stocks, non_conforme=False
+        bon__depot=depot, article_id__in=stocks, non_conforme=False
     ).select_related("bon"):
         entrees[ligne.article_id].append(
             (ligne.bon.cree_le, {ligne.date_peremption: ligne.quantite})
         )
     for ligne in LigneTransfert.objects.filter(
-        transfert__destination=magasin,
+        transfert__depot_destination=depot,
         transfert__statut=TransfertStock.Statut.RECU,
         article_id__in=stocks,
     ).select_related("transfert"):
@@ -64,7 +64,7 @@ def lots(magasin, stocks):
     inventaires = {}
     for ligne in (
         LigneInventaire.objects.filter(
-            inventaire__magasin=magasin,
+            inventaire__depot=depot,
             inventaire__statut=Inventaire.Statut.VALIDE,
             article_id__in=stocks,
         )
@@ -95,12 +95,12 @@ def lots(magasin, stocks):
     return resultat
 
 
-def a_envoyer(magasin, article, quantite):
-    """Dates des pièces qu'un magasin envoie : les plus proches d'abord, puis les inconnues."""
-    stock = _stocks(magasin, [article])
+def a_envoyer(depot, article, quantite):
+    """Dates des pièces qu'un dépôt envoie : les plus proches d'abord, puis les inconnues."""
+    stock = _stocks(depot, [article])
     if not stock:
         return []
-    disponibles = lots(magasin, stock).get(article.pk, {})
+    disponibles = lots(depot, stock).get(article.pk, {})
     envoi, reste = [], quantite
     for jour in sorted(disponibles, key=lambda d: (d is None, d or date.min)):
         pris = min(reste, disponibles[jour])
@@ -112,11 +112,11 @@ def a_envoyer(magasin, article, quantite):
     return envoi
 
 
-def peremptions(magasin, aujourd_hui, *, proche_jours=90):
-    stocks = _stocks(magasin)
+def peremptions(depot, aujourd_hui, *, proche_jours=90):
+    stocks = _stocks(depot)
     if not stocks:
         return []
-    tous_lots = lots(magasin, stocks)
+    tous_lots = lots(depot, stocks)
     limite = aujourd_hui + timedelta(days=proche_jours)
     resultat = []
     for article in Article.objects.filter(pk__in=stocks):

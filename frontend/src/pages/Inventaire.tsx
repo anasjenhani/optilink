@@ -46,7 +46,7 @@ import {
   terminerComptage,
   validerInventaire,
 } from "../api/inventaires";
-import { depotDabord, listerMagasins } from "../api/magasins";
+import { abriteLeCentral, depotDabord, listerMagasins } from "../api/magasins";
 import { AjoutArticle } from "./BonReception";
 import { imprimer } from "./FactureAchat";
 import { BANDEAU, BORDEAUX, BOUTON } from "./RechercheClients";
@@ -88,7 +88,7 @@ th { background: #eee; text-align: left; }
 .n { text-align: right; }
 </style></head><body>
 <h1>Inventaire ${e(inv.numero)}</h1>
-<p>${e(inv.magasin)} · ${e(inv.perimetre)} · ${e(inv.statut_libelle)}${inv.valide_le ? ` le ${new Date(inv.valide_le).toLocaleString("fr-FR")} par ${e(inv.valide_par)}` : ""}</p>
+<p>${e(inv.depot ? `${inv.magasin} · ${inv.depot}` : inv.magasin)} · ${e(inv.perimetre)} · ${e(inv.statut_libelle)}${inv.valide_le ? ` le ${new Date(inv.valide_le).toLocaleString("fr-FR")} par ${e(inv.valide_par)}` : ""}</p>
 <table><thead><tr><th>Code</th><th>Article</th><th class="n">Ancienne qté</th><th class="n">Quantité</th><th class="n">Écart</th><th>Observation</th></tr></thead><tbody>${lignes}</tbody></table>
 ${inv.observation ? `<p>Observation : ${e(inv.observation)}</p>` : ""}
 ${inv.observation_validation ? `<p>Observation de validation : ${e(inv.observation_validation)}</p>` : ""}
@@ -274,8 +274,8 @@ function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventai
     <Stack spacing={1.5}>
       <Bandeau titre={`Inventaire ${inv.numero}`} />
       <Typography>
-        {inv.magasin} · <strong>{inv.perimetre}</strong> · créé le {new Date(inv.cree_le).toLocaleString("fr-FR")} par{" "}
-        {inv.cree_par}
+        {inv.depot ? `${inv.magasin} · ${inv.depot}` : inv.magasin} · <strong>{inv.perimetre}</strong> · créé le{" "}
+        {new Date(inv.cree_le).toLocaleString("fr-FR")} par {inv.cree_par}
         {inv.observation && ` · ${inv.observation}`}
       </Typography>
       {inv.statut !== "annule" && (
@@ -504,7 +504,7 @@ function Comptage({ id, droits, onRetour }: { id: string; droits: DroitsInventai
             <Stack spacing={2}>
               <Typography>
                 {confirmer === "valider"
-                  ? `Le stock de ${inv.magasin} sera corrigé pour ${avecEcart} article(s) avec écart${nonComptes ? `, dont ${nonComptes} non compté(s) mis à 0` : ""}. Cette opération est définitive.`
+                  ? `Le stock de ${inv.depot ?? inv.magasin} sera corrigé pour ${avecEcart} article(s) avec écart${nonComptes ? `, dont ${nonComptes} non compté(s) mis à 0` : ""}. Cette opération est définitive.`
                   : "Le comptage sera abandonné ; le stock ne change pas."}
               </Typography>
               {confirmer === "valider" && (
@@ -545,6 +545,10 @@ export function Inventaire({ droits }: { droits: DroitsInventaire }) {
   const liste = magasins.data ? depotDabord(magasins.data) : undefined;
   const [magasinChoisi, setMagasin] = useState("");
   const magasin = liste?.find((m) => m.id === magasinChoisi) ?? liste?.[0];
+  // Le dépôt compté : le dépôt de vente par défaut, sauf pour un site qui n'a que le dépôt central.
+  const depots = magasin?.depots ?? [];
+  const [depotChoisi, setDepot] = useState("");
+  const depot = depots.find((d) => d.id === depotChoisi) ?? depots.find((d) => d.type === "vente") ?? depots[0];
   const [famille, setFamille] = useState<Famille | "">("");
   const [marque, setMarque] = useState("");
   const [nature, setNature] = useState<NatureMonture | "">("");
@@ -563,6 +567,7 @@ export function Inventaire({ droits }: { droits: DroitsInventaire }) {
     mutationFn: () =>
       ouvrirInventaire({
         magasin: magasin!.id,
+        depot: depot?.id,
         famille: montures ? "monture" : famille,
         marque: marque.trim(),
         nature,
@@ -592,16 +597,35 @@ export function Inventaire({ droits }: { droits: DroitsInventaire }) {
             size="small"
             label="Magasin"
             value={magasin?.id ?? ""}
-            onChange={(e) => setMagasin(e.target.value)}
+            onChange={(e) => {
+              setMagasin(e.target.value);
+              setDepot("");
+            }}
             sx={{ width: 240 }}
           >
             {(liste ?? []).map((m) => (
               <MenuItem key={m.id} value={m.id}>
                 {m.nom}
-                {m.type === "depot" ? " (dépôt central)" : ""}
+                {abriteLeCentral(m) ? " (dépôt central)" : ""}
               </MenuItem>
             ))}
           </TextField>
+          {depots.length > 1 && (
+            <TextField
+              select
+              size="small"
+              label="Dépôt"
+              value={depot?.id ?? ""}
+              onChange={(e) => setDepot(e.target.value)}
+              sx={{ width: 220 }}
+            >
+              {depots.map((d) => (
+                <MenuItem key={d.id} value={d.id}>
+                  {d.nom}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
           <TextField
             select
             size="small"
@@ -704,7 +728,7 @@ export function Inventaire({ droits }: { droits: DroitsInventaire }) {
               >
                 <TableCell>{i.numero}</TableCell>
                 <TableCell>{new Date(i.cree_le).toLocaleString("fr-FR")}</TableCell>
-                <TableCell>{i.magasin}</TableCell>
+                <TableCell>{i.depot ? `${i.magasin} · ${i.depot}` : i.magasin}</TableCell>
                 <TableCell>{i.perimetre}</TableCell>
                 <TableCell
                   sx={{

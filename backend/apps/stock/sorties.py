@@ -48,21 +48,29 @@ def _regrouper(lignes, erreur):
 
 
 @transaction.atomic
-def sortir(*, magasin, type, motif, lignes, auteur, observation=""):
-    """Sort des articles du stock (usage interne, cadeau, casse…) : effet immédiat."""
+def sortir(*, magasin, type, motif, lignes, auteur, observation="", depot=None):
+    """Sort des articles d'un dépôt (usage interne, cadeau, casse…) : effet immédiat.
+
+    Sans dépôt précisé : le dépôt de vente du magasin.
+    """
+    depot = depot or magasin.depot_de_vente
+    if depot.magasin_id != magasin.pk:
+        raise SortieImpossible(f"Le dépôt {depot.nom} n'est pas un dépôt de {magasin.nom}.")
     if not motif.strip():
         raise SortieImpossible("Indiquer le motif de la sortie.")
     quantites = _regrouper(lignes, SortieImpossible)
     for article, quantite in quantites.items():
-        disponible = stock_disponible(magasin, article)
+        disponible = stock_disponible(magasin, article, depot)
         if quantite > disponible:
             raise SortieImpossible(
-                f"{article.libelle} : {quantite} à sortir, {disponible} en stock à {magasin.nom}."
+                f"{article.libelle} : {quantite} à sortir, {disponible} en stock au dépôt "
+                f"{depot.nom}."
             )
     annee = _aujourd_hui(magasin.pays).year
     sequence = _prochain_numero(magasin, annee, TypeDocument.BON_SORTIE)
     bon = BonSortie.tous.create(
         magasin=magasin,
+        depot=depot,
         numero=_numero(magasin, TypeDocument.BON_SORTIE, annee, sequence),
         annee=annee,
         sequence=sequence,
@@ -78,6 +86,7 @@ def sortir(*, magasin, type, motif, lignes, auteur, observation=""):
         LigneSortie.objects.create(bon=bon, article=article, quantite=quantite)
         MouvementStock.tous.create(
             magasin=magasin,
+            depot=depot,
             article=article,
             quantite=-quantite,
             type=mouvement,
@@ -194,7 +203,8 @@ def _fin_de_journee(jour, pays):
 def reassort(magasin, *, du, au, famille="", depot=None):
     """Ce qui s'est vendu au magasin sur la période, son stock actuel et celui du dépôt.
 
-    La quantité proposée remplace ce qui est parti, dans la limite du stock du dépôt.
+    ``depot`` est le magasin qui abrite le dépôt central. La quantité proposée remplace ce qui
+    est parti, dans la limite du stock du dépôt central.
     """
     pays = magasin.pays
     debut = datetime.combine(du, time.min, tzinfo=ZoneInfo(pays.fuseau_horaire))
@@ -220,15 +230,15 @@ def reassort(magasin, *, du, au, famille="", depot=None):
             return {}
         return {
             s["article"]: s["q"]
-            for s in MouvementStock.tous.filter(magasin=ou, article__in=vendus)
+            for s in MouvementStock.tous.filter(depot=ou, article__in=vendus)
             .values("article")
             .annotate(q=Sum("quantite"))
         }
 
-    au_magasin = stocks(magasin)
+    au_magasin = stocks(magasin.depot_de_vente)
     # Le stock du dépôt, hors du périmètre du magasin : lu exprès, pour cette proposition.
     with rls.voir_aussi([depot.pk] if depot else []):
-        au_depot = stocks(depot)
+        au_depot = stocks(depot.depot_de_reception if depot else None)
     resultat = []
     for article in Article.objects.filter(pk__in=vendus).order_by("famille", "libelle"):
         vendu = vendus[article.pk]
@@ -245,14 +255,17 @@ def reassort(magasin, *, du, au, famille="", depot=None):
     return resultat
 
 
-def stock_a_la_date(magasin, jour, *, famille="", recherche=""):
+def stock_a_la_date(magasin, jour, *, famille="", recherche="", depot=None):
     """Stock de chaque article à la fin du jour donné : la somme des mouvements jusque-là.
 
-    La valeur est au prix d'achat net du tarif actuel (vide si l'article n'en a pas).
+    Sans dépôt précisé : tous les dépôts du magasin. La valeur est au prix d'achat net du tarif
+    actuel (vide si l'article n'en a pas).
     """
     mouvements = MouvementStock.tous.filter(
         magasin=magasin, horodatage__lt=_fin_de_journee(jour, magasin.pays)
     )
+    if depot is not None:
+        mouvements = mouvements.filter(depot=depot)
     if famille:
         mouvements = mouvements.filter(article__famille=famille)
     if recherche.strip():

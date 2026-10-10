@@ -23,9 +23,11 @@ commande_verres = test_receptions.commande_verres
 
 @pytest.fixture
 def depot(tunis):
-    return Magasin.tous.create(
-        code="DEP", nom="Dépôt central", societe=tunis.societe, pays=tunis.pays, type="depot"
+    depot = Magasin.tous.create(
+        code="DEP", nom="Dépôt central", societe=tunis.societe, pays=tunis.pays
     )
+    depot.depots.update(type="central", nom="Dépôt central")
+    return depot
 
 
 @pytest.fixture

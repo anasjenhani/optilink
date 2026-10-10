@@ -27,7 +27,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { FAMILLES, type Article, type Famille } from "../api/caisse";
-import { listerMagasins, type Magasin } from "../api/magasins";
+import { abriteLeCentral, listerMagasins, type Magasin } from "../api/magasins";
 import { formaterTexte } from "../api/monnaie";
 import {
   annulerDemande,
@@ -107,7 +107,7 @@ function ChoixMagasin({
       {magasins.map((m) => (
         <MenuItem key={m.id} value={m.id}>
           {m.nom}
-          {m.type === "depot" ? " (dépôt central)" : ""}
+          {abriteLeCentral(m) ? " (dépôt central)" : ""}
         </MenuItem>
       ))}
     </TextField>
@@ -329,7 +329,7 @@ function NouvelleDemande({ alimentation }: { alimentation: boolean }) {
   const magasin = (miens.length ? miens : tous).find((m) => m.id === magasinChoisi) ?? miens[0] ?? tous[0];
   const possibles = tous.filter(
     (m) =>
-      magasin && m.id !== magasin.id && m.societe_id === magasin.societe_id && (!alimentation || m.type === "depot"),
+      magasin && m.id !== magasin.id && m.societe_id === magasin.societe_id && (!alimentation || abriteLeCentral(m)),
   );
   const [aupresChoisi, setAupres] = useState("");
   const aupres = possibles.find((m) => m.id === aupresChoisi) ?? (alimentation ? possibles[0] : undefined);
@@ -593,7 +593,7 @@ export function Reassort() {
   const miens = tous.filter((m) => m.type !== "depot");
   const [magasinChoisi, setMagasin] = useState("");
   const magasin = miens.find((m) => m.id === magasinChoisi) ?? miens[0];
-  const depot = tous.find((m) => m.type === "depot" && magasin && m.societe_id === magasin.societe_id);
+  const depot = tous.find((m) => abriteLeCentral(m) && magasin && m.societe_id === magasin.societe_id);
   const [du, setDu] = useState(ilYA(30));
   const [au, setAu] = useState(jourIso(new Date()));
   const [famille, setFamille] = useState<Famille | "">("");

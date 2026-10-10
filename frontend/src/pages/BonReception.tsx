@@ -172,17 +172,20 @@ export function AjoutArticle({
   famille,
   onAjoute,
   avecStock = false,
+  depot = "",
 }: {
   magasin: string;
   famille: Famille | "";
   onAjoute: (article: Article) => void;
   /** Affiche le stock du magasin sous chaque article (transfert, bon retour). */
   avecStock?: boolean;
+  /** Stock de ce dépôt du magasin (par défaut : son dépôt de vente). */
+  depot?: string;
 }) {
   const [saisie, setSaisie] = useState("");
   const articles = useQuery({
-    queryKey: ["articles", magasin, famille, saisie, "reception"],
-    queryFn: () => chercherArticles(magasin, saisie, famille),
+    queryKey: ["articles", magasin, famille, saisie, "reception", depot],
+    queryFn: () => chercherArticles(magasin, saisie, famille, "", false, depot),
     enabled: Boolean(magasin),
   });
   return (

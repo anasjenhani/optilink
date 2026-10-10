@@ -85,7 +85,9 @@ def test_creation_d_une_fiche_monture(api, tunis, cartier, gestionnaire):
         "taux_tva": "19.00",
         "prix_vente_ttc": "2500.000",
     }
-    assert donnees["stocks"] == [{"magasin": "Tunis Centre", "stock": 0}]
+    assert donnees["stocks"] == [
+        {"magasin": "Tunis Centre", "depot": "Dépôt Tunis Centre", "stock": 0}
+    ]
     assert donnees["stockable"] is True
 
     # Le code suivant se suit.
@@ -159,7 +161,9 @@ def test_dernier_achat_et_mouvements(api, tunis, cartier, gestionnaire):
     donnees = api.get(url(tunis, article)).json()
     assert donnees["dernier_achat"]["net_ht"] == "600.000"
     assert donnees["dernier_achat"]["numero_bl"] == "BL-7"
-    assert donnees["stocks"] == [{"magasin": "Tunis Centre", "stock": 2}]
+    assert donnees["stocks"] == [
+        {"magasin": "Tunis Centre", "depot": "Dépôt Tunis Centre", "stock": 2}
+    ]
     mouvements = api.get(url(tunis, article, "mouvements/")).json()
     assert [(m["quantite"], m["magasin"]) for m in mouvements] == [(2, "Tunis Centre")]
 

@@ -198,6 +198,13 @@ class BonReception(ModeleDeBase):
         FACTURE = "facture", "Facturé"
 
     magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    depot = models.ForeignKey(
+        "reseau.Depot",
+        on_delete=models.PROTECT,
+        related_name="+",
+        verbose_name="dépôt",
+        help_text="Dépôt où les articles de stock sont entrés.",
+    )
     numero = models.CharField(max_length=40, unique=True)
     annee = models.PositiveSmallIntegerField()
     sequence = models.PositiveIntegerField()

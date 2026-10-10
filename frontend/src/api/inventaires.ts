@@ -22,6 +22,9 @@ export type InventaireResume = {
   numero: string;
   magasin: string;
   magasin_id: string;
+  /** Dépôt compté (dépôt de vente, central ou casse du magasin). */
+  depot?: string;
+  depot_id?: string;
   famille: Famille | "";
   famille_libelle: string;
   marque: string;
@@ -64,6 +67,8 @@ export type Comptage = {
 
 export type OuvertureInventaire = {
   magasin: string;
+  /** Vide : le dépôt de vente du magasin. */
+  depot?: string;
   famille: Famille | "";
   marque: string;
   nature: NatureMonture | "";

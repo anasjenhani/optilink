@@ -13,7 +13,8 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.response import Response
 
-from apps.reseau.models import Magasin
+from apps.achats.depot import depot_de
+from apps.reseau.models import Depot, Magasin
 from core.perimetre import perimetre_actuel
 
 from .. import sorties
@@ -42,6 +43,21 @@ def _magasin(identifiant, champ):
     if magasin is None:
         raise ValidationError({champ: "Magasin inconnu."})
     return magasin
+
+
+def _depot(magasin, identifiant, defaut=None):
+    """Dépôt du magasin choisi par son identifiant ; sans identifiant, ``defaut`` (par défaut le
+    dépôt de vente du magasin)."""
+    if not identifiant:
+        return defaut or magasin.depot_de_vente
+    try:
+        uuid.UUID(str(identifiant))
+    except ValueError:
+        raise ValidationError({"depot": "Identifiant invalide."}) from None
+    depot = Depot.objects.filter(public_id=identifiant, magasin=magasin).first()
+    if depot is None:
+        raise ValidationError({"depot": f"Ce dépôt n'est pas un dépôt de {magasin.nom}."})
+    return depot
 
 
 def _articles(lignes):
@@ -86,6 +102,9 @@ class LigneArticleSerializer(serializers.Serializer):
 
 class BonSortieSaisieSerializer(serializers.Serializer):
     magasin = serializers.UUIDField()
+    depot = serializers.UUIDField(
+        required=False, allow_null=True, help_text="Par défaut : le dépôt de vente du magasin."
+    )
     type = serializers.ChoiceField(choices=BonSortie.Type.choices)
     motif = serializers.CharField(max_length=200)
     observation = serializers.CharField(required=False, allow_blank=True)
@@ -95,6 +114,7 @@ class BonSortieSaisieSerializer(serializers.Serializer):
 class BonSortieSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source="public_id", read_only=True)
     magasin = serializers.CharField(source="magasin.nom", read_only=True)
+    depot = serializers.CharField(source="depot.nom", read_only=True)
     type_libelle = serializers.CharField(source="get_type_display", read_only=True)
     cree_par = serializers.SerializerMethodField()
     total_articles = serializers.SerializerMethodField()
@@ -106,6 +126,7 @@ class BonSortieSerializer(serializers.ModelSerializer):
             "id",
             "numero",
             "magasin",
+            "depot",
             "type",
             "type_libelle",
             "motif",
@@ -140,7 +161,7 @@ class BonSortieViewSet(
     }
 
     def get_queryset(self):
-        bons = BonSortie.objects.select_related("magasin", "cree_par").prefetch_related(
+        bons = BonSortie.objects.select_related("magasin", "depot", "cree_par").prefetch_related(
             Prefetch("lignes", queryset=LigneSortie.objects.select_related("article"))
         )
         params = self.request.query_params
@@ -175,6 +196,7 @@ class BonSortieViewSet(
                 lignes=_articles(donnees["lignes"]),
                 auteur=request.user,
                 observation=donnees.get("observation", ""),
+                depot=_depot(magasin, donnees.get("depot")),
             )
         except sorties.SortieImpossible as erreur:
             return Response({"detail": str(erreur)}, status=status.HTTP_400_BAD_REQUEST)
@@ -412,7 +434,10 @@ class DemandeTransfertViewSet(
             OpenApiParameter("au", OpenApiTypes.DATE, description="Par défaut : aujourd'hui."),
             OpenApiParameter("famille", OpenApiTypes.STR, enum=Article.Famille.values),
             OpenApiParameter(
-                "depot", OpenApiTypes.UUID, description="Par défaut : le dépôt central."
+                "depot",
+                OpenApiTypes.UUID,
+                description="Magasin qui abrite le dépôt central (par défaut : celui de la "
+                "société).",
             ),
         ],
         responses=ReassortSerializer(many=True),
@@ -429,13 +454,9 @@ class DemandeTransfertViewSet(
         if request.query_params.get("depot"):
             depot = _magasin(request.query_params["depot"], "depot")
         else:
-            depot = (
-                Magasin.tous.filter(
-                    societe_id=magasin.societe_id, type=Magasin.Type.DEPOT, est_actif=True
-                )
-                .exclude(pk=magasin.pk)
-                .first()
-            )
+            depot = depot_de(magasin)
+            if depot is not None and depot.pk == magasin.pk:
+                depot = None
         au = _date(request, "au", timezone.localdate())
         du = _date(request, "du", au - timedelta(days=30))
         lignes = sorties.reassort(
@@ -476,6 +497,9 @@ class StockADateViewSet(viewsets.ViewSet):
             OpenApiParameter("date", OpenApiTypes.DATE, description="Par défaut : aujourd'hui."),
             OpenApiParameter("famille", OpenApiTypes.STR, enum=Article.Famille.values),
             OpenApiParameter("recherche", OpenApiTypes.STR),
+            OpenApiParameter(
+                "depot", OpenApiTypes.UUID, description="Par défaut : tous les dépôts du magasin."
+            ),
         ],
         responses=StockADateResultatSerializer,
     )
@@ -491,6 +515,11 @@ class StockADateViewSet(viewsets.ViewSet):
             jour,
             famille=request.query_params.get("famille", ""),
             recherche=request.query_params.get("recherche", ""),
+            depot=(
+                _depot(magasin, request.query_params["depot"])
+                if request.query_params.get("depot")
+                else None
+            ),
         )
         valeur = sum((ligne["valeur_achat"] or 0 for ligne in lignes), 0)
         resultat = {

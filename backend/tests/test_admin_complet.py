@@ -57,7 +57,10 @@ def test_ajouter_un_transfert(creer_utilisateur, client_de, tunis, monture):
         'href="/admin/stock/transfertstock/add/"'
         in navigateur.get("/admin/stock/transfertstock/").content.decode()
     )
-    entete = {"magasin": tunis.pk, "destination": lac.pk}
+    entete = {
+        "depot_origine": tunis.depot_de_vente.pk,
+        "depot_destination": lac.depot_de_vente.pk,
+    }
     reponse = navigateur.post(
         "/admin/stock/transfertstock/add/",
         {**entete, **_lignes({"article": monture.reference, "quantite": "2"})},
@@ -70,12 +73,12 @@ def test_ajouter_un_transfert(creer_utilisateur, client_de, tunis, monture):
     meme = navigateur.post(
         "/admin/stock/transfertstock/add/",
         {
-            "magasin": tunis.pk,
-            "destination": tunis.pk,
+            "depot_origine": tunis.depot_de_vente.pk,
+            "depot_destination": tunis.depot_de_vente.pk,
             **_lignes({"article": "MON-T", "quantite": "1"}),
         },
     )
-    assert "autre magasin" in meme.content.decode()
+    assert "autre dépôt" in meme.content.decode()
     assert TransfertStock.tous.count() == 1
 
 

@@ -479,7 +479,11 @@ class PlageVerre(models.Model):
 
 
 class MouvementStock(models.Model):
-    """Entrée ou sortie d'un article dans un magasin. Le stock est la somme des mouvements."""
+    """Entrée ou sortie d'un article dans un dépôt. Le stock est la somme des mouvements.
+
+    Le magasin est celui du dépôt (il sert au filtrage par magasin). Sans dépôt précisé, le
+    mouvement va au dépôt de vente du magasin.
+    """
 
     class Type(models.TextChoices):
         RECEPTION = "reception", "Réception"
@@ -493,6 +497,9 @@ class MouvementStock(models.Model):
         CASSE = "casse", "Sortie casse"
 
     magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    depot = models.ForeignKey(
+        "reseau.Depot", on_delete=models.PROTECT, related_name="+", verbose_name="dépôt"
+    )
     article = models.ForeignKey(Article, on_delete=models.PROTECT, related_name="mouvements")
     quantite = models.IntegerField(help_text="Positive en entrée, négative en sortie.")
     type = models.CharField(max_length=20, choices=Type.choices)
@@ -508,7 +515,10 @@ class MouvementStock(models.Model):
     class Meta:
         verbose_name = "mouvement de stock"
         verbose_name_plural = "mouvements de stock"
-        indexes = [models.Index(fields=["magasin", "article"])]
+        indexes = [
+            models.Index(fields=["magasin", "article"]),
+            models.Index(fields=["depot", "article"]),
+        ]
         constraints = [
             models.CheckConstraint(
                 name="mouvement_quantite_non_nulle", condition=~models.Q(quantite=0)
@@ -518,12 +528,32 @@ class MouvementStock(models.Model):
     def __str__(self):
         return f"{self.get_type_display()} {self.quantite:+d} {self.article}"
 
+    def save(self, *args, **kwargs):
+        avec_depot(self)
+        super().save(*args, **kwargs)
+
+
+def avec_depot(mouvement):
+    """Complète le dépôt (le dépôt de vente du magasin) ou le magasin (celui du dépôt).
+
+    À appeler avant ``bulk_create``, qui ne passe pas par ``save``.
+    """
+    if mouvement.depot_id is None:
+        mouvement.depot = mouvement.magasin.depot_de_vente
+    elif mouvement.magasin_id is None:
+        mouvement.magasin_id = mouvement.depot.magasin_id
+    elif mouvement.depot.magasin_id != mouvement.magasin_id:
+        raise ValueError(f"Le dépôt {mouvement.depot} n'est pas un dépôt de ce magasin.")
+    return mouvement
+
 
 class TransfertStock(ModeleDeBase):
-    """Envoi d'articles d'un magasin (le dépôt central en général) vers un autre.
+    """Envoi d'articles d'un dépôt (le dépôt central en général) vers un autre.
 
-    À l'envoi, les articles sortent du stock de départ ; ils entrent dans le stock du magasin
-    destinataire quand il le réceptionne. Entre les deux, ils sont « en route ».
+    À l'envoi, les articles sortent du dépôt de départ ; ils entrent dans le dépôt destinataire
+    quand son magasin les réceptionne. Entre les deux, ils sont « en route ». Les deux dépôts
+    peuvent appartenir au même magasin (du dépôt central au dépôt de vente, vers le dépôt
+    casse…) ; ``magasin`` et ``destination`` sont alors le même magasin.
     """
 
     class Statut(models.TextChoices):
@@ -542,6 +572,15 @@ class TransfertStock(ModeleDeBase):
         on_delete=models.PROTECT,
         related_name="+",
         verbose_name="magasin destinataire",
+    )
+    depot_origine = models.ForeignKey(
+        "reseau.Depot", on_delete=models.PROTECT, related_name="+", verbose_name="dépôt de départ"
+    )
+    depot_destination = models.ForeignKey(
+        "reseau.Depot",
+        on_delete=models.PROTECT,
+        related_name="+",
+        verbose_name="dépôt destinataire",
     )
     numero = models.CharField(max_length=40, unique=True)
     annee = models.PositiveSmallIntegerField()
@@ -574,8 +613,8 @@ class TransfertStock(ModeleDeBase):
                 fields=["magasin", "annee", "sequence"], name="transfert_sans_doublon"
             ),
             models.CheckConstraint(
-                name="transfert_vers_un_autre_magasin",
-                condition=~models.Q(destination=models.F("magasin")),
+                name="transfert_vers_un_autre_depot",
+                condition=~models.Q(depot_destination=models.F("depot_origine")),
             ),
         ]
 
@@ -611,6 +650,9 @@ class BonSortie(ModeleDeBase):
         CASSE = "casse", "Sortie casse"
 
     magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    depot = models.ForeignKey(
+        "reseau.Depot", on_delete=models.PROTECT, related_name="+", verbose_name="dépôt"
+    )
     numero = models.CharField(max_length=40, unique=True)
     annee = models.PositiveSmallIntegerField()
     sequence = models.PositiveIntegerField()
@@ -735,8 +777,8 @@ class LigneDemandeTransfert(models.Model):
 
 
 class Inventaire(ModeleDeBase):
-    """Comptage physique du stock d'un magasin (ou du dépôt) : tout le stock, ou une partie
-    (famille, marque, nature de monture, fournisseur).
+    """Comptage physique du stock d'un dépôt : tout le stock, ou une partie (famille, marque,
+    nature de monture, fournisseur).
 
     Trois étapes : le comptage (« en cours »), puis la vérification où le responsable contrôle
     les écarts et corrige les quantités, puis la validation finale avec une observation. À la
@@ -751,6 +793,9 @@ class Inventaire(ModeleDeBase):
         ANNULE = "annule", "Annulé"
 
     magasin = models.ForeignKey("reseau.Magasin", on_delete=models.PROTECT, related_name="+")
+    depot = models.ForeignKey(
+        "reseau.Depot", on_delete=models.PROTECT, related_name="+", verbose_name="dépôt"
+    )
     numero = models.CharField(max_length=40, unique=True)
     annee = models.PositiveSmallIntegerField()
     sequence = models.PositiveIntegerField()
@@ -758,7 +803,7 @@ class Inventaire(ModeleDeBase):
         max_length=20,
         choices=Article.Famille.choices,
         blank=True,
-        help_text="Vide : tout le stock du magasin.",
+        help_text="Vide : tout le stock du dépôt.",
     )
     marque = models.CharField(max_length=100, blank=True, help_text="Montures de cette marque.")
     nature = models.CharField(
@@ -833,8 +878,10 @@ class LigneInventaire(models.Model):
         return f"{self.quantite_comptee} × {self.article}"
 
 
-def stock_disponible(magasin, article):
-    total = MouvementStock.tous.filter(magasin=magasin, article=article).aggregate(
+def stock_disponible(magasin, article, depot=None):
+    """Stock d'un article dans un dépôt (par défaut : le dépôt de vente du magasin)."""
+    depot = depot or magasin.depot_de_vente
+    total = MouvementStock.tous.filter(depot=depot, article=article).aggregate(
         total=Sum("quantite")
     )["total"]
     return total or 0

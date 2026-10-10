@@ -270,9 +270,10 @@ def test_alertes_sur_les_articles_deja_en_stock(logisticien, tunis, fournisseurs
     assert alertes[5].endswith("(pas en stock).")
 
     # Une nouvelle entrée signale le stock déjà présent, cumulé ligne après ligne.
+    DEPOT_TUNIS = "au dépôt Dépôt Tunis Centre"  # noqa: N806
     bon = "code_barres;quantite\n8053672000001;2\n8053672000001;3\n3700000000017;1\n"
     verification = importer(logisticien, fichier(bon, "bl.csv"), "stock", apercu=True, **tunis_)
     assert verification.json()["alertes"] == [
-        {"ligne": 2, "message": "MON-1 déjà en stock à Tunis Centre : 5 ; 7 après l'entrée."},
-        {"ligne": 3, "message": "MON-1 déjà en stock à Tunis Centre : 7 ; 10 après l'entrée."},
+        {"ligne": 2, "message": f"MON-1 déjà en stock {DEPOT_TUNIS} : 5 ; 7 après l'entrée."},
+        {"ligne": 3, "message": f"MON-1 déjà en stock {DEPOT_TUNIS} : 7 ; 10 après l'entrée."},
     ]
