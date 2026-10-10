@@ -596,13 +596,14 @@ export function modulesPour(session: EtatSession): Module[] {
     },
     {
       id: "reglement",
-      libelle: "Règlement",
+      libelle: "Règlements",
       tuiles: [
         {
           id: "reglement",
           libelle: "Règlement",
           icone: Payments,
           couleur: COULEURS.vert,
+          categorie: "Règlements clients",
           ecran: si(vendre, () => <Commandes saisirPec={a("ventes.add_priseencharge")} />),
         },
         {
@@ -610,6 +611,7 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Remboursement Client",
           icone: Undo,
           couleur: COULEURS.vert,
+          categorie: "Règlements clients",
           ecran: si(a("ventes.add_avoir") || a("ventes.view_avoir"), () => (
             <Avoirs emettre={a("ventes.add_avoir")} consulter={a("ventes.view_avoir")} />
           )),
@@ -619,6 +621,7 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Avance Personnel",
           icone: Groups,
           couleur: COULEURS.bleu,
+          categorie: "Règlements clients",
           ecran: si(droitsRh.voirAcomptes, () => <RessourcesHumaines droits={droitsRh} ongletInitial="acomptes" />),
         },
         {
@@ -626,6 +629,7 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Liste Vente à Crédit",
           icone: ListAlt,
           couleur: COULEURS.brun,
+          categorie: "Règlements clients",
           ecran: si(a("ventes.view_vente"), () => <CreditClients droits={droitsCredit} ongletInitial="ventes" />),
         },
         {
@@ -633,6 +637,7 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Liste Règlements",
           icone: ReceiptLong,
           couleur: COULEURS.gris,
+          categorie: "Règlements clients",
           ecran: si(voirVentes, () => <Recus />),
         },
         {
@@ -640,6 +645,7 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Changement Chèques",
           icone: SwapHoriz,
           couleur: COULEURS.brun,
+          categorie: "Règlements clients",
           ecran: si(a("ventes.gerer_impayes"), () => <CreditClients droits={droitsCredit} ongletInitial="cheques" />),
         },
         {
@@ -647,6 +653,7 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Prises en Charge (CNAM)",
           icone: Description,
           couleur: COULEURS.orange,
+          categorie: "Règlements clients",
           ecran: si(a("ventes.view_priseencharge"), () => (
             <PrisesEnCharge modifier={a("ventes.change_priseencharge")} />
           )),
@@ -656,6 +663,7 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Bordereaux CNAM / Conventions",
           icone: FactCheck,
           couleur: COULEURS.orange,
+          categorie: "Règlements clients",
           ecran: si(a("ventes.view_bordereaupec"), () => (
             <BordereauxPec preparer={a("ventes.add_bordereaupec")} regler={a("ventes.change_bordereaupec")} />
           )),
@@ -665,14 +673,19 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Règlement Crédit",
           icone: CreditCard,
           couleur: COULEURS.brun,
+          categorie: "Règlements clients",
           ecran: si(a("ventes.add_vente"), () => <CreditClients droits={droitsCredit} ongletInitial="ventes" />),
         },
-        aVenir("transfert-solde", "Transfert Solde", CompareArrows, COULEURS.gris),
+        {
+          ...aVenir("transfert-solde", "Transfert Solde", CompareArrows, COULEURS.gris),
+          categorie: "Règlements clients",
+        },
         {
           id: "impaye",
           libelle: "Impayé Client",
           icone: ReportProblem,
           couleur: COULEURS.rouge,
+          categorie: "Règlements clients",
           ecran: si(a("ventes.view_vente"), () => <CreditClients droits={droitsCredit} ongletInitial="impayes" />),
         },
         {
@@ -680,21 +693,17 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Liste Noire",
           icone: Block,
           couleur: COULEURS.rouge,
+          categorie: "Règlements clients",
           ecran: si(a("ventes.gerer_impayes"), () => (
             <CreditClients droits={droitsCredit} ongletInitial="liste-noire" />
           )),
         },
-      ],
-    },
-    {
-      id: "reglement-fournisseur",
-      libelle: "Règlement Fournisseur",
-      tuiles: [
         {
           id: "nouveau-reglement-fournisseur",
           libelle: "Règlement Fournisseur",
           icone: Payments,
           couleur: COULEURS.vert,
+          categorie: "Règlements fournisseurs",
           ecran: si(a("achats.add_reglementfournisseur"), () => (
             <ReglementsFournisseurs droits={droitsReglementsFournisseurs} />
           )),
@@ -704,6 +713,7 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Liste Règlements Fournisseurs",
           icone: ReceiptLong,
           couleur: COULEURS.gris,
+          categorie: "Règlements fournisseurs",
           ecran: si(a("achats.view_reglementfournisseur"), () => (
             <ReglementsFournisseurs droits={droitsReglementsFournisseurs} ongletInitial="liste" />
           )),
@@ -713,6 +723,7 @@ export function modulesPour(session: EtatSession): Module[] {
           libelle: "Échéancier Fournisseurs",
           icone: CalendarMonth,
           couleur: COULEURS.orange,
+          categorie: "Règlements fournisseurs",
           ecran: si(a("achats.view_reglementfournisseur"), () => (
             <ReglementsFournisseurs droits={droitsReglementsFournisseurs} ongletInitial="echeancier" />
           )),
