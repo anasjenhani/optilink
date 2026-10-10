@@ -505,6 +505,12 @@ _AIDE_LISTES = {
 _TITRES_LISTES = {
     "marques_montures": ("Marques de monture", {"code": "RB", "libelle": "RAY BAN"}),
     "matieres_verres": ("Matières de verre", {"code": "24", "libelle": "ORMIX"}),
+    "marques_lentilles": ("Marques de lentille", {"code": "1", "libelle": "BIOFINITY"}),
+    "couleurs_lentilles": ("Couleurs de lentille", {"code": "10", "libelle": "PURE HAZEL"}),
+    "matieres_lentilles": (
+        "Matières de lentille",
+        {"code": "SH", "libelle": "SILICONE HYDROGEL"},
+    ),
     "familles_verres": (
         "Familles de verres",
         {

@@ -142,6 +142,9 @@ def test_listes_dans_l_administration(creer_utilisateur, client_de):
         ("diametreverre", "diametres_verres"),
         ("matiereverre", "matieres_verres"),
         ("marquemonture", "marques_montures"),
+        ("marquelentille", "marques_lentilles"),
+        ("couleurlentille", "couleurs_lentilles"),
+        ("matierelentille", "matieres_lentilles"),
     ):
         page = navigateur.get(f"/admin/stock/{liste}/").content.decode()
         assert f"/admin/stock/{liste}/importer/{quoi}/" in page

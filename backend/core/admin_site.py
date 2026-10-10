@@ -33,7 +33,10 @@ SECTIONS_STOCK = [
         ],
     ),
     ("Montures", ["ArticleMonture", "MarqueMonture"]),
-    ("Lentilles", ["ArticleLentille"]),
+    (
+        "Lentilles",
+        ["ArticleLentille", "MarqueLentille", "CouleurLentille", "MatiereLentille"],
+    ),
     ("Produits", ["ArticleProduit"]),
 ]
 
