@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 
-import { DemandesTransfert, Reassort } from "./SortiesStock";
+import { DemandesTransfert, PeremptionLentilles, Reassort } from "./SortiesStock";
 
 const PAYS = { code: "TN", devise: "TND", decimales: 3, timbre_fiscal: "1.000" };
 const MAGASIN = { id: "m1", code: "T01", nom: "Tunis Centre", societe_id: "s1", type: "magasin", pays: PAYS };
@@ -99,4 +99,37 @@ test("le réassort part en demande d'alimentation au dépôt", async () => {
       },
     },
   ]);
+});
+
+test("la péremption des lentilles met les périmées en tête et cache celles sans souci", async () => {
+  const lentille = (reference: string, etat: string, lots: { date: string | null; quantite: number }[]) => ({
+    article: reference,
+    reference,
+    libelle: `biofinity ${reference}`,
+    stock: lots.reduce((s, l) => s + l.quantite, 0),
+    prochaine: lots[0].date,
+    etat,
+    lots,
+  });
+  simuler(
+    (url) =>
+      url.includes("peremptions-lentilles")
+        ? [
+            lentille("LEN-1", "perimee", [{ date: "2026-09-30", quantite: 2 }]),
+            lentille("LEN-2", "inconnue", [{ date: null, quantite: 3 }]),
+            lentille("LEN-3", "ok", [{ date: "2027-06-30", quantite: 6 }]),
+          ]
+        : { results: [MAGASIN] },
+    [],
+  );
+  ecran(<PeremptionLentilles />);
+
+  expect(
+    await screen.findByText("1 périmées · 0 bientôt périmées · 1 à dater (au prochain inventaire des lentilles)"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Périmée")).toBeInTheDocument();
+  expect(screen.getByText("3 × date inconnue")).toBeInTheDocument();
+  expect(screen.queryByText("LEN-3")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText("Voir aussi les lentilles sans souci"));
+  expect(screen.getByText("LEN-3")).toBeInTheDocument();
 });

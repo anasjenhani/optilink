@@ -58,6 +58,11 @@ class ComptageInventaireSerializer(serializers.Serializer):
     observation = serializers.CharField(
         required=False, allow_blank=True, max_length=200, allow_null=True, default=None
     )
+    date_peremption = serializers.DateField(
+        required=False,
+        allow_null=True,
+        help_text="Lentilles : péremption la plus proche des boîtes comptées (null l'efface).",
+    )
 
 
 class ValidationSerializer(serializers.Serializer):
@@ -81,6 +86,7 @@ class LigneEtatSerializer(serializers.Serializer):
     comptee = serializers.BooleanField()
     ecart = serializers.IntegerField()
     observation = serializers.CharField()
+    date_peremption = serializers.DateField(allow_null=True)
 
 
 def _nom(utilisateur):
@@ -287,6 +293,7 @@ class InventaireViewSet(
                 quantite=donnees["quantite"],
                 remplacer=donnees["remplacer"],
                 observation=donnees["observation"],
+                **{c: donnees[c] for c in ("date_peremption",) if c in donnees},
             )
         except InventaireImpossible as erreur:
             return self._erreur(erreur)
