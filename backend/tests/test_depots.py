@@ -139,3 +139,53 @@ def test_les_depots_dans_l_api_et_l_administration(aouina, creer_utilisateur, cl
     assert "Code magasin" in page
     fiche = navigateur.get(f"/admin/reseau/magasin/{aouina.pk}/change/").content.decode()
     assert "DEPCAS" in fiche
+
+
+# Le fichier « Depot » de l'ancien logiciel, tel qu'exporté.
+FICHIER_DEPOTS = """CodeDepot;Libelle;Adresse;Ville;Tel;EtatInventaire;NomBaseCentrale;CodeMagasin
+DEPCAS;CASSE & REPARATION;;Tunis;;0;;
+DEPCEN;Central;;Tunis;;0;;C
+DEPTN;MAGASIN Jribi Optic (Tunis);;Tunis;;0;;01
+"""
+
+
+def test_import_du_fichier_depot_de_l_ancien_logiciel(tunis, creer_utilisateur, client_de):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    un = Magasin.tous.create(code="1", nom="Jribi Optic", societe=tunis.societe, pays=tunis.pays)
+    central = Magasin.tous.create(
+        code="C", nom="Central Achat", societe=tunis.societe, pays=tunis.pays
+    )
+    # Comme après la reprise de l'ancien « magasin dépôt » : son dépôt est le central, code C.
+    central.depots.update(type="central")
+
+    navigateur = _admin(creer_utilisateur, client_de)
+    assert (
+        'href="/admin/reseau/depot/importer/depots/"'
+        in navigateur.get("/admin/reseau/depot/").content.decode()
+    )
+    url = "/admin/reseau/depot/importer/depots/"
+    fichier = SimpleUploadedFile("Depot.csv", FICHIER_DEPOTS.encode("utf-8-sig"))
+    verification = navigateur.post(url, {"fichier": fichier})
+    rapport = verification.context["rapport"]
+    assert rapport.erreurs == []
+    assert (rapport.crees, rapport.modifies) == (1, 2)
+    assert not Depot.objects.filter(code="DEPCEN").exists()  # vérification seulement
+    fin = navigateur.post(url, {"importer": "1", "jeton": verification.context["jeton"]})
+    assert "Import terminé" in fin.content.decode()
+
+    # Les dépôts créés avec les magasins prennent les codes du fichier, sans doublon.
+    assert list(un.depots.values_list("code", "type")) == [("DEPTN", "vente")]
+    assert un.depots.get().nom == "MAGASIN Jribi Optic (Tunis)"
+    assert sorted(central.depots.values_list("code", "type")) == [
+        ("DEPCAS", "casse"),
+        ("DEPCEN", "central"),
+    ]
+    assert Depot.objects.get(code="DEPCAS").ville == "Tunis"
+
+    # Réimporter le même fichier met à jour, sans rien créer.
+    from apps.reseau.imports import importer_depots
+    from apps.stock.imports import lire_tableau
+
+    lignes = lire_tableau(SimpleUploadedFile("Depot.csv", FICHIER_DEPOTS.encode()))
+    assert (importer_depots(lignes).crees, Depot.objects.count()) == (0, 4)

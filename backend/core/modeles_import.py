@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from apps.achats.imports import COLONNES_FOURNISSEURS, COLONNES_RECEPTIONS
 from apps.crm.imports import COLONNES_CLIENTS
 from apps.optique.imports import COLONNES_OPHTALMOLOGUES
+from apps.reseau.imports import COLONNES_DEPOTS
 from apps.securite.imports import COLONNES_UTILISATEURS
 from apps.stock.imports import (
     COLONNES_CATALOGUE,
@@ -382,6 +383,41 @@ MODELES = {
                 "reference": "MON-RB3025",
                 "quantite": "1",
                 "prix_achat_ht": "180,000",
+            },
+        ],
+    ),
+    "depots": Modele(
+        titre="Dépôts",
+        colonnes=COLONNES_DEPOTS,
+        obligatoires={"CodeDepot", "Libelle"},
+        aide={
+            "CodeDepot": "Code du dépôt (DEPTN, DEPCEN, DEPCAS…) ; réimporter le même code met "
+            "le dépôt à jour.",
+            "Libelle": "Nom du dépôt.",
+            "Adresse": "Adresse du dépôt.",
+            "Ville": "Ville (Tunis, Ariana…).",
+            "Tel": "Téléphone.",
+            "EtatInventaire": "Ignoré : OptiLink sait seul si un inventaire est en cours.",
+            "NomBaseCentrale": "Ignoré (base de l'ancien logiciel).",
+            "CodeMagasin": "Code du magasin du dépôt (01 = 1). Vide : le magasin du dépôt "
+            "central. Le dépôt de vente créé avec le magasin prend ce code au lieu d'être "
+            "doublé.",
+            "Type": "Facultatif : vente, central ou casse. Vide : déduit du code et du libellé "
+            "(CASSE → casse, Central ou …CEN → central, sinon vente).",
+        },
+        exemples=[
+            {
+                "CodeDepot": "DEPTN",
+                "Libelle": "MAGASIN Tunis",
+                "Ville": "Tunis",
+                "CodeMagasin": "01",
+            },
+            {"CodeDepot": "DEPCEN", "Libelle": "Central", "Ville": "Tunis", "CodeMagasin": "C"},
+            {
+                "CodeDepot": "DEPCAS",
+                "Libelle": "CASSE & REPARATION",
+                "Ville": "Tunis",
+                "Type": "casse",
             },
         ],
     ),

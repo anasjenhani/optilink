@@ -6,6 +6,8 @@ from django.contrib import admin
 from django.core.exceptions import ValidationError
 from django.utils.html import format_html, format_html_join
 
+from core.admin_imports import AvecImport
+
 from .banques import valider_banque
 from .models import Banque, Depot, Magasin, Pays, Societe, TauxTva, Ville
 from .pays_du_monde import CHAMPS, pays_du_monde
@@ -333,7 +335,8 @@ class MagasinAdmin(AvecListeVilles, admin.ModelAdmin):
 
 # Un dépôt ne se supprime pas (son stock et ses mouvements y restent) : on le désactive.
 @admin.register(Depot)
-class DepotAdmin(AvecListeVilles, admin.ModelAdmin):
+class DepotAdmin(AvecListeVilles, AvecImport, admin.ModelAdmin):
+    imports = ("depots",)
     # Les colonnes de l'ancien logiciel : CodeDepot, Libelle, Adresse, Ville, Tel,
     # EtatInventaire, CodeMagasin ; puis le type et l'état.
     list_display = (
