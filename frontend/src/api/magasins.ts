@@ -17,6 +17,9 @@ export type Depot = {
   id: string;
   code: string;
   nom: string;
+  adresse?: string;
+  ville?: string;
+  telephone?: string;
   type: "vente" | "central" | "casse";
 };
 

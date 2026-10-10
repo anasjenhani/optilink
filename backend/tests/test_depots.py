@@ -30,6 +30,7 @@ def test_chaque_magasin_a_son_depot_de_vente(tunis):
     vente = tunis.depots.get()
     assert (vente.code, vente.type, vente.nom) == ("T01", "vente", "Dépôt Tunis Centre")
     assert tunis.depot_de_vente == tunis.depot_de_reception == vente
+    assert vente.ville == tunis.ville
     assert not tunis.est_depot
 
 
@@ -122,7 +123,19 @@ def test_les_depots_dans_l_api_et_l_administration(aouina, creer_utilisateur, cl
     magasin = navigateur.get(f"/api/v1/magasins/{aouina.public_id}/").json()
     assert (magasin["type"], magasin["depot_central"]) == ("magasin", True)
     assert [d["code"] for d in magasin["depots"]] == ["DEPCAS", "DEPCEN", "T01"]
+    assert {"adresse", "ville", "telephone"} <= set(magasin["depots"][0])
     page = navigateur.get("/admin/reseau/depot/").content.decode()
     assert "DEPCEN" in page and "Dépôt central" in page
+    # Les colonnes de la table Depot de l'ancien logiciel.
+    for colonne in (
+        "Code dépôt",
+        "Libellé",
+        "Adresse",
+        "Ville",
+        "Téléphone",
+        "Inventaire en cours",
+    ):
+        assert colonne in page
+    assert "Code magasin" in page
     fiche = navigateur.get(f"/admin/reseau/magasin/{aouina.pk}/change/").content.decode()
     assert "DEPCAS" in fiche

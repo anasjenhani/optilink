@@ -28,7 +28,7 @@ class DepotSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Depot
-        fields = ["id", "code", "nom", "type"]
+        fields = ["id", "code", "nom", "adresse", "ville", "telephone", "type"]
 
 
 class MagasinSerializer(serializers.ModelSerializer):

@@ -233,6 +233,9 @@ class Magasin(ModeleDeBase):
                 magasin=self,
                 code=code or f"{self.code}-V"[:20],
                 nom=f"Dépôt {self.nom}"[:100],
+                adresse=self.adresse,
+                ville=self.ville,
+                telephone=self.telephone,
                 type=Depot.Type.VENTE,
             )
 
@@ -273,9 +276,16 @@ class Depot(ModeleDeBase):
         CENTRAL = "central", "Dépôt central"
         CASSE = "casse", "Dépôt casse"
 
+    # Mêmes colonnes que la table Depot de l'ancien logiciel : CodeDepot, Libelle, Adresse,
+    # Ville, Tel, CodeMagasin ; EtatInventaire est calculé (inventaire_en_cours).
+    code = models.CharField(
+        "code dépôt", max_length=20, unique=True, help_text="Ex. DEPTN, DEPCEN, DEPCAS."
+    )
+    nom = models.CharField("libellé", max_length=100)
+    adresse = models.TextField(blank=True)
+    ville = models.CharField(max_length=100, blank=True)
+    telephone = models.CharField("téléphone", max_length=20, blank=True)
     magasin = models.ForeignKey(Magasin, on_delete=models.PROTECT, related_name="depots")
-    code = models.CharField(max_length=20, unique=True, help_text="Ex. DEPTN, DEPCEN, DEPCAS.")
-    nom = models.CharField(max_length=100)
     type = models.CharField(max_length=10, choices=Type.choices, default=Type.VENTE)
     est_actif = models.BooleanField("actif", default=True)
 
@@ -292,6 +302,19 @@ class Depot(ModeleDeBase):
 
     def __str__(self):
         return f"{self.code} {self.nom}"
+
+    @property
+    def pays(self):
+        return self.magasin.pays if self.magasin_id else None
+
+    @property
+    def inventaire_en_cours(self):
+        """EtatInventaire de l'ancien logiciel : un inventaire est ouvert sur ce dépôt."""
+        from apps.stock.models import Inventaire
+
+        return Inventaire.objects.filter(
+            depot=self, statut__in=[Inventaire.Statut.EN_COURS, Inventaire.Statut.A_VERIFIER]
+        ).exists()
 
     def clean(self):
         from django.core.exceptions import ValidationError

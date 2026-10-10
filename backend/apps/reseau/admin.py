@@ -311,6 +311,7 @@ class DepotInline(admin.TabularInline):
 
     model = Depot
     fields = ("code", "nom", "type", "est_actif")
+    show_change_link = True  # adresse, ville, téléphone : sur la fiche du dépôt
     extra = 0
     can_delete = False
 
@@ -332,10 +333,31 @@ class MagasinAdmin(AvecListeVilles, admin.ModelAdmin):
 
 # Un dépôt ne se supprime pas (son stock et ses mouvements y restent) : on le désactive.
 @admin.register(Depot)
-class DepotAdmin(admin.ModelAdmin):
-    list_display = ("code", "nom", "type", "magasin", "est_actif")
+class DepotAdmin(AvecListeVilles, admin.ModelAdmin):
+    # Les colonnes de l'ancien logiciel : CodeDepot, Libelle, Adresse, Ville, Tel,
+    # EtatInventaire, CodeMagasin ; puis le type et l'état.
+    list_display = (
+        "code",
+        "nom",
+        "adresse",
+        "ville",
+        "telephone",
+        "etat_inventaire",
+        "code_magasin",
+        "type",
+        "est_actif",
+    )
     list_filter = ("type", "magasin__societe", "est_actif")
-    search_fields = ("code", "nom", "magasin__nom")
+    search_fields = ("code", "nom", "ville", "magasin__code", "magasin__nom")
+    fields = ("code", "nom", "adresse", "ville", "telephone", "magasin", "type", "est_actif")
+
+    @admin.display(description="code magasin", ordering="magasin__code")
+    def code_magasin(self, depot):
+        return f"{depot.magasin.code} {depot.magasin.nom}"
+
+    @admin.display(description="inventaire en cours", boolean=True)
+    def etat_inventaire(self, depot):
+        return depot.inventaire_en_cours
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("magasin")
