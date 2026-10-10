@@ -38,8 +38,7 @@ test("les modules sont des onglets horizontaux, Vente d'abord", () => {
   expect(onglets.map((o) => o.textContent)).toEqual([
     "Vente",
     "Stock",
-    "Règlement",
-    "Règlement Fournisseur",
+    "Règlements",
     "Caisse",
     "SAV",
     "Facture",
@@ -122,4 +121,20 @@ test("l'Administration est rangée en catégories, comme dans /admin/", async ()
   fireEvent.change(screen.getByLabelText("Rechercher"), { target: { value: "sécurité" } });
   expect(screen.getByRole("heading", { name: "Sécurité" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /Accès et Sécurité/ })).toBeInTheDocument();
+});
+
+test("un seul onglet Règlements, avec les règlements clients et fournisseurs", async () => {
+  afficher(["ventes.view_vente", "achats.view_reglementfournisseur"]);
+  fireEvent.click(screen.getByRole("tab", { name: "Règlements" }));
+  const categories = await screen.findByRole("tablist", { name: "Catégories Règlements" });
+  expect(
+    within(categories)
+      .getAllByRole("tab")
+      .map((t) => t.textContent),
+  ).toEqual(["Règlements clients", "Règlements fournisseurs"]);
+  expect(screen.getByRole("button", { name: /Liste Vente à Crédit/ })).toBeInTheDocument();
+
+  fireEvent.click(within(categories).getByRole("tab", { name: "Règlements fournisseurs" }));
+  expect(screen.getByRole("button", { name: /Échéancier Fournisseurs/ })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Liste Vente à Crédit/ })).not.toBeInTheDocument();
 });
