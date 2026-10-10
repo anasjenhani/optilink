@@ -11,6 +11,7 @@ from .models import (
     ArticleProduit,
     ArticleVerre,
     BonSortie,
+    CouleurLentille,
     CouleurVerre,
     DemandeTransfert,
     DiametreVerre,
@@ -21,7 +22,9 @@ from .models import (
     LigneInventaire,
     LigneSortie,
     LigneTransfert,
+    MarqueLentille,
     MarqueMonture,
+    MatiereLentille,
     MatiereVerre,
     Monture,
     MouvementStock,
@@ -283,8 +286,8 @@ class InventaireAdmin(admin.ModelAdmin):
         return False
 
 
-# Listes de référence des verres et des montures : on désactive au lieu de supprimer (les
-# verres déjà créés gardent leur famille, leur sous-famille et leur couleur).
+# Listes de référence des verres, des montures et des lentilles : on désactive au lieu de
+# supprimer (les verres déjà créés gardent leur famille, leur sous-famille et leur couleur).
 class _ListeAdmin(AvecImport, admin.ModelAdmin):
     list_filter = ("est_actif",)
 
@@ -295,6 +298,27 @@ class _ListeAdmin(AvecImport, admin.ModelAdmin):
 @admin.register(MarqueMonture)
 class MarqueMontureAdmin(_ListeAdmin):
     imports = ("marques_montures",)
+    list_display = ("code", "libelle", "est_actif")
+    search_fields = ("code", "libelle")
+
+
+@admin.register(MarqueLentille)
+class MarqueLentilleAdmin(_ListeAdmin):
+    imports = ("marques_lentilles",)
+    list_display = ("code", "libelle", "est_actif")
+    search_fields = ("code", "libelle")
+
+
+@admin.register(CouleurLentille)
+class CouleurLentilleAdmin(_ListeAdmin):
+    imports = ("couleurs_lentilles",)
+    list_display = ("code", "libelle", "est_actif")
+    search_fields = ("code", "libelle")
+
+
+@admin.register(MatiereLentille)
+class MatiereLentilleAdmin(_ListeAdmin):
+    imports = ("matieres_lentilles",)
     list_display = ("code", "libelle", "est_actif")
     search_fields = ("code", "libelle")
 

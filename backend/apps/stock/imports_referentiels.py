@@ -1,6 +1,6 @@
-"""Import des listes de référence des verres et des montures (fichier Excel .xlsx ou CSV).
+"""Import des listes de référence des verres, des montures et des lentilles (Excel ou CSV).
 
-Familles et sous-familles de verres, couleurs, diamètres, matières, marques de monture : une
+Familles et sous-familles de verres, couleurs, diamètres, matières, marques : une
 ligne par élément, repéré par son code. Réimporter le même code met l'élément à jour (une case
 vide garde la valeur enregistrée). Tout le fichier est contrôlé avant d'enregistrer quoi que ce
 soit, et l'import exige la vérification, comme les autres imports.
@@ -15,11 +15,14 @@ from apps.achats.imports import trouver_fournisseur
 
 from .imports import Rapport, _Annuler, _booleen, _choix, _message
 from .models import (
+    CouleurLentille,
     CouleurVerre,
     DiametreVerre,
     FamilleVerre,
     Foyer,
+    MarqueLentille,
     MarqueMonture,
+    MatiereLentille,
     MatiereVerre,
     SousFamilleVerre,
 )
@@ -61,6 +64,15 @@ LISTES = {
         {"code", "libelle"},
         ("libelle",),
         {"famille_couleur": CouleurVerre.FamilleCouleur.choices},
+    ),
+    "marques_lentilles": Liste(
+        MarqueLentille, ["code", "libelle", "actif"], {"code", "libelle"}, ("libelle",)
+    ),
+    "couleurs_lentilles": Liste(
+        CouleurLentille, ["code", "libelle", "actif"], {"code", "libelle"}, ("libelle",)
+    ),
+    "matieres_lentilles": Liste(
+        MatiereLentille, ["code", "libelle", "actif"], {"code", "libelle"}, ("libelle",)
     ),
     "diametres_verres": Liste(
         DiametreVerre,
