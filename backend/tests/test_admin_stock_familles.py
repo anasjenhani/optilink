@@ -3,7 +3,8 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from apps.achats.models import Fournisseur
-from apps.stock.models import Article, Lentille
+from apps.stock.imports_referentiels import importer_liste
+from apps.stock.models import Article, CouleurLentille, Lentille
 from tests.test_admin_imports import _admin
 
 
@@ -15,7 +16,12 @@ def test_sections_par_type(creer_utilisateur, client_de):
     sections = {
         app["name"]: [m["object_name"] for m in app["models"]] for app in page.context["app_list"]
     }
-    assert sections["Lentilles"] == ["ArticleLentille"]
+    assert sections["Lentilles"] == [
+        "ArticleLentille",
+        "MarqueLentille",
+        "CouleurLentille",
+        "MatiereLentille",
+    ]
     assert sections["Montures"] == ["ArticleMonture", "MarqueMonture"]
     assert "Article" in sections["Stock"] and "Inventaire" in sections["Stock"]
     accueil = navigateur.get("/admin/", {"onglet": "stock"})
@@ -46,6 +52,15 @@ def test_liste_et_import_des_lentilles(creer_utilisateur, client_de, tunis):
     assert "biofinity" in navigateur.get("/admin/stock/articlelentille/").content.decode()
     fiche = navigateur.get(f"/admin/stock/articlelentille/{lentille.article.pk}/change/")
     assert fiche.status_code == 200 and "Renouvellement" in fiche.content.decode()
+
+
+def test_import_des_couleurs_de_lentille(db):
+    rapport = importer_liste(
+        "couleurs_lentilles",
+        [(2, {"code": "10", "libelle": " pure  hazel "}), (3, {"code": "11", "libelle": "grey"})],
+    )
+    assert (rapport.crees, rapport.erreurs) == (2, [])
+    assert CouleurLentille.objects.get(code="10").libelle == "pure hazel"
 
 
 def test_ajouter_un_produit(creer_utilisateur, client_de, tunis):

@@ -840,8 +840,8 @@ def stock_disponible(magasin, article):
     return total or 0
 
 
-# Listes de référence des verres et des montures (tables de l'ancien logiciel : familles,
-# sous-familles, couleurs, diamètres, matières, marques de monture). Un verre se choisit en
+# Listes de référence des verres, des montures et des lentilles (tables de l'ancien logiciel :
+# familles, sous-familles, couleurs, diamètres, matières, marques). Un verre se choisit en
 # descendant : fournisseur → famille → sous-famille, puis couleur et diamètre du fournisseur.
 
 
@@ -868,6 +868,42 @@ class MarqueMonture(_Reference):
         ordering = ["libelle"]
         verbose_name = "marque de monture"
         verbose_name_plural = "marques de monture"
+
+    def __str__(self):
+        return self.libelle
+
+
+class MarqueLentille(_Reference):
+    libelle = models.CharField("libellé", max_length=100)
+
+    class Meta:
+        ordering = ["libelle"]
+        verbose_name = "marque de lentille"
+        verbose_name_plural = "marques de lentille"
+
+    def __str__(self):
+        return self.libelle
+
+
+class CouleurLentille(_Reference):
+    libelle = models.CharField("libellé", max_length=100)
+
+    class Meta:
+        ordering = ["libelle"]
+        verbose_name = "couleur de lentille"
+        verbose_name_plural = "couleurs de lentille"
+
+    def __str__(self):
+        return self.libelle
+
+
+class MatiereLentille(_Reference):
+    libelle = models.CharField("libellé", max_length=100)
+
+    class Meta:
+        ordering = ["libelle"]
+        verbose_name = "matière de lentille"
+        verbose_name_plural = "matières de lentille"
 
     def __str__(self):
         return self.libelle
